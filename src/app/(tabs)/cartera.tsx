@@ -3,7 +3,8 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { FotoCampo, useFoto } from '@/components/FotoCampo';
 import { Icon } from '@/components/Icon';
-import { DatoTarjeta, EstadoTarjeta, Tarjeta, type Tono } from '@/components/Tarjeta';
+import { DocumentoLicencia } from '@/components/DocumentoLicencia';
+import { DatoTarjeta, EstadoTarjeta, Tarjeta } from '@/components/Tarjeta';
 import { Button, Card, FakeQr, Screen, Segmented, nivelColor, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { nivelPorDias } from '@/lib/avisos';
@@ -11,8 +12,6 @@ import { diasHasta, formatear, plazo } from '@/lib/fechas';
 import { colors, space } from '@/theme';
 
 type Vista = 'licencias' | 'federacion';
-
-const TONO_LICENCIA: Record<string, Tono> = { F: 'azul', D: 'verde', E: 'naranja' };
 
 export default function Cartera() {
   const store = useStore();
@@ -28,7 +27,7 @@ export default function Cartera() {
       right={
         <Pressable
           hitSlop={12}
-          accessibilityLabel={vista === 'licencias' ? 'Añadir licencia' : 'Editar federación'}
+          accessibilityLabel={vista === 'licencias' ? 'Editar licencia' : 'Editar federación'}
           onPress={() => router.push(vista === 'licencias' ? '/licencia' : '/federacion')}
         >
           <Icon name="plus" color={colors.text} />
@@ -46,8 +45,13 @@ export default function Cartera() {
 
       {vista === 'licencias' && (
         <>
-          <Card style={{ gap: space.sm }}>
-            <Text style={st.titulo}>Permiso de armas</Text>
+          <DocumentoLicencia permiso={datos.permiso} onPress={() => router.push('/licencia')} />
+          {datos.permiso.licencias.length === 0 ? (
+            <Card style={{ gap: space.md }}>
+              <Text style={s.muted}>Escanea tu tarjeta de licencia de armas: leo cada licencia (E, F, D) con sus fechas y te aviso antes de que caduquen.</Text>
+              <Button title="Escanear la licencia" onPress={() => router.push('/licencia')} />
+            </Card>
+          ) : (
             <View style={{ flexDirection: 'row', gap: space.sm }}>
               <FotoCampo
                 etiqueta="Anverso"
@@ -62,31 +66,7 @@ export default function Cartera() {
                 onChange={(fotoReverso) => store.actualizarPermiso({ fotoReverso })}
               />
             </View>
-          </Card>
-          {datos.permiso.licencias.length === 0 && (
-            <Card style={{ gap: space.md }}>
-              <Text style={s.muted}>Añade tus licencias (F, D, E) para recibir avisos de renovación y de revista.</Text>
-              <Button title="Añadir licencia" onPress={() => router.push('/licencia')} />
-            </Card>
           )}
-          {datos.permiso.licencias.map((l) => {
-            const dias = diasHasta(l.caducidad);
-            return (
-              <Tarjeta
-                key={l.id}
-                tono={TONO_LICENCIA[l.tipo] ?? 'azul'}
-                etiqueta="Licencia de armas"
-                titulo={`Tipo ${l.tipo}`}
-                sello={l.tipo}
-                onPress={() => router.push(`/licencia?id=${l.id}`)}
-                pie={<EstadoTarjeta color={nivelColor(nivelPorDias(dias))} texto={plazo(l.caducidad)} />}
-              >
-                <DatoTarjeta etiqueta="Número" valor={l.numero || '—'} />
-                <DatoTarjeta etiqueta="Expedición" valor={formatear(l.expedicion)} />
-                <DatoTarjeta etiqueta="Caducidad" valor={formatear(l.caducidad)} />
-              </Tarjeta>
-            );
-          })}
         </>
       )}
 

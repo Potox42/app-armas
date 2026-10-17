@@ -20,7 +20,10 @@ const PAPEL = '#EDE6D6';
 const NEGRO = '#151515';
 
 /** Diana ISSF de pistola 25 m precisión dibujada a escala real, en milímetros. */
-export function Diana({ disparos, tamano, visibleMm = 360, anteriores = [], grupo, onToque }: Props) {
+export function Diana({ disparos: todos, tamano, visibleMm = 360, anteriores: previos = [], grupo, onToque }: Props) {
+  // Los disparos apuntados con el teclado no tienen posición: no se dibujan.
+  const disparos = todos.filter((d) => !d.sinPosicion);
+  const anteriores = previos.filter((d) => !d.sinPosicion);
   const r = visibleMm / 2;
   const escala = tamano / visibleMm; // px por mm
 
@@ -111,7 +114,8 @@ export function Diana({ disparos, tamano, visibleMm = 360, anteriores = [], grup
 }
 
 /** Diana pequeña para listas: solo la zona negra y los impactos, sin números. */
-export function MiniDiana({ disparos, tamano = 56 }: { disparos: Disparo[]; tamano?: number }) {
+export function MiniDiana({ disparos: todos, tamano = 56 }: { disparos: Disparo[]; tamano?: number }) {
+  const disparos = todos.filter((d) => !d.sinPosicion);
   // Se ve la zona negra con margen; los impactos que caen fuera se pegan al borde.
   const r = 130;
   const punto = (r * 2 * 1.5) / tamano; // unos 1,5 px de radio, sea cual sea el tamaño

@@ -5,8 +5,9 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { ajustarTarjeta } from '@/lib/ajustarTarjeta';
-import { subirResolucion } from '@/lib/camaraWeb';
+import { hayLinterna, linterna, subirResolucion } from '@/lib/camaraWeb';
 import { colors, radius, space } from '@/theme';
+import { Icon } from './Icon';
 import { Button } from './ui';
 
 // Proporción de una tarjeta tipo DNI o licencia (85,6 × 54 mm).
@@ -76,10 +77,13 @@ export function Escaner({ visible, titulo, proporcion = TARJETA, onFoto, onCerra
   const [procesando, setProcesando] = useState(false);
   const [resultado, setResultado] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [luz, setLuz] = useState(false);
+  const [conLuz, setConLuz] = useState(false);
 
   const m = marco(vista, proporcion);
 
   const cerrar = () => {
+    setLuz(false);
     setResultado(null);
     setError(null);
     onCerrar();
@@ -141,9 +145,10 @@ export function Escaner({ visible, titulo, proporcion = TARJETA, onFoto, onCerra
                 ref={camara}
                 style={StyleSheet.absoluteFill}
                 facing="back"
+                enableTorch={luz}
                 onCameraReady={() => {
                   setLista(true);
-                  subirResolucion();
+                  subirResolucion().then(() => setConLuz(hayLinterna()));
                 }}
               />
             )}
@@ -165,6 +170,17 @@ export function Escaner({ visible, titulo, proporcion = TARJETA, onFoto, onCerra
                   Encaja el documento en el recuadro, con buena luz y sin reflejos
                 </Text>
               </>
+            )}
+            {conLuz && (
+              <SafeAreaView edges={['top']} style={st.arriba}>
+                <Pressable
+                  onPress={async () => setLuz(await linterna(!luz))}
+                  accessibilityLabel={luz ? 'Apagar linterna' : 'Encender linterna'}
+                  style={[st.luz, luz && st.luzOn]}
+                >
+                  <Icon name="flash" size={22} color={luz ? '#111' : '#fff'} />
+                </Pressable>
+              </SafeAreaView>
             )}
             <SafeAreaView edges={['bottom']} style={st.barra}>
               <Pressable onPress={cerrar} hitSlop={12}><Text style={st.boton}>Cancelar</Text></Pressable>
@@ -197,6 +213,12 @@ const st = StyleSheet.create({
     position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', paddingHorizontal: space.xl, paddingTop: space.lg, paddingBottom: space.lg,
   },
+  arriba: { position: 'absolute', top: 0, right: 0, padding: space.lg },
+  luz: {
+    width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
+  },
+  luzOn: { backgroundColor: '#FFD43B', borderColor: '#FFD43B' },
   boton: { color: '#fff', fontSize: 16, fontWeight: '600', minWidth: 72, textAlign: 'center' },
   disparador: {
     width: 76, height: 76, borderRadius: 38, borderWidth: 4, borderColor: '#fff',

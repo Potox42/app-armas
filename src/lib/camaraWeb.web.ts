@@ -27,3 +27,26 @@ export async function subirResolucion() {
     console.warn('La cámara no admite más resolución', e);
   }
 }
+
+function pistaActual() {
+  const video = [...document.querySelectorAll('video')].find((v) => v.srcObject instanceof MediaStream);
+  return (video?.srcObject as MediaStream | undefined)?.getVideoTracks()[0];
+}
+
+/** ¿El navegador deja encender la linterna con la cámara abierta? (Safari no siempre lo permite). */
+export function hayLinterna(): boolean {
+  const caps = pistaActual()?.getCapabilities?.() as (MediaTrackCapabilities & { torch?: boolean }) | undefined;
+  return !!caps?.torch;
+}
+
+/** Enciende o apaga la linterna; devuelve si ha quedado encendida. */
+export async function linterna(encender: boolean): Promise<boolean> {
+  const pista = pistaActual();
+  if (!pista) return false;
+  try {
+    await pista.applyConstraints({ advanced: [{ torch: encender } as MediaTrackConstraintSet] });
+    return encender;
+  } catch {
+    return false;
+  }
+}

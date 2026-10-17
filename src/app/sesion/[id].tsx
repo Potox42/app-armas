@@ -1,15 +1,16 @@
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import { Anillo, Cifra } from '@/components/Cifra';
 import { Diana } from '@/components/Diana';
+import { GraficaDisparos } from '@/components/GraficaDisparos';
 import { Icon } from '@/components/Icon';
 import { Button, Card, Screen, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import type { Sesion } from '@/data/types';
 import { formatear } from '@/lib/fechas';
 import { volver } from '@/lib/volver';
-import { agrupacion, formatoMedia, media, sumaSerie, todosLosDisparos, totalSesion } from '@/lib/sesiones';
+import { agrupacion, conPosicion, extremos, formatoMedia, media, sumaSerie, todosLosDisparos, totalSesion } from '@/lib/sesiones';
 import { colors, radius, space } from '@/theme';
 
 export default function SesionPantalla() {
@@ -34,36 +35,89 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   const nSerie = sesion.series.length;
   const serie = sesion.series[nSerie - 1];
   const completa = serie.disparos.length >= sesion.disparosPorSerie;
+  const ultimaSerie = !!sesion.seriesPrevistas && nSerie >= sesion.seriesPrevistas;
   const ultimo = serie.disparos[serie.disparos.length - 1];
   const anteriores = sesion.series.slice(0, -1).flatMap((x) => x.disparos);
+  const teclado = sesion.registro === 'teclado';
+  const valores = serie.disparos.map((d) => d.valor);
 
   const terminar = () => {
     store.terminarSesion(sesion.id);
   };
+  const siguiente = () => {
+    if (serie.disparos.length === 0) return;
+    if (ultimaSerie) terminar();
+    else store.nuevaSerie(sesion.id);
+  };
 
   return (
-    <Screen title={`Serie ${nSerie} · Disparo ${Math.min(serie.disparos.length + 1, sesion.disparosPorSerie)}/${sesion.disparosPorSerie}`} back="/entrenar">
+    <Screen
+      title={`Serie ${nSerie}${sesion.seriesPrevistas ? `/${sesion.seriesPrevistas}` : ''} · Disparo ${Math.min(serie.disparos.length + 1, sesion.disparosPorSerie)}/${sesion.disparosPorSerie}`}
+      back="/entrenar"
+    >
       <Text style={[s.muted, { textAlign: 'center', marginTop: -space.sm }]}>
         {sesion.distancia} m · {arma ? `${arma.marca} ${arma.modelo}` : ''} · {sesion.modalidad}
-      </Text>
-
-      <View style={{ alignItems: 'center' }}>
-        <Diana
-          tamano={tamano}
-          disparos={serie.disparos}
-          anteriores={anteriores}
-          onToque={completa ? undefined : (x, y) => store.anadirDisparo(sesion.id, x, y)}
-        />
-      </View>
-      <Text style={[s.muted, { textAlign: 'center' }]}>
-        {completa ? 'Serie completa' : 'Toca la diana donde ha entrado el disparo'}
+        {sesion.municion ? ` · ${sesion.municion}` : ''}
       </Text>
 
       <View style={st.datos}>
-        <Dato titulo="Último disparo" valor={ultimo ? String(ultimo.valor) : '–'} grande />
-        <Dato titulo="Serie" valor={`${sumaSerie(serie)} / ${serie.disparos.length * 10}`} />
-        <Dato titulo="Media serie" valor={serie.disparos.length ? formatoMedia(media(serie.disparos)) : '–'} />
+        <Dato titulo="Último" valor={ultimo ? String(ultimo.valor) : '–'} grande />
+        <Dato titulo="Serie" valor={`${sumaSerie(serie)}`} />
+        <Dato titulo="Media" valor={serie.disparos.length ? formatoMedia(media(serie.disparos)) : '–'} />
       </View>
+
+      {teclado ? (
+        <>
+          <Card style={{ alignItems: 'center', gap: space.xs }}>
+            <Text style={[s.muted, { alignSelf: 'flex-start' }]}>Puntuación por disparo · media en verde</Text>
+            <GraficaDisparos valores={valores} previstos={sesion.disparosPorSerie} />
+          </Card>
+          <View style={st.teclado}>
+            {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map((v) => (
+              <Pressable
+                key={v}
+                disabled={completa}
+                onPress={() => store.anadirValor(sesion.id, v)}
+                accessibilityLabel={`Apuntar ${v}`}
+                style={({ pressed }) => [st.tecla, v === 10 && st.teclaDiez, v === 0 && st.teclaCero, completa && { opacity: 0.4 }, pressed && { transform: [{ scale: 0.94 }] }]}
+              >
+                <Text style={[st.teclaTexto, v === 10 && { color: '#fff' }]}>{v === 0 ? 'Fuera' : v}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={st.linea}>
+            {Array.from({ length: sesion.disparosPorSerie }, (_, i) => {
+              const v = valores[i];
+              return (
+                <View key={i} style={[st.hueco, v !== undefined && st.huecoLleno, i === valores.length - 1 && st.huecoUltimo]}>
+                  <Text style={st.huecoValor}>{v ?? ''}</Text>
+                  <Text style={st.huecoNum}>{i + 1}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </>
+      ) : (
+        <>
+          <View style={{ alignItems: 'center' }}>
+            <Diana
+              tamano={tamano}
+              disparos={serie.disparos}
+              anteriores={anteriores}
+              onToque={completa ? undefined : (x, y) => store.anadirDisparo(sesion.id, x, y)}
+            />
+          </View>
+          <Text style={[s.muted, { textAlign: 'center' }]}>
+            {completa ? 'Serie completa' : 'Toca la diana donde ha entrado el disparo'}
+          </Text>
+          {valores.length > 0 && (
+            <Card style={{ alignItems: 'center', gap: space.xs }}>
+              <Text style={[s.muted, { alignSelf: 'flex-start' }]}>Puntuación por disparo · media en verde</Text>
+              <GraficaDisparos valores={valores} previstos={sesion.disparosPorSerie} />
+            </Card>
+          )}
+        </>
+      )}
 
       <View style={st.botones}>
         <View style={{ flex: 1 }}>
@@ -71,19 +125,21 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         </View>
         <View style={{ flex: 1 }}>
           <Button
-            title={completa ? 'Siguiente serie' : 'Finalizar serie'}
-            onPress={() => serie.disparos.length > 0 && store.nuevaSerie(sesion.id)}
+            title={ultimaSerie ? 'Terminar' : completa ? 'Siguiente serie' : 'Finalizar serie'}
+            onPress={siguiente}
           />
         </View>
       </View>
-      <Button title="Terminar entrenamiento" variant="secondary" onPress={terminar} />
+      {!ultimaSerie && <Button title="Terminar entrenamiento" variant="secondary" onPress={terminar} />}
 
-      <Card style={st.camara}>
-        <Icon name="target" color={colors.textMuted} />
-        <Text style={[s.muted, { flex: 1 }]}>
-          Detección automática con la cámara en el catalejo: en desarrollo. De momento marca los impactos a mano.
-        </Text>
-      </Card>
+      {!teclado && (
+        <Card style={st.camara}>
+          <Icon name="target" color={colors.textMuted} />
+          <Text style={[s.muted, { flex: 1 }]}>
+            Detección automática con la cámara en el catalejo: en desarrollo. De momento marca los impactos a mano.
+          </Text>
+        </Card>
+      )}
     </Screen>
   );
 }
@@ -101,6 +157,11 @@ function Resumen({ sesion }: { sesion: Sesion }) {
   const reparto = [10, 9, 8, 7, 6].map((v) => ({ v, n: disparos.filter((d) => d.valor === v).length }));
   const resto = disparos.filter((d) => d.valor < 6).length;
   const masAlto = Math.max(1, ...reparto.map((r) => r.n), resto);
+  const conSitio = conPosicion(disparos).length > 0;
+  const ex = extremos(sesion);
+  // Comparación con la sesión anterior con la misma arma.
+  const previa = store.datos.sesiones.find((x) => x.terminada && x.id !== sesion.id && x.armaId === sesion.armaId && x.fecha < sesion.fecha);
+  const lectura = resumenSesion(media(disparos), previa ? media(todosLosDisparos(previa)) : undefined, ex.diferencia, sesion.disparosPorSerie);
 
   return (
     <Screen title="Resultado" back="/entrenar">
@@ -119,8 +180,23 @@ function Resumen({ sesion }: { sesion: Sesion }) {
       <View style={st.datos}>
         <Cifra titulo="Media" valor={formatoMedia(media(disparos))} color={colors.green} />
         <Cifra titulo="Dieces" valor={String(reparto[0].n)} detalle={`de ${disparos.length}`} />
-        <Cifra titulo="Agrupación" valor={`${Math.round(g.radio)} mm`} detalle="radio medio" />
+        {conSitio
+          ? <Cifra titulo="Agrupación" valor={`${Math.round(g.radio)} mm`} detalle="radio medio" />
+          : <Cifra titulo="Series" valor={String(sumas.length)} detalle={`${sesion.disparosPorSerie} disparos c/u`} />}
       </View>
+
+      <Card style={st.lectura}>
+        <Text style={st.lecturaTitulo}>{lectura.titulo}</Text>
+        <Text style={s.muted}>{lectura.texto}</Text>
+      </Card>
+
+      {sumas.length > 1 && (
+        <View style={st.datos}>
+          <Cifra titulo="Mejor serie" valor={String(ex.sumas[ex.mejor])} detalle={`serie ${ex.mejor + 1}`} color={colors.green} />
+          <Cifra titulo="Peor serie" valor={String(ex.sumas[ex.peor])} detalle={`serie ${ex.peor + 1}`} color={colors.orange} />
+          <Cifra titulo="Diferencia" valor={String(ex.diferencia)} detalle="puntos" />
+        </View>
+      )}
 
       <SectionTitle>Series</SectionTitle>
       <View style={st.series}>
@@ -150,21 +226,39 @@ function Resumen({ sesion }: { sesion: Sesion }) {
         ))}
       </Card>
 
-      <SectionTitle>Todos los impactos</SectionTitle>
-      <View style={{ alignItems: 'center' }}>
-        <Diana tamano={tamano} disparos={[]} anteriores={disparos} grupo={g} />
-      </View>
-      <Card style={st.centro}>
-        <Icon name="target" color={colors.accent} />
-        <View style={{ flex: 1 }}>
-          <Text style={s.text}>Centro de impactos</Text>
-          <Text style={s.muted}>{consejo(g.cx, g.cy)}</Text>
-        </View>
-      </Card>
+      {conSitio && (
+        <>
+          <SectionTitle>Todos los impactos</SectionTitle>
+          <View style={{ alignItems: 'center' }}>
+            <Diana tamano={tamano} disparos={[]} anteriores={disparos} grupo={g} />
+          </View>
+          <Card style={st.centro}>
+            <Icon name="target" color={colors.accent} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.text}>Centro de impactos</Text>
+              <Text style={s.muted}>{consejo(g.cx, g.cy)}</Text>
+            </View>
+          </Card>
+        </>
+      )}
 
       <Button title="Volver a Entrenar" onPress={() => volver('/entrenar')} />
     </Screen>
   );
+}
+
+/** Una frase que resume la sesión: comparación con la anterior y regularidad entre series. */
+function resumenSesion(mediaHoy: number, mediaAntes: number | undefined, diferencia: number, porSerie: number) {
+  const regular = diferencia <= porSerie * 0.3; // menos de 3 puntos entre series de 10
+  const regularidad = regular
+    ? 'Has sido muy regular entre series.'
+    : `Entre tu mejor y tu peor serie hay ${diferencia} puntos: trabaja la regularidad.`;
+  if (mediaAntes === undefined) return { titulo: 'Primera sesión con esta arma', texto: regularidad };
+  const cambio = mediaHoy - mediaAntes;
+  if (Math.abs(cambio) < 0.05) return { titulo: 'Igual que la última vez', texto: `Misma media que la sesión anterior. ${regularidad}` };
+  return cambio > 0
+    ? { titulo: `Mejoras ${formatoMedia(cambio)} puntos de media`, texto: `Respecto a la sesión anterior con esta arma. ${regularidad}` }
+    : { titulo: `${formatoMedia(-cambio)} puntos por debajo de la última vez`, texto: `Respecto a la sesión anterior con esta arma. ${regularidad}` };
 }
 
 /** Dónde queda el centro del grupo respecto al centro de la diana. */
@@ -222,6 +316,23 @@ const st = StyleSheet.create({
   datos: { flexDirection: 'row', gap: space.sm },
   botones: { flexDirection: 'row', gap: space.sm },
   camara: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  teclado: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  tecla: {
+    flexBasis: '17%', flexGrow: 1, aspectRatio: 1.15, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+  },
+  teclaDiez: { backgroundColor: colors.accent, borderColor: colors.accent },
+  teclaCero: { flexBasis: '100%', aspectRatio: undefined, height: 52 },
+  teclaTexto: { color: colors.text, fontSize: 24, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  linea: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  hueco: {
+    flexBasis: '8%', flexGrow: 1, alignItems: 'center', paddingVertical: 6, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed',
+  },
+  huecoLleno: { borderStyle: 'solid', backgroundColor: colors.card },
+  huecoUltimo: { borderColor: colors.green },
+  huecoValor: { color: colors.text, fontSize: 17, fontWeight: '800', minHeight: 22, fontVariant: ['tabular-nums'] },
+  huecoNum: { color: colors.textMuted, fontSize: 10 },
   titulo: { color: colors.text, fontSize: 16, fontWeight: '700' },
   hero: { alignItems: 'center', gap: 4, paddingVertical: space.md },
   total: { color: colors.text, fontSize: 44, fontWeight: '800', fontVariant: ['tabular-nums'] },
@@ -239,4 +350,6 @@ const st = StyleSheet.create({
   barra: { height: '100%', borderRadius: 6, backgroundColor: colors.accent },
   barraN: { width: 28, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   centro: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  lectura: { gap: 4, borderLeftWidth: 4, borderLeftColor: colors.accent },
+  lecturaTitulo: { color: colors.text, fontSize: 16, fontWeight: '800' },
 });

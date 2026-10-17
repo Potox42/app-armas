@@ -54,11 +54,12 @@ export function datosDeEjemplo(): Datos {
   return {
     nombre: 'Rubén',
     permiso: {
-      numero: '12345678-F',
+      numero: '12345678-Z',
+      expedicion: sumarAnios(cadE, -5),
       licencias: [
-        { id: 'lic-f', tipo: 'F', numero: '12345678-F', expedicion: sumarAnios(cadF, -5), caducidad: cadF },
-        { id: 'lic-d', tipo: 'D', numero: '87654321-D', expedicion: sumarAnios(cadD, -5), caducidad: cadD },
-        { id: 'lic-e', tipo: 'E', numero: '11223344-E', expedicion: sumarAnios(cadE, -5), caducidad: cadE },
+        { id: 'lic-e', tipo: 'E', expedicion: sumarAnios(cadE, -5), caducidad: cadE },
+        { id: 'lic-f', tipo: 'F', categoria: '3', expedicion: sumarAnios(cadF, -5), caducidad: cadF },
+        { id: 'lic-d', tipo: 'D', expedicion: sumarAnios(cadD, -5), caducidad: cadD },
       ],
     },
     armas: [

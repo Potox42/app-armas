@@ -16,6 +16,7 @@ interface Store {
   sesion: (id: string) => Sesion | undefined;
   nuevaSesion: (datos: Omit<Sesion, 'id' | 'fecha' | 'series' | 'terminada'>) => string;
   anadirDisparo: (sesionId: string, x: number, y: number) => void;
+  anadirValor: (sesionId: string, valor: number) => void;
   deshacerDisparo: (sesionId: string) => void;
   nuevaSerie: (sesionId: string) => void;
   terminarSesion: (sesionId: string) => void;
@@ -24,6 +25,7 @@ interface Store {
   guardarLicencia: (licencia: Licencia) => void;
   borrarLicencia: (id: string) => void;
   actualizarPermiso: (cambios: Partial<PermisoArmas>) => void;
+  guardarPermiso: (permiso: PermisoArmas) => void;
   guardarFederacion: (f: Federacion) => void;
   empezarDeCero: () => void;
   restaurar: (d: Datos) => void;
@@ -53,7 +55,14 @@ function datosVacios(nombre: string): Datos {
 
 /** Datos guardados con una versión anterior de la app: se completan los campos nuevos. */
 function completar(d: Datos): Datos {
-  return { ...d, sesiones: d.sesiones ?? [], esEjemplo: d.esEjemplo ?? true };
+  // Antes cada licencia tenía sus fotos; ahora son de la tarjeta (el permiso).
+  const conFotos = d.permiso.licencias.find((l) => l.fotoAnverso || l.fotoReverso);
+  const permiso = {
+    ...d.permiso,
+    fotoAnverso: d.permiso.fotoAnverso ?? conFotos?.fotoAnverso,
+    fotoReverso: d.permiso.fotoReverso ?? conFotos?.fotoReverso,
+  };
+  return { ...d, permiso, sesiones: d.sesiones ?? [], esEjemplo: d.esEjemplo ?? true };
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -115,6 +124,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       anadirDisparo: (sesionId, x, y) =>
         actualizarSesion(sesionId, (s) => conUltimaSerie(s, (ds) => [...ds, { x, y, valor: puntuar(x, y) }])),
+      anadirValor: (sesionId, valor) =>
+        actualizarSesion(sesionId, (s) => conUltimaSerie(s, (ds) => [...ds, { x: 0, y: 0, valor, sinPosicion: true }])),
       deshacerDisparo: (sesionId) =>
         actualizarSesion(sesionId, (s) => conUltimaSerie(s, (ds) => ds.slice(0, -1))),
       nuevaSerie: (sesionId) =>
@@ -154,6 +165,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       borrarLicencia: (id) =>
         setDatos((d) => d && { ...d, permiso: { ...d.permiso, licencias: d.permiso.licencias.filter((x) => x.id !== id) } }),
       actualizarPermiso: (cambios) => setDatos((d) => d && { ...d, permiso: { ...d.permiso, ...cambios } }),
+      guardarPermiso: (permiso) =>
+        setDatos((d) => {
+          if (!d) return d;
+          // Las armas de una licencia que ya no está pasan a otra del mismo tipo (o a la primera).
+          const ids = new Set(permiso.licencias.map((l) => l.id));
+          const tipoDe = (id: string) => d.permiso.licencias.find((l) => l.id === id)?.tipo;
+          const armas = d.armas.map((a) => {
+            if (ids.has(a.licenciaId)) return a;
+            const otra = permiso.licencias.find((l) => l.tipo === tipoDe(a.licenciaId)) ?? permiso.licencias[0];
+            return { ...a, licenciaId: otra?.id ?? '' };
+          });
+          return { ...d, permiso, armas };
+        }),
       guardarFederacion: (f) => setDatos((d) => d && { ...d, federacion: f }),
       empezarDeCero: () => setDatos((d) => d && { ...datosVacios(d.nombre), ajustes: d.ajustes }),
       // Los ajustes (Face ID, avisos) son de este móvil: no se traen de la copia.

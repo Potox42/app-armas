@@ -9,6 +9,8 @@ export interface FilaLicencia {
 
 export interface DatosLeidos {
   filas: FilaLicencia[];
+  nif?: string; // NIF/NIE del titular (anverso), solo si la letra de control cuadra
+  categoria?: string; // «LICENCIA F CATEGORÍA 3»
   tipo?: TipoLicencia;
   numero?: string;
   expedicion?: string; // ISO
@@ -44,6 +46,15 @@ export function fechasDe(texto: string): string[] {
     if (f) res.push(f);
   }
   return [...new Set(res)].sort();
+}
+
+const LETRAS_NIF = 'TRWAGMYFPDXBNJZSQVHLCKE';
+
+/** NIF o NIE con la letra de control correcta, como «12345678-Z»; null si no cuadra. */
+export function nifValido(cifras: string, letra: string): string | null {
+  const n = cifras.replace(/^X/, '0').replace(/^Y/, '1').replace(/^Z/, '2');
+  if (!/^\d{8}$/.test(n)) return null;
+  return LETRAS_NIF[+n % 23] === letra ? `${cifras}-${letra}` : null;
 }
 
 function masAnios(isoFecha: string, n: number): string {
@@ -108,6 +119,17 @@ export function leerLicencia(
     else r.expedicion = fechas[0];
   }
 
+  for (const m of t.matchAll(/\b([XYZ]?\d{7,8})\s?-?\s?([A-Z])\b/g)) {
+    const cifras = m[1].length === 7 && !/^[XYZ]/.test(m[1]) ? `0${m[1]}` : m[1];
+    const nif = nifValido(cifras, m[2]);
+    if (nif) {
+      r.nif = nif;
+      break;
+    }
+  }
+  const categoria = t.match(/LICENCIA\s+F\s+CATEGOR[IÍ]A\s*([123])\b/);
+  if (categoria) r.categoria = categoria[1];
+
   // Si hay tabla de licencias (reverso), manda: la del tipo pedido o, si no está, la que caduca más tarde.
   if (r.filas.length) {
     const fila = r.filas.find((x) => x.tipo === preferido) ?? [...r.filas].sort((a, b) => b.hasta.localeCompare(a.hasta))[0];
@@ -137,6 +159,8 @@ export function combinar(lecturas: DatosLeidos[]): DatosLeidos {
     if (d.filas.length > r.filas.length) r.filas = d.filas;
     r.tipo ??= d.tipo;
     r.numero ??= d.numero;
+    r.nif ??= d.nif;
+    r.categoria ??= d.categoria;
     r.expedicion ??= d.expedicion;
     r.caducidad ??= d.caducidad;
   }

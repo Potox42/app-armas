@@ -18,11 +18,14 @@ export default function NuevaSesion() {
   const [distancia, setDistancia] = useState(ultima?.distancia ?? 25);
   const [municion, setMunicion] = useState(ultima?.municion ?? '');
   const [porSerie, setPorSerie] = useState(String(ultima?.disparosPorSerie ?? 10) as '5' | '10');
+  const [series, setSeries] = useState(String(ultima?.seriesPrevistas ?? 0) as '0' | '4' | '6');
+  const [registro, setRegistro] = useState<'diana' | 'teclado'>(ultima?.registro ?? 'diana');
 
   const empezar = () => {
     if (!armaId) return;
     const id = store.nuevaSesion({
       armaId, modalidad, distancia, municion: municion.trim(), disparosPorSerie: Number(porSerie),
+      seriesPrevistas: Number(series) || undefined, registro,
     });
     router.replace(`/sesion/${id}`);
   };
@@ -73,6 +76,25 @@ export default function NuevaSesion() {
 
       <Text style={st.paso}>5. Disparos por serie</Text>
       <Segmented value={porSerie} onChange={setPorSerie} options={[{ value: '5', label: '5' }, { value: '10', label: '10' }]} />
+
+      <Text style={st.paso}>6. Número de series</Text>
+      <Segmented
+        value={series}
+        onChange={setSeries}
+        options={[{ value: '0', label: 'Libre' }, { value: '4', label: '4' }, { value: '6', label: '6' }]}
+      />
+
+      <Text style={st.paso}>7. Cómo apuntas los disparos</Text>
+      <Segmented
+        value={registro}
+        onChange={setRegistro}
+        options={[{ value: 'diana', label: 'Tocando la diana' }, { value: 'teclado', label: 'Con números' }]}
+      />
+      <Text style={s.muted}>
+        {registro === 'diana'
+          ? 'Marcas dónde entró cada disparo: la app calcula la puntuación y tu agrupación.'
+          : 'Más rápido: tocas la puntuación de cada disparo (10, 9, 8…). No guarda dónde entró.'}
+      </Text>
 
       <Text style={[s.muted, { marginTop: space.sm }]}>Diana: pistola precisión ISSF (25 m / 50 m)</Text>
       <Button title="Empezar" onPress={empezar} />
