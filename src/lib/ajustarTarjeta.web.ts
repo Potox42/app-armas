@@ -1,8 +1,57 @@
-// Quita el fondo que queda alrededor de la tarjeta dentro del recuadro.
-// Mide cuánto se aleja cada punto del color del fondo (umbral de Otsu) y busca el bloque de filas y columnas
-// que son mayoritariamente «tarjeta». Si el resultado no es creíble, devuelve null.
+// Quita el fondo que queda alrededor de la tarjeta dentro del recuadro, de dos formas:
+// 1) por color: cuánto se aleja cada punto del color del fondo (umbral de Otsu);
+// 2) por bordes: las líneas rectas más marcadas cerca de cada lado del recuadro.
+// La primera falla si la tarjeta es casi del color de la mesa (guías claras sobre fondo claro);
+// entonces manda la segunda. Si ninguna da algo con forma de tarjeta, devuelve null.
 
 const ANALISIS = 400; // ancho al que se reduce la foto para analizarla
+const PROPORCION = 85.6 / 53.98; // tarjeta tamaño DNI (ISO 7810 ID-1)
+
+type Caja = { x0: number; y0: number; x1: number; y1: number };
+
+/** Creíble: ocupa al menos la mitad del recuadro, deja algo de fondo y tiene forma de tarjeta. */
+function creible(c: Caja, W: number, H: number, tolerancia: number): boolean {
+  const w = c.x1 - c.x0 + 1, h = c.y1 - c.y0 + 1;
+  const area = (w * h) / (W * H);
+  return area >= 0.45 && area <= 0.97 && Math.abs(w / h - PROPORCION) <= tolerancia;
+}
+
+/**
+ * Bordes de la tarjeta: en cada franja exterior del recuadro, la línea con más cambio de color.
+ * Se mira solo la parte central de cada lado para que no cuenten las esquinas redondeadas,
+ * y, de fuera hacia dentro, se toma la primera línea fuerte (las rayas de dentro de la tarjeta van después).
+ */
+function porBordes(px: Uint8ClampedArray, W: number, H: number): Caja {
+  const dif = (a: number, b: number) =>
+    Math.abs(px[a] - px[b]) + Math.abs(px[a + 1] - px[b + 1]) + Math.abs(px[a + 2] - px[b + 2]);
+  const filas = new Array<number>(H).fill(0), cols = new Array<number>(W).fill(0);
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      const i = (y * W + x) * 4;
+      if (x > W * 0.15 && x < W * 0.85) filas[y] += dif(i + W * 4, i - W * 4);
+      if (y > H * 0.15 && y < H * 0.85) cols[x] += dif(i + 4, i - 4);
+    }
+  }
+  const borde = (perfil: number[], desde: number, hasta: number) => {
+    const paso = desde < hasta ? 1 : -1;
+    let max = 0;
+    for (let i = desde; i !== hasta; i += paso) max = Math.max(max, perfil[i]);
+    for (let i = desde; i !== hasta; i += paso) {
+      if (perfil[i] < 0.6 * max) continue;
+      // El pico de esa línea (el borde puede ocupar dos o tres píxeles).
+      let mejor = i;
+      for (let j = i; j !== i + 4 * paso && j !== hasta; j += paso) if (perfil[j] > perfil[mejor]) mejor = j;
+      return mejor;
+    }
+    return desde;
+  };
+  return {
+    x0: borde(cols, 1, Math.round(W * 0.3)),
+    x1: borde(cols, W - 2, Math.round(W * 0.7)),
+    y0: borde(filas, 1, Math.round(H * 0.35)),
+    y1: borde(filas, H - 2, Math.round(H * 0.65)),
+  };
+}
 
 function cargar(src: string): Promise<HTMLImageElement> {
   return new Promise((ok, mal) => {
@@ -72,15 +121,17 @@ export async function ajustarTarjeta(dataUri: string): Promise<string | null> {
     }
     const [x0, x1] = tramo(cols.map((n) => n / H), 0.5);
     const [y0, y1] = tramo(filas.map((n) => n / W), 0.5);
-    const w = x1 - x0 + 1, h = y1 - y0 + 1;
-    // Creíble: ocupa al menos la mitad del recuadro, deja algo de fondo y tiene forma de tarjeta.
-    const area = (w * h) / (W * H);
-    if (area < 0.45 || area > 0.97 || w / h < 1.2 || w / h > 2) return null;
+    const color = { x0, x1, y0, y1 };
+    const bordes = porBordes(px, W, H);
+    // Por color es lo más fiable cuando la tarjeta destaca; si su forma no cuadra, se prueba por bordes.
+    const caja = creible(color, W, H, 0.25) ? color : creible(bordes, W, H, 0.15) ? bordes : null;
+    if (!caja) return null;
+    const w = caja.x1 - caja.x0 + 1, h = caja.y1 - caja.y0 + 1;
 
     const k = img.width / W;
     const sal = document.createElement('canvas');
     sal.width = Math.round(w * k); sal.height = Math.round(h * k);
-    sal.getContext('2d')!.drawImage(img, x0 * k, y0 * k, w * k, h * k, 0, 0, sal.width, sal.height);
+    sal.getContext('2d')!.drawImage(img, caja.x0 * k, caja.y0 * k, w * k, h * k, 0, 0, sal.width, sal.height);
     return sal.toDataURL('image/jpeg', 0.9);
   } catch (e) {
     console.warn('No se pudo ajustar la tarjeta', e);

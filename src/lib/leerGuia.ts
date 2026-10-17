@@ -1,4 +1,5 @@
 import type { TipoArma, TipoLicencia } from '@/data/types';
+import type { Palabra } from './ocrTipos';
 
 export interface GuiaLeida {
   marca?: string;
@@ -24,9 +25,9 @@ const ETIQUETAS = {
   marca: /\bMARCA\b/,
   modelo: /\bMODELO\b/,
   calibre: /\bCALIBRE\b/,
-  numeroSerie: /\bN(?:[ºª°O]|[ÚU]MERO|UM\.?)\s*(?:DE\s+)?(?:SERIE|FABRICACI[OÓ]N|ARMA|DEL\s+ARMA)\b|\bSERIE\b/,
-  numeroGuia: /\bGU[IÍ]A\s*(?:DE\s+PERTENENCIA\s*)?N[ºª°O]?\.?|\bN(?:[ºª°O]|[ÚU]MERO)\s*(?:DE\s+)?GU[IÍ]A\b/,
-  fecha: /\bFECHA\s*(?:DE\s+)?(?:EXPEDICI[OÓ]N|EMISI[OÓ]N|ALTA)?\b/,
+  numeroSerie: /\bN(?:[ºª°O]|[ÚU]MERO|[ÚU]M\.?)\s*(?:DE\s+)?(?:SERIE|FABRICACI[OÓ]N|IDENTIFICACI[OÓ]N|ARMA|DEL\s+ARMA)\b|\bSERIE\b/,
+  numeroGuia: /\bGU[IÍ]A\s*(?:DE\s+PERTENENCIA\s*)?N[ºª°O]?\.?|\bN(?:[ºª°O]|[ÚU]MERO|[ÚU]M\.?)\s*(?:DE\s+)?(?:GU[IÍ]A|DOC(?:UMENTO)?)\b\.?/,
+  fecha: /\bF(?:ECHA|\.)\s*(?:DE\s+)?(?:EXPEDICI[OÓ]N|EMISI[OÓ]N|ALTA)\b|\bFECHA\b/,
 };
 const CUALQUIER_ETIQUETA = new RegExp(Object.values(ETIQUETAS).map((r) => r.source).join('|'));
 
@@ -77,7 +78,11 @@ function calibre(v?: string): string | undefined {
  * Datos de una guía de pertenencia leídos por OCR. No conocemos todos los modelos de guía,
  * así que se buscan las etiquetas habituales; la persona revisa siempre el resultado.
  */
-export function leerGuia(texto: string, hoy = new Date().toISOString().slice(0, 10)): GuiaLeida {
+export function leerGuia(
+  texto: string,
+  hoy = new Date().toISOString().slice(0, 10),
+  palabras: Palabra[] = [],
+): GuiaLeida {
   const t = texto.toUpperCase();
   const lineas = t.split('\n').map((l) => l.trim()).filter(Boolean);
   const r: GuiaLeida = {};
@@ -101,7 +106,75 @@ export function leerGuia(texto: string, hoy = new Date().toISOString().slice(0, 
   const lic = t.match(/\bLICENCIA\s*(?:TIPO\s*)?[:.\-]?\s*["'«]?([FDE])\b/);
   if (lic) r.licencia = lic[1] as TipoLicencia;
 
+  // En la guía tipo tarjeta las etiquetas son diminutas y casi nunca se leen: manda la posición.
+  Object.assign(r, porPosicion(palabras, hoy));
   for (const k of Object.keys(r) as (keyof GuiaLeida)[]) if (r[k] === undefined) delete r[k];
+  return r;
+}
+
+const alto = (p: Palabra) => p.y1 - p.y0;
+const centro = (p: Palabra) => (p.y0 + p.y1) / 2;
+// Palabras de las etiquetas de la guía tipo tarjeta.
+const ETIQUETA = /^(?:N[UÚ]M\.?|IDENTIFICACI[OÓ]N|TIPO|MARCA|CALIBRE|DOC\.?|F\.?|EXPEDICI[OÓ]N|TITULAR|NACIMIENTO|C\.?V\.?)$/;
+const esEtiqueta = (p: Palabra, altoDato: number) => ETIQUETA.test(letras(p)) || alto(p) < 0.6 * altoDato;
+const letras = (p: Palabra) => p.texto.toUpperCase().replace(/[|«»"'_—–]/g, '').trim();
+
+/**
+ * Guía de pertenencia en formato tarjeta (como el DNI). Los datos van en una cuadrícula:
+ *   NÚM. IDENTIFICACIÓN | TIPO       (p. ej. 1234567  ESCOPETA)
+ *   MARCA               | CALIBRE    (p. ej. BERETTA  12)
+ *   NÚM. DOC.           | F. EXPEDICIÓN
+ * Se toma como referencia la palabra del tipo de arma y la fecha, que se leen bien, y cada dato se
+ * busca en su fila y su columna. Así no depende de leer las etiquetas ni de cómo se haya recortado.
+ */
+export function porPosicion(palabras: Palabra[], hoy: string): GuiaLeida {
+  const r: GuiaLeida = {};
+  const ps = palabras.filter((p) => letras(p).length > 0);
+  if (!ps.length) return r;
+  const altos = ps.filter((p) => letras(p).length >= 3).map(alto).sort((a, b) => a - b);
+  const H = altos[Math.floor(altos.length / 2)] ?? 20;
+  const enFila = (a: Palabra, b: Palabra) => Math.abs(centro(a) - centro(b)) < 0.6 * Math.max(H, alto(a), alto(b));
+  const digitos = (p: Palabra) => letras(p).replace(/\D/g, '').length;
+
+  const tipo = ps.find((p) => TIPOS.some(([re]) => re.test(letras(p).replace(/0/g, 'O'))));
+  if (tipo) {
+    const U = Math.max(H, alto(tipo));
+    // Nº de identificación: en la fila del tipo, a su izquierda.
+    const id = ps
+      .filter((p) => p !== tipo && enFila(p, tipo) && p.x1 < tipo.x0 && digitos(p) >= 3 && /^[A-Z0-9\-/.]{4,}$/.test(letras(p)))
+      .sort((a, b) => b.x1 - a.x1)[0];
+    // La fila siguiente: marca debajo del nº de identificación y calibre debajo del tipo.
+    // Las etiquetas (más pequeñas) no cuentan como fila.
+    const debajo = ps
+      .filter((p) => !esEtiqueta(p, alto(tipo)) && centro(p) > centro(tipo) + 0.7 * U && centro(p) < centro(tipo) + 6 * U)
+      .sort((a, b) => centro(a) - centro(b));
+    const fila = debajo.length ? debajo.filter((p) => enFila(p, debajo[0])) : [];
+    const columnaIzq = id?.x0 ?? 0;
+    const marca = fila.filter((p) => p.x0 >= columnaIzq - 1.5 * U && p.x1 < tipo.x0 - 0.5 * U).sort((a, b) => a.x0 - b.x0);
+    const cal = fila.filter((p) => p.x0 >= tipo.x0 - 1.5 * U).sort((a, b) => a.x0 - b.x0);
+    // Sin un número a la izquierda del tipo no es la cuadrícula de la tarjeta (p. ej. «CLASE: PISTOLA»).
+    if (id) {
+      r.numeroSerie = letras(id);
+      // Lo que no parece una marca (sin letras) o un calibre (sin cifras) es ruido del fondo.
+      const textoMarca = marca.map(letras).join(' ');
+      const textoCal = cal.map(letras).join(' ');
+      if (/[A-Z]{2,}/.test(textoMarca)) r.marca = titulo(limpiar(textoMarca));
+      if (/\d/.test(textoCal)) r.calibre = calibre(textoCal);
+    }
+  }
+
+  // Nº de documento: en la fila de la fecha de expedición, a su izquierda.
+  const conFecha = ps
+    .map((p) => ({ p, f: fecha(letras(p)) }))
+    .filter((x): x is { p: Palabra; f: string } => !!x.f && x.f >= '1990-01-01' && x.f <= hoy)
+    .sort((a, b) => b.f.localeCompare(a.f))[0];
+  if (conFecha) {
+    r.fechaGuia = conFecha.f;
+    const doc = ps
+      .filter((p) => enFila(p, conFecha.p) && p.x1 < conFecha.p.x0 && digitos(p) >= 5 && /^[A-Z0-9\-/.]+$/.test(letras(p)))
+      .sort((a, b) => b.x1 - a.x1)[0];
+    if (doc) r.numeroGuia = letras(doc);
+  }
   return r;
 }
 

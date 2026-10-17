@@ -1,3 +1,5 @@
+import type { Lectura, Palabra } from './ocrTipos';
+
 // Lectura de texto (OCR) en el propio navegador con Tesseract.js: la imagen no sale del móvil.
 // Los archivos (motor, idioma español) se publican junto a la web en /ocr (scripts/web-app.js).
 
@@ -8,9 +10,24 @@ interface TesseractGlobal {
     opciones: { workerPath: string; corePath: string; langPath: string },
   ) => Promise<{
     // Modo de lectura 6 = un bloque uniforme (mejor para tablas); 3 = automático.
-    recognize: (imagen: string | HTMLCanvasElement) => Promise<{ data: { text: string } }>;
+    recognize: (
+      imagen: string | HTMLCanvasElement,
+      opciones?: object,
+      salida?: { text?: boolean; blocks?: boolean },
+    ) => Promise<{ data: { text: string; blocks?: BloqueOcr[] | null } }>;
     setParameters: (p: Record<string, string>) => Promise<unknown>;
   }>;
+}
+
+interface BloqueOcr {
+  paragraphs: { lines: { words: { text: string; bbox: { x0: number; y0: number; x1: number; y1: number } }[] }[] }[];
+}
+
+/** Las palabras leídas con su posición en la imagen, en píxeles. */
+function palabrasDe(bloques?: BloqueOcr[] | null): Palabra[] {
+  return (bloques ?? []).flatMap((b) =>
+    b.paragraphs.flatMap((p) => p.lines.flatMap((l) => l.words.map((w) => ({ texto: w.text, ...w.bbox })))),
+  );
 }
 
 const base = `${process.env.EXPO_BASE_URL ?? ''}/ocr`;
@@ -94,20 +111,26 @@ async function preparar(dataUri: string): Promise<HTMLCanvasElement> {
 export const ocrDisponible = true;
 
 /**
- * Texto de la imagen leído de dos formas: con la luz igualada y en modo tabla, y tal cual en modo
- * automático. Cada una acierta en cosas distintas; quien lo usa combina las dos lecturas.
- * Lista vacía si no se pudo leer.
+ * La imagen leída de dos formas: con la luz igualada y en modo tabla, y tal cual en modo automático.
+ * Cada una acierta en cosas distintas; quien lo usa combina las dos lecturas. Cada lectura trae el
+ * texto y las palabras con su posición. Lista vacía si no se pudo leer.
  */
-export async function leerTextos(dataUri: string): Promise<string[]> {
+export async function leerDocumento(dataUri: string): Promise<Lectura[]> {
   try {
     const w = await obtenerTrabajador();
+    const salida = { text: true, blocks: true };
     await w.setParameters({ tessedit_pageseg_mode: '6' });
-    const preparada = await w.recognize(await preparar(dataUri));
+    const preparada = await w.recognize(await preparar(dataUri), {}, salida);
     await w.setParameters({ tessedit_pageseg_mode: '3' });
-    const original = await w.recognize(dataUri);
-    return [preparada.data.text, original.data.text];
+    const original = await w.recognize(dataUri, {}, salida);
+    return [preparada, original].map((r) => ({ texto: r.data.text, palabras: palabrasDe(r.data.blocks) }));
   } catch (e) {
     console.warn('No se pudo leer el texto de la imagen', e);
     return [];
   }
+}
+
+/** Solo el texto de cada lectura. */
+export async function leerTextos(dataUri: string): Promise<string[]> {
+  return (await leerDocumento(dataUri)).map((l) => l.texto);
 }

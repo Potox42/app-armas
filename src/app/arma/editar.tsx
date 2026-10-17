@@ -10,7 +10,7 @@ import type { Arma, TipoArma } from '@/data/types';
 import { confirmar } from '@/lib/confirmar';
 import { formatear } from '@/lib/fechas';
 import { combinarGuia, leerGuia } from '@/lib/leerGuia';
-import { leerTextos, ocrDisponible } from '@/lib/ocr';
+import { leerDocumento, ocrDisponible } from '@/lib/ocr';
 import { volver } from '@/lib/volver';
 import { colors, space } from '@/theme';
 
@@ -38,8 +38,13 @@ export default function EditarArma() {
     if (!ocrDisponible) return;
     setLeyendo(true);
     setAviso(null);
-    const g = combinarGuia((await leerTextos(foto)).map((t) => leerGuia(t)));
+    const lecturas = await leerDocumento(foto);
+    const g = combinarGuia(lecturas.map((l) => leerGuia(l.texto, undefined, l.palabras)));
     setLeyendo(false);
+    if (!lecturas.length) {
+      setAviso({ ok: false, texto: 'No he podido arrancar el lector de texto. Cierra la app del todo, vuelve a abrirla y repite la foto.' });
+      return;
+    }
     const licencia = g.licencia && licencias.find((l) => l.tipo === g.licencia);
     const nombres: [keyof typeof g, string][] = [
       ['marca', 'marca'], ['modelo', 'modelo'], ['tipo', 'tipo'], ['calibre', 'calibre'],
