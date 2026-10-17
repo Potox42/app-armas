@@ -3,7 +3,7 @@ import { puntuar } from '@/lib/diana';
 import { hoyISO } from '@/lib/fechas';
 import { cargarDatos, guardarDatos } from './db';
 import { datosDeEjemplo } from './ejemplo';
-import type { Arma, Datos, Disparo, Limpieza, Sesion } from './types';
+import type { Arma, Datos, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Sesion } from './types';
 
 // Los datos se cargan de la base de datos cifrada al arrancar y se guardan en cada cambio.
 // Mientras no existan las pantallas de alta, el primer arranque parte del ejemplo.
@@ -19,11 +19,35 @@ interface Store {
   deshacerDisparo: (sesionId: string) => void;
   nuevaSerie: (sesionId: string) => void;
   terminarSesion: (sesionId: string) => void;
+  guardarArma: (arma: Arma) => void;
+  borrarArma: (id: string) => void;
+  guardarLicencia: (licencia: Licencia) => void;
+  borrarLicencia: (id: string) => void;
+  actualizarPermiso: (cambios: Partial<PermisoArmas>) => void;
+  guardarFederacion: (f: Federacion) => void;
+  empezarDeCero: () => void;
+  esEjemplo: boolean;
+}
+
+export const nuevoId = (prefijo: string) => `${prefijo}-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+
+function datosVacios(nombre: string): Datos {
+  return {
+    nombre,
+    permiso: { numero: '', licencias: [] },
+    armas: [],
+    federacion: {
+      nombre: 'Federación Madrileña de Tiro Olímpico',
+      numeroFederado: '', categoria: '', caducidadCarnet: '', codigoPase: '', caducidadPase: '',
+    },
+    sesiones: [],
+    esEjemplo: false,
+  };
 }
 
 /** Datos guardados con una versión anterior de la app: se completan los campos nuevos. */
 function completar(d: Datos): Datos {
-  return { ...d, sesiones: d.sesiones ?? [] };
+  return { ...d, sesiones: d.sesiones ?? [], esEjemplo: d.esEjemplo ?? true };
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -103,6 +127,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             armas: d.armas.map((a) => (a.id === s.armaId ? { ...a, disparosTotales: a.disparosTotales + n } : a)),
           };
         }),
+      guardarArma: (arma) =>
+        setDatos((d) => d && {
+          ...d,
+          armas: d.armas.some((a) => a.id === arma.id)
+            ? d.armas.map((a) => (a.id === arma.id ? arma : a))
+            : [...d.armas, arma],
+        }),
+      borrarArma: (id) => setDatos((d) => d && { ...d, armas: d.armas.filter((a) => a.id !== id) }),
+      guardarLicencia: (l) =>
+        setDatos((d) => d && {
+          ...d,
+          permiso: {
+            ...d.permiso,
+            licencias: d.permiso.licencias.some((x) => x.id === l.id)
+              ? d.permiso.licencias.map((x) => (x.id === l.id ? l : x))
+              : [...d.permiso.licencias, l],
+          },
+        }),
+      borrarLicencia: (id) =>
+        setDatos((d) => d && { ...d, permiso: { ...d.permiso, licencias: d.permiso.licencias.filter((x) => x.id !== id) } }),
+      actualizarPermiso: (cambios) => setDatos((d) => d && { ...d, permiso: { ...d.permiso, ...cambios } }),
+      guardarFederacion: (f) => setDatos((d) => d && { ...d, federacion: f }),
+      empezarDeCero: () => setDatos((d) => d && datosVacios(d.nombre)),
+      esEjemplo: datos.esEjemplo !== false,
     };
   }, [datos]);
 

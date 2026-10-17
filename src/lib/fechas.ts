@@ -56,3 +56,13 @@ export function plazo(iso: string, verbo = 'Caduca'): string {
   if (dias < 730) return `En ${Math.round(dias / 30)} meses`;
   return `En ${Math.floor(dias / 365)} años`;
 }
+
+/** "15/03/2029" -> "2029-03-15"; null si no es una fecha válida. */
+export function deTexto(texto: string): string | null {
+  const m = texto.trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  if (!m) return null;
+  const [, d, mes, y] = m.map(Number);
+  const f = new Date(y, mes - 1, d);
+  if (f.getFullYear() !== y || f.getMonth() !== mes - 1 || f.getDate() !== d) return null;
+  return aISO(f);
+}

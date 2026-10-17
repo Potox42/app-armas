@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Brightness from 'expo-brightness';
+import { useFoto } from '@/components/FotoCampo';
 import { FakeQr } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { formatear } from '@/lib/fechas';
@@ -10,6 +11,7 @@ import { formatear } from '@/lib/fechas';
 export default function Pase() {
   const { datos } = useStore();
   const f = datos.federacion;
+  const qr = useFoto(f.fotoQr);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -28,9 +30,11 @@ export default function Pase() {
   return (
     <Pressable style={st.fondo} onPress={() => router.back()}>
       <Text style={st.titulo}>{f.nombre}</Text>
-      <View style={st.qr}><FakeQr size={280} /></View>
-      <Text style={st.texto}>Federado nº {f.numeroFederado}</Text>
-      <Text style={st.texto}>Válido hasta {formatear(f.caducidadPase)}</Text>
+      <View style={st.qr}>
+        {qr ? <Image source={{ uri: qr }} style={{ width: 300, height: 300 }} resizeMode="contain" /> : <FakeQr size={280} />}
+      </View>
+      {f.numeroFederado ? <Text style={st.texto}>Federado nº {f.numeroFederado}</Text> : null}
+      {f.caducidadPase ? <Text style={st.texto}>Válido hasta {formatear(f.caducidadPase)}</Text> : null}
       <Text style={st.cerrar}>Toca para cerrar</Text>
     </Pressable>
   );

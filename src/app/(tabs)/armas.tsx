@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Icon } from '@/components/Icon';
-import { Card, GunArt, Screen, Segmented, s } from '@/components/ui';
+import { FotoArma } from '@/components/FotoArma';
+import { Button, Card, Screen, Segmented, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { disparosDesdeLimpieza } from '@/lib/avisos';
 import { colors, space } from '@/theme';
@@ -17,7 +18,14 @@ export default function Armas() {
   const lista = filtro === 'todas' ? datos.armas : filtro === 'cortas' ? cortas : largas;
 
   return (
-    <Screen title="Mis armas">
+    <Screen
+      title="Mis armas"
+      right={
+        <Pressable hitSlop={12} accessibilityLabel="Añadir arma" onPress={() => router.push('/arma/editar')}>
+          <Icon name="plus" color={colors.text} />
+        </Pressable>
+      }
+    >
       <Segmented
         value={filtro}
         onChange={setFiltro}
@@ -27,11 +35,17 @@ export default function Armas() {
           { value: 'largas', label: `Largas (${largas.length})` },
         ]}
       />
+      {datos.armas.length === 0 && (
+        <Card style={{ gap: space.md }}>
+          <Text style={s.muted}>Aún no has añadido armas. Añade cada una con su guía de pertenencia.</Text>
+          <Button title="Añadir arma" onPress={() => router.push('/arma/editar')} />
+        </Card>
+      )}
       {lista.map((a) => {
         const limpiar = disparosDesdeLimpieza(a) >= a.intervaloLimpieza;
         return (
           <Card key={a.id} onPress={() => router.push(`/arma/${a.id}`)} style={st.item}>
-            <GunArt tipo={a.tipo} width={110} />
+            <FotoArma arma={a} ancho={110} />
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={st.nombre}>{a.marca} {a.modelo}</Text>
               <Text style={s.muted}>{a.tipo} · {a.calibre}</Text>

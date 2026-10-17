@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { Button, Card, GunArt, Screen, Segmented, s } from '@/components/ui';
+import { FotoArma } from '@/components/FotoArma';
+import { Button, Card, Screen, Segmented, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import type { Modalidad } from '@/data/types';
 import { colors, radius, space } from '@/theme';
@@ -29,10 +30,16 @@ export default function NuevaSesion() {
   return (
     <Screen title="Nueva sesión" back>
       <Text style={st.paso}>1. Arma</Text>
+      {armas.length === 0 && (
+        <Card style={{ gap: space.md }}>
+          <Text style={s.muted}>Primero añade un arma.</Text>
+          <Button title="Añadir arma" onPress={() => router.push('/arma/editar')} />
+        </Card>
+      )}
       {armas.map((a) => (
         <Pressable key={a.id} onPress={() => setArmaId(a.id)}>
           <Card style={[st.arma, a.id === armaId && st.elegida]}>
-            <GunArt tipo={a.tipo} width={80} />
+            <FotoArma arma={a} ancho={80} />
             <View>
               <Text style={st.nombre}>{a.marca} {a.modelo}</Text>
               <Text style={s.muted}>{a.tipo} · {a.calibre}</Text>

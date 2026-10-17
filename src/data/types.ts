@@ -84,4 +84,5 @@ export interface Datos {
   armas: Arma[];
   federacion: Federacion;
   sesiones: Sesion[];
+  esEjemplo?: boolean; // true mientras se usan los datos de ejemplo
 }

@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Icon } from '@/components/Icon';
+import { FotoArma } from '@/components/FotoArma';
+import { FotoCampo } from '@/components/FotoCampo';
 import {
-  Badge, Button, Card, DocPlaceholder, GunArt, ProgressBar, Row, Screen, Segmented, SectionTitle, s,
+  Badge, Button, Card, ProgressBar, Row, Screen, Segmented, SectionTitle, s,
 } from '@/components/ui';
 import { useStore } from '@/data/store';
 import type { Limpieza } from '@/data/types';
@@ -29,9 +31,17 @@ export default function FichaArma() {
   const desde = disparosDesdeLimpieza(arma);
 
   return (
-    <Screen title={`${arma.marca} ${arma.modelo}`} back>
+    <Screen
+      title={`${arma.marca} ${arma.modelo}`}
+      back
+      right={
+        <Pressable hitSlop={12} onPress={() => router.push(`/arma/editar?id=${arma.id}`)}>
+          <Text style={{ color: colors.accent, fontWeight: '700' }}>Editar</Text>
+        </Pressable>
+      }
+    >
       <Card style={st.cabecera}>
-        <GunArt tipo={arma.tipo} width={130} />
+        <FotoArma arma={arma} ancho={130} />
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={s.h2}>{arma.marca} {arma.modelo}</Text>
           <Text style={s.muted}>{arma.tipo} · {arma.calibre}</Text>
@@ -54,15 +64,23 @@ export default function FichaArma() {
           <Card style={{ gap: space.sm }}>
             <Text style={st.titulo}>Guía de pertenencia</Text>
             <View style={{ flexDirection: 'row', gap: space.sm }}>
-              <DocPlaceholder label="Anverso" />
-              <DocPlaceholder label="Reverso" />
+              <FotoCampo
+                etiqueta="Anverso"
+                fotoId={arma.fotoGuiaAnverso}
+                onChange={(fotoGuiaAnverso) => store.guardarArma({ ...arma, fotoGuiaAnverso })}
+              />
+              <FotoCampo
+                etiqueta="Reverso"
+                fotoId={arma.fotoGuiaReverso}
+                onChange={(fotoGuiaReverso) => store.guardarArma({ ...arma, fotoGuiaReverso })}
+              />
             </View>
             <Row label="Nº de guía" value={arma.numeroGuia} />
             <Row label="Marca" value={arma.marca} />
             <Row label="Modelo" value={arma.modelo} />
             <Row label="Calibre" value={arma.calibre} />
             <Row label="Nº de serie" value={arma.numeroSerie} />
-            <Row label="Fecha de expedición" value={formatear(arma.fechaGuia)} />
+            <Row label="Fecha de expedición" value={arma.fechaGuia ? formatear(arma.fechaGuia) : '—'} />
             <Row label="Licencia" value={licencia ? `Tipo ${licencia.tipo}` : '—'} />
           </Card>
           {revista && (

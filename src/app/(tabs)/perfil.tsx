@@ -1,7 +1,8 @@
 import { Text, View } from 'react-native';
 import { Icon, type IconName } from '@/components/Icon';
-import { Card, Screen, s } from '@/components/ui';
+import { Button, Card, Screen, s } from '@/components/ui';
 import { useStore } from '@/data/store';
+import { confirmar } from '@/lib/confirmar';
 import { colors, space } from '@/theme';
 
 const PENDIENTE: { icon: IconName; titulo: string; detalle: string }[] = [
@@ -11,14 +12,17 @@ const PENDIENTE: { icon: IconName; titulo: string; detalle: string }[] = [
 ];
 
 export default function Perfil() {
-  const { datos } = useStore();
+  const store = useStore();
+  const { datos } = store;
   return (
     <Screen title="Perfil">
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
         <Icon name="user" size={36} color={colors.textMuted} />
         <View>
           <Text style={s.h2}>{datos.nombre}</Text>
-          <Text style={s.muted}>Federado nº {datos.federacion.numeroFederado}</Text>
+          {datos.federacion.numeroFederado ? (
+            <Text style={s.muted}>Federado nº {datos.federacion.numeroFederado}</Text>
+          ) : null}
         </View>
       </Card>
       {PENDIENTE.map((p) => (
@@ -30,7 +34,23 @@ export default function Perfil() {
           </View>
         </Card>
       ))}
-      <Text style={[s.muted, { textAlign: 'center' }]}>Vista previa con datos de ejemplo</Text>
+      {store.esEjemplo && (
+        <Card style={{ gap: space.md, borderColor: colors.orange }}>
+          <Text style={s.text}>Estás viendo datos de ejemplo.</Text>
+          <Text style={s.muted}>
+            Cuando quieras usar la app de verdad, bórralos y añade tus licencias, armas y carnet.
+          </Text>
+          <Button
+            title="Borrar el ejemplo y empezar con mis datos"
+            onPress={() => confirmar(
+              'Empezar con tus datos',
+              'Se borrarán las armas, licencias y entrenamientos de ejemplo.',
+              store.empezarDeCero,
+              'Borrar ejemplo',
+            )}
+          />
+        </Card>
+      )}
     </Screen>
   );
 }

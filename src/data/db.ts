@@ -36,6 +36,10 @@ async function abrir(): Promise<SQLite.SQLiteDatabase> {
       json TEXT NOT NULL,
       actualizado TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS foto (
+      id TEXT PRIMARY KEY NOT NULL,
+      datos TEXT NOT NULL
+    );
   `);
   return db;
 }
@@ -62,4 +66,19 @@ export async function guardarDatos(datos: Datos): Promise<void> {
     JSON.stringify(datos),
     new Date().toISOString(),
   );
+}
+
+// Las fotos van en su propia tabla (también cifrada) para no reescribirlas en cada cambio.
+
+export async function guardarFoto(id: string, dataUri: string): Promise<void> {
+  await (await bd()).runAsync('INSERT OR REPLACE INTO foto (id, datos) VALUES (?, ?)', id, dataUri);
+}
+
+export async function leerFoto(id: string): Promise<string | null> {
+  const fila = await (await bd()).getFirstAsync<{ datos: string }>('SELECT datos FROM foto WHERE id = ?', id);
+  return fila?.datos ?? null;
+}
+
+export async function borrarFoto(id: string): Promise<void> {
+  await (await bd()).runAsync('DELETE FROM foto WHERE id = ?', id);
 }

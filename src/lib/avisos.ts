@@ -93,6 +93,7 @@ export function calcularAvisos(datos: Datos): Aviso[] {
   }
 
   const f = datos.federacion;
+  if (!f.caducidadCarnet) return avisos.sort((x, y) => x.orden - y.orden);
   const diasCarnet = diasHasta(f.caducidadCarnet);
   avisos.push({
     id: 'carnet',
@@ -103,7 +104,7 @@ export function calcularAvisos(datos: Datos): Aviso[] {
     nivel: nivelPorDias(diasCarnet),
     orden: diasCarnet,
   });
-  if (f.caducidadPase !== f.caducidadCarnet) {
+  if (f.caducidadPase && f.caducidadPase !== f.caducidadCarnet) {
     const diasPase = diasHasta(f.caducidadPase);
     avisos.push({
       id: 'pase',

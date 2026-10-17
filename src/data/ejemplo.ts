@@ -123,5 +123,6 @@ export function datosDeEjemplo(): Datos {
       caducidadPase: sumarDias(hoy, 118),
     },
     sesiones: sesionesDeEjemplo(hoy),
+    esEjemplo: true,
   };
 }

@@ -16,7 +16,8 @@ const ICONO_AVISO: Record<TipoAviso, IconName> = {
 };
 
 export default function Inicio() {
-  const { datos } = useStore();
+  const store = useStore();
+  const { datos } = store;
   const avisos = calcularAvisos(datos).filter((a) => a.nivel !== 'verde' || a.orden < 365).slice(0, 5);
 
   return (
@@ -42,7 +43,7 @@ export default function Inicio() {
         <Pressable onPress={() => router.push('/armas')} style={[st.tile, st.square, { backgroundColor: colors.cardAlt }]}>
           <Icon name="gun" size={36} />
           <Text style={st.tileTitle}>Mis armas</Text>
-          <Text style={st.tileSub}>{datos.armas.length} armas registradas</Text>
+          <Text style={st.tileSub}>{datos.armas.length === 1 ? '1 arma registrada' : `${datos.armas.length} armas registradas`}</Text>
         </Pressable>
         <Pressable onPress={() => router.push('/cartera')} style={[st.tile, st.square, { backgroundColor: '#8A4A1F' }]}>
           <Icon name="wallet" size={36} />
@@ -59,8 +60,24 @@ export default function Inicio() {
         </View>
       </Pressable>
 
+      {store.esEjemplo && (
+        <Pressable onPress={() => router.push('/perfil')}>
+          <Card style={{ borderColor: colors.orange }}>
+            <Text style={s.text}>Datos de ejemplo</Text>
+            <Text style={s.muted}>Para usar los tuyos, ve a Perfil y empieza de cero.</Text>
+          </Card>
+        </Pressable>
+      )}
+
       <SectionTitle>Próximos avisos</SectionTitle>
       <Card style={{ paddingVertical: space.sm }}>
+        {avisos.length === 0 && (
+          <Text style={[s.muted, { paddingVertical: space.md }]}>
+            {datos.permiso.licencias.length || datos.armas.length
+              ? 'Todo en regla: no hay renovaciones ni revistas en los próximos meses.'
+              : 'Sin avisos. Añade tus licencias y armas en Cartera y Armas.'}
+          </Text>
+        )}
         {avisos.map((a, i) => (
           <Pressable
             key={a.id}
