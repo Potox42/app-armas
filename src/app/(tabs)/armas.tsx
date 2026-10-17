@@ -58,6 +58,9 @@ export default function Armas() {
           </Card>
         );
       })}
+      {datos.armas.length > 0 && (
+        <Button title="Añadir otra arma" variant="secondary" onPress={() => router.push('/arma/editar')} />
+      )}
     </Screen>
   );
 }

@@ -19,7 +19,11 @@ const TIPOS: TipoLicencia[] = ['E', 'F', 'D'];
 /** La tarjeta de licencia de armas: fotos, NIF y una fila por cada licencia (E, F, D). */
 export default function EditarLicencia() {
   const store = useStore();
-  const [p, setP] = useState<PermisoArmas>(store.datos.permiso);
+  // Una licencia por tipo: si quedara alguna repetida de antes, se queda la primera.
+  const [p, setP] = useState<PermisoArmas>(() => {
+    const permiso = store.datos.permiso;
+    return { ...permiso, licencias: permiso.licencias.filter((l, i, todas) => todas.findIndex((x) => x.tipo === l.tipo) === i) };
+  });
   const [intentado, setIntentado] = useState(false);
   const [leyendo, setLeyendo] = useState(false);
   const [aviso, setAviso] = useState<{ texto: string; ok: boolean } | null>(null);
@@ -29,16 +33,13 @@ export default function EditarLicencia() {
   const filas = p.licencias;
   // Las licencias F, D y E tienen 5 años de validez (Ministerio del Interior).
   const hasta = (l: Licencia) => l.caducidad || (l.expedicion ? sumarAnios(l.expedicion, 5) : '');
-  const repetidas = TIPOS.filter((t) => filas.filter((l) => l.tipo === t).length > 1);
-  const valida = filas.every((l) => l.expedicion) && repetidas.length === 0;
+  const valida = filas.every((l) => l.expedicion);
 
   const cambiarFila = (id: string, cambio: Partial<Licencia>) =>
     setP((x) => ({ ...x, licencias: x.licencias.map((l) => (l.id === id ? { ...l, ...cambio } : l)) }));
 
-  const anadirFila = () => {
-    const libre = TIPOS.find((t) => !filas.some((l) => l.tipo === t)) ?? 'F';
-    setP((x) => ({ ...x, licencias: [...x.licencias, { id: nuevoId('lic'), tipo: libre, expedicion: '', caducidad: '' }] }));
-  };
+  const anadirFila = (tipo: TipoLicencia) =>
+    setP((x) => ({ ...x, licencias: [...x.licencias, { id: nuevoId('lic'), tipo, expedicion: '', caducidad: '' }] }));
 
   const quitarFila = (l: Licencia) => {
     const armas = store.datos.armas.filter((a) => a.licenciaId === l.id).length;
@@ -159,57 +160,60 @@ export default function EditarLicencia() {
       />
 
       <SectionTitle>Licencias de la tarjeta</SectionTitle>
-      {filas.length === 0 && (
-        <Text style={s.muted}>Escanea el reverso o añade cada licencia (E, F, D) con sus fechas.</Text>
-      )}
-      {filas.map((l) => (
-        <Card key={`${l.id}-${version}`} style={{ gap: space.md }}>
-          <View style={st.cabecera}>
-            <View style={st.sello}><Text style={st.selloTexto}>{l.tipo}</Text></View>
-            <Text style={[st.titulo, { flex: 1 }]}>Licencia {l.tipo}</Text>
-            <Pressable hitSlop={12} onPress={() => quitarFila(l)} accessibilityLabel={`Quitar licencia ${l.tipo}`}>
-              <Icon name="trash" color={colors.textMuted} size={20} />
-            </Pressable>
-          </View>
-          <Chips
-            opciones={TIPOS.map((t) => ({ value: t, label: t }))}
-            valor={l.tipo}
-            onChange={(tipo) => cambiarFila(l.id, { tipo })}
-          />
-          {repetidas.includes(l.tipo) && <Text style={st.error}>Ya hay otra fila con la licencia {l.tipo}.</Text>}
-          {l.tipo === 'F' && (
-            <View style={{ gap: 6 }}>
-              <Text style={st.etiqueta}>Categoría</Text>
-              <Chips
-                opciones={['1', '2', '3'].map((c) => ({ value: c, label: `${c}ª` }))}
-                valor={l.categoria}
-                onChange={(categoria) => cambiarFila(l.id, { categoria })}
-              />
+      <Text style={s.muted}>Una ficha por cada licencia. Añade las que tengas en el reverso de la tarjeta.</Text>
+      {/* Una ficha fija por tipo (E, F, D), en el mismo orden que la tarjeta. */}
+      {TIPOS.map((tipo) => {
+        const l = filas.find((x) => x.tipo === tipo);
+        return (
+          <Card key={`${tipo}-${l?.id ?? 'no'}-${version}`} style={{ gap: space.md, opacity: l ? 1 : 0.85 }}>
+            <View style={st.cabecera}>
+              <View style={[st.sello, !l && st.selloApagado]}><Text style={st.selloTexto}>{tipo}</Text></View>
+              <Text style={[st.titulo, { flex: 1 }]}>Licencia {tipo}</Text>
+              {l && (
+                <Pressable hitSlop={12} onPress={() => quitarFila(l)} accessibilityLabel={`Quitar licencia ${tipo}`}>
+                  <Icon name="trash" color={colors.textMuted} size={20} />
+                </Pressable>
+              )}
             </View>
-          )}
-          <View style={formSt.fila}>
-            <View style={{ flex: 1 }}>
-              <CampoFecha
-                etiqueta="Válida desde"
-                valor={l.expedicion}
-                obligatorio={intentado}
-                onChange={(expedicion) => cambiarFila(l.id, { expedicion })}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <CampoFecha
-                etiqueta="Válida hasta"
-                valor={l.caducidad}
-                onChange={(caducidad) => cambiarFila(l.id, { caducidad })}
-              />
-            </View>
-          </View>
-          {!l.caducidad && hasta(l) && <Text style={s.muted}>Si la dejas vacía: {formatear(hasta(l))} (5 años).</Text>}
-        </Card>
-      ))}
-      {filas.length < TIPOS.length && <Button title="Añadir licencia" variant="secondary" onPress={anadirFila} />}
+            {!l ? (
+              <Button title={`Tengo la licencia ${tipo}`} variant="secondary" onPress={() => anadirFila(tipo)} />
+            ) : (
+              <>
+                {tipo === 'F' && (
+                  <View style={{ gap: 6 }}>
+                    <Text style={st.etiqueta}>Categoría</Text>
+                    <Chips
+                      opciones={['1', '2', '3'].map((c) => ({ value: c, label: `${c}ª` }))}
+                      valor={l.categoria}
+                      onChange={(categoria) => cambiarFila(l.id, { categoria })}
+                    />
+                  </View>
+                )}
+                <View style={formSt.fila}>
+                  <View style={{ flex: 1 }}>
+                    <CampoFecha
+                      etiqueta="Válida desde"
+                      valor={l.expedicion}
+                      obligatorio={intentado}
+                      onChange={(expedicion) => cambiarFila(l.id, { expedicion })}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <CampoFecha
+                      etiqueta="Válida hasta"
+                      valor={l.caducidad}
+                      onChange={(caducidad) => cambiarFila(l.id, { caducidad })}
+                    />
+                  </View>
+                </View>
+                {!l.caducidad && hasta(l) && <Text style={s.muted}>Si la dejas vacía: {formatear(hasta(l))} (5 años).</Text>}
+              </>
+            )}
+          </Card>
+        );
+      })}
 
-      {intentado && !valida && <Text style={st.error}>Revisa las licencias: cada una necesita su fecha «válida desde» y no puede repetirse.</Text>}
+      {intentado && !valida && <Text style={st.error}>Revisa las licencias: cada una necesita su fecha «válida desde».</Text>}
       <Button title="Guardar" onPress={guardar} />
     </Screen>
   );
@@ -224,6 +228,7 @@ const st = StyleSheet.create({
     width: 36, height: 36, borderRadius: radius.md, backgroundColor: colors.accent,
     alignItems: 'center', justifyContent: 'center',
   },
+  selloApagado: { backgroundColor: colors.cardAlt },
   selloTexto: { color: '#fff', fontSize: 18, fontWeight: '900' },
   error: { color: colors.red, fontSize: 13 },
 });

@@ -16,17 +16,22 @@ function BotonEntrenar(props: {
 }) {
   const activo = props['aria-selected'] ?? props.accessibilityState?.selected;
   return (
-    <View style={st.hueco}>
-      <Pressable
-        onPress={(e: GestureResponderEvent) => props.onPress?.(e as never)}
-        accessibilityRole="tab"
-        accessibilityLabel="Entrenar"
-        style={({ pressed }) => [st.circulo, pressed && { transform: [{ scale: 0.94 }] }]}
-      >
-        <Icon name="target" size={30} />
-      </Pressable>
-      <Text style={[st.texto, activo && { color: colors.accent }]}>Entrenar</Text>
-    </View>
+    // Todo el hueco (círculo y texto) se puede tocar, no solo el círculo.
+    <Pressable
+      onPress={(e: GestureResponderEvent) => props.onPress?.(e as never)}
+      accessibilityRole="tab"
+      accessibilityLabel="Entrenar"
+      style={st.hueco}
+    >
+      {({ pressed }) => (
+        <>
+          <View style={[st.circulo, pressed && { transform: [{ scale: 0.94 }] }]}>
+            <Icon name="target" size={30} />
+          </View>
+          <Text style={[st.texto, activo && { color: colors.accent }]}>Entrenar</Text>
+        </>
+      )}
+    </Pressable>
   );
 }
 
