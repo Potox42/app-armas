@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View, type ColorValue, type GestureResponderEvent } from 'react-native';
 import { Tabs } from 'expo-router/tabs';
 import { Icon, type IconName } from '@/components/Icon';
+import { barraPestanasWeb } from '@/lib/margenes';
 import { colors } from '@/theme';
 
 const tab = (title: string, icon: IconName) => ({
@@ -42,7 +43,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border },
+        tabBarStyle: [{ backgroundColor: colors.card, borderTopColor: colors.border }, barraPestanasWeb],
         sceneStyle: { backgroundColor: colors.bg },
       }}
     >

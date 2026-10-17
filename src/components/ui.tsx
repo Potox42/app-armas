@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { bordesNativos, margenArriba } from '@/lib/margenes';
 import type { Href } from 'expo-router';
 import Svg, { Path, Rect } from 'react-native-svg';
 import type { Nivel } from '@/lib/avisos';
@@ -17,7 +18,7 @@ export function Screen({ title, back, right, children }: {
   children: ReactNode;
 }) {
   return (
-    <SafeAreaView style={s.screen} edges={['top']}>
+    <SafeAreaView style={[s.screen, margenArriba()]} edges={bordesNativos(['top'])}>
       {title !== undefined && (
         <View style={s.header}>
           <View style={s.headerSide}>

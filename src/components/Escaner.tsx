@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View, type LayoutRectangle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { bordesNativos, margenAbajo, margenArriba } from '@/lib/margenes';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
@@ -120,7 +121,7 @@ export function Escaner({ visible, titulo, proporcion = TARJETA, onFoto, onCerra
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={cerrar}>
       <View style={st.fondo}>
         {resultado ? (
-          <SafeAreaView style={st.revision}>
+          <SafeAreaView edges={bordesNativos()} style={[st.revision, margenArriba(space.xl), margenAbajo(space.xl)]}>
             <Text style={st.titulo}>¿Se lee bien?</Text>
             <Image source={{ uri: resultado }} style={[st.previa, { aspectRatio: proporcion }]} resizeMode="contain" />
             <View style={{ gap: space.sm, alignSelf: 'stretch' }}>
@@ -129,7 +130,7 @@ export function Escaner({ visible, titulo, proporcion = TARJETA, onFoto, onCerra
             </View>
           </SafeAreaView>
         ) : !permiso?.granted ? (
-          <SafeAreaView style={st.revision}>
+          <SafeAreaView edges={bordesNativos()} style={[st.revision, margenArriba(space.xl), margenAbajo(space.xl)]}>
             <Text style={st.titulo}>Permiso de cámara</Text>
             <Text style={st.texto}>Para encuadrar el documento hace falta usar la cámara.</Text>
             <View style={{ gap: space.sm, alignSelf: 'stretch' }}>
@@ -172,7 +173,7 @@ export function Escaner({ visible, titulo, proporcion = TARJETA, onFoto, onCerra
               </>
             )}
             {conLuz && (
-              <SafeAreaView edges={['top']} style={st.arriba}>
+              <SafeAreaView edges={bordesNativos(['top'])} style={[st.arriba, margenArriba(space.lg)]}>
                 <Pressable
                   onPress={async () => setLuz(await linterna(!luz))}
                   accessibilityLabel={luz ? 'Apagar linterna' : 'Encender linterna'}
@@ -182,7 +183,7 @@ export function Escaner({ visible, titulo, proporcion = TARJETA, onFoto, onCerra
                 </Pressable>
               </SafeAreaView>
             )}
-            <SafeAreaView edges={['bottom']} style={st.barra}>
+            <SafeAreaView edges={bordesNativos(['bottom'])} style={[st.barra, margenAbajo(space.lg)]}>
               <Pressable onPress={cerrar} hitSlop={12}><Text style={st.boton}>Cancelar</Text></Pressable>
               <Pressable
                 onPress={disparar}

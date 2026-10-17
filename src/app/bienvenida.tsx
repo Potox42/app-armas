@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { bordesNativos, margenAbajo, margenArriba } from '@/lib/margenes';
 import { router } from 'expo-router';
 import { Icon, type IconName } from '@/components/Icon';
 import { Logo } from '@/components/Logo';
@@ -27,7 +28,7 @@ export default function Bienvenida() {
   };
 
   return (
-    <SafeAreaView style={st.pantalla}>
+    <SafeAreaView edges={bordesNativos()} style={[st.pantalla, margenArriba(), margenAbajo()]}>
       <ScrollView contentContainerStyle={st.contenido}>
         <View style={st.cabecera}>
           <Logo size={120} />
