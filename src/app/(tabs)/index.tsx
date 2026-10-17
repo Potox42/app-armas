@@ -51,11 +51,11 @@ export default function Inicio() {
         </Pressable>
       </View>
 
-      <Pressable onPress={() => router.push('/entrenar')} style={[st.tile, { backgroundColor: colors.purpleSoft }]}>
+      <Pressable onPress={() => router.push('/evolucion')} style={[st.tile, { backgroundColor: colors.purpleSoft }]}>
         <Icon name="chart" size={36} />
         <View style={{ flex: 1 }}>
           <Text style={st.tileTitle}>Mi evolución</Text>
-          <Text style={st.tileSub}>Estadísticas y resultados · próximamente</Text>
+          <Text style={st.tileSub}>Estadísticas y resultados</Text>
         </View>
       </Pressable>
 

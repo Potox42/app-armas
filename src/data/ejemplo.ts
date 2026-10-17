@@ -23,14 +23,19 @@ function seriesDeEjemplo(semilla: number, dispersion: number): Serie[] {
 }
 
 function sesionesDeEjemplo(hoy: string): Sesion[] {
-  return [
-    { dias: -3, dispersion: 30, semilla: 11 },
-    { dias: -10, dispersion: 33, semilla: 23 },
-    { dias: -17, dispersion: 36, semilla: 37 },
-  ].map(({ dias, dispersion, semilla }) => ({
+  // Un entrenamiento cada dos semanas durante seis meses, mejorando poco a poco.
+  return Array.from({ length: 13 }, (_, i) => {
+    const semilla = 11 + i * 7;
+    return {
+      dias: -3 - i * 14,
+      dispersion: 30 + i * 1.2,
+      semilla,
+      armaId: i % 4 === 2 ? 'pardini-sp' : 'walther-p22',
+    };
+  }).map(({ dias, dispersion, semilla, armaId }) => ({
     id: `ejemplo-${semilla}`,
     fecha: `${sumarDias(hoy, dias)}T10:14:00`,
-    armaId: 'walther-p22',
+    armaId,
     modalidad: 'Precisión',
     distancia: 25,
     municion: 'RWS R50 .22 LR',
