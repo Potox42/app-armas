@@ -3,7 +3,7 @@ import { puntuar } from '@/lib/diana';
 import { hoyISO } from '@/lib/fechas';
 import { cargarDatos, guardarDatos } from './db';
 import { datosDeEjemplo } from './ejemplo';
-import type { Ajustes, Arma, Datos, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Sesion } from './types';
+import type { Ajustes, Arma, Datos, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Registro, Sesion } from './types';
 
 // Los datos se cargan de la base de datos cifrada al arrancar y se guardan en cada cambio.
 // Mientras no existan las pantallas de alta, el primer arranque parte del ejemplo.
@@ -20,6 +20,8 @@ interface Store {
   deshacerDisparo: (sesionId: string) => void;
   nuevaSerie: (sesionId: string) => void;
   terminarSesion: (sesionId: string) => void;
+  borrarSesion: (sesionId: string) => void;
+  cambiarRegistro: (sesionId: string, registro: Registro) => void;
   guardarArma: (arma: Arma) => void;
   borrarArma: (id: string) => void;
   guardarLicencia: (licencia: Licencia) => void;
@@ -142,6 +144,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             sesiones: d.sesiones.map((x) => (x.id === sesionId ? { ...x, series, terminada: true } : x)),
             // los disparos de la sesión cuentan para el mantenimiento del arma
             armas: d.armas.map((a) => (a.id === s.armaId ? { ...a, disparosTotales: a.disparosTotales + n } : a)),
+          };
+        }),
+      cambiarRegistro: (sesionId, registro) => actualizarSesion(sesionId, (s) => ({ ...s, registro })),
+      borrarSesion: (sesionId) =>
+        setDatos((d) => {
+          if (!d) return d;
+          const s = d.sesiones.find((x) => x.id === sesionId);
+          if (!s) return d;
+          // Si ya estaba terminada, sus disparos se habían sumado al arma: se restan.
+          const n = s.terminada ? s.series.reduce((t, x) => t + x.disparos.length, 0) : 0;
+          return {
+            ...d,
+            sesiones: d.sesiones.filter((x) => x.id !== sesionId),
+            armas: d.armas.map((a) => (a.id === s.armaId ? { ...a, disparosTotales: Math.max(0, a.disparosTotales - n) } : a)),
           };
         }),
       guardarArma: (arma) =>

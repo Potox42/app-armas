@@ -1,13 +1,15 @@
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import { Anillo, Cifra } from '@/components/Cifra';
+import { CamaraDiana } from '@/components/CamaraDiana';
 import { Diana } from '@/components/Diana';
 import { GraficaDisparos } from '@/components/GraficaDisparos';
 import { Icon } from '@/components/Icon';
 import { Button, Card, Screen, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import type { Sesion } from '@/data/types';
+import { confirmar } from '@/lib/confirmar';
 import { formatear } from '@/lib/fechas';
 import { volver } from '@/lib/volver';
 import { agrupacion, conPosicion, extremos, formatoMedia, media, sumaSerie, todosLosDisparos, totalSesion } from '@/lib/sesiones';
@@ -39,6 +41,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   const ultimo = serie.disparos[serie.disparos.length - 1];
   const anteriores = sesion.series.slice(0, -1).flatMap((x) => x.disparos);
   const teclado = sesion.registro === 'teclado';
+  const camara = sesion.registro === 'camara';
   const valores = serie.disparos.map((d) => d.valor);
 
   const terminar = () => {
@@ -99,6 +102,9 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         </>
       ) : (
         <>
+          {camara && (
+            <CamaraDiana activo={!completa} onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)} />
+          )}
           <View style={{ alignItems: 'center' }}>
             <Diana
               tamano={tamano}
@@ -108,7 +114,11 @@ function Asistente({ sesion }: { sesion: Sesion }) {
             />
           </View>
           <Text style={[s.muted, { textAlign: 'center' }]}>
-            {completa ? 'Serie completa' : 'Toca la diana donde ha entrado el disparo'}
+            {completa
+              ? 'Serie completa'
+              : camara
+                ? 'Si la cámara se salta un disparo, tócalo en la diana; si apunta uno de más, pulsa Deshacer.'
+                : 'Toca la diana donde ha entrado el disparo'}
           </Text>
           {valores.length > 0 && (
             <Card style={{ alignItems: 'center', gap: space.xs }}>
@@ -131,16 +141,45 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         </View>
       </View>
       {!ultimaSerie && <Button title="Terminar entrenamiento" variant="secondary" onPress={terminar} />}
+      <BotonBorrar sesion={sesion} />
 
-      {!teclado && (
-        <Card style={st.camara}>
-          <Icon name="target" color={colors.textMuted} />
+      {!teclado && !camara && (
+        <Card style={st.camara} onPress={() => store.cambiarRegistro(sesion.id, 'camara')}>
+          <Icon name="target" color={colors.accent} />
           <Text style={[s.muted, { flex: 1 }]}>
-            Detección automática con la cámara en el catalejo: en desarrollo. De momento marca los impactos a mano.
+            ¿Tienes el móvil en el catalejo? Toca aquí y la cámara apuntará cada impacto sola.
           </Text>
         </Card>
       )}
     </Screen>
+  );
+}
+
+/** Borra el entrenamiento (pide confirmación) y vuelve a la lista. */
+function BotonBorrar({ sesion }: { sesion: Sesion }) {
+  const store = useStore();
+  const disparos = todosLosDisparos(sesion).length;
+  return (
+    <Pressable
+      onPress={() =>
+        confirmar(
+          'Borrar entrenamiento',
+          disparos
+            ? `Se borrarán sus ${disparos} disparos${sesion.terminada ? ' y se restarán del contador del arma' : ''}. No se puede deshacer.`
+            : 'No se puede deshacer.',
+          () => {
+            router.replace('/entrenar');
+            store.borrarSesion(sesion.id);
+          },
+          'Borrar',
+        )
+      }
+      style={st.borrar}
+      accessibilityLabel="Borrar entrenamiento"
+    >
+      <Icon name="trash" color={colors.red} size={18} />
+      <Text style={st.borrarTexto}>Borrar entrenamiento</Text>
+    </Pressable>
   );
 }
 
@@ -243,6 +282,7 @@ function Resumen({ sesion }: { sesion: Sesion }) {
       )}
 
       <Button title="Volver a Entrenar" onPress={() => volver('/entrenar')} />
+      <BotonBorrar sesion={sesion} />
     </Screen>
   );
 }
@@ -315,6 +355,8 @@ function GraficaSeries({ sumas, maximo }: { sumas: number[]; maximo: number }) {
 const st = StyleSheet.create({
   datos: { flexDirection: 'row', gap: space.sm },
   botones: { flexDirection: 'row', gap: space.sm },
+  borrar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm, paddingVertical: space.md },
+  borrarTexto: { color: colors.red, fontWeight: '600' },
   camara: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   teclado: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   tecla: {

@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { FotoArma } from '@/components/FotoArma';
 import { Button, Card, Screen, Segmented, s } from '@/components/ui';
 import { useStore } from '@/data/store';
-import type { Modalidad } from '@/data/types';
+import type { Modalidad, Registro } from '@/data/types';
 import { colors, radius, space } from '@/theme';
 
 const DISTANCIAS = [25, 50, 10];
@@ -19,7 +19,7 @@ export default function NuevaSesion() {
   const [municion, setMunicion] = useState(ultima?.municion ?? '');
   const [porSerie, setPorSerie] = useState(String(ultima?.disparosPorSerie ?? 10) as '5' | '10');
   const [series, setSeries] = useState(String(ultima?.seriesPrevistas ?? 0) as '0' | '4' | '6');
-  const [registro, setRegistro] = useState<'diana' | 'teclado'>(ultima?.registro ?? 'diana');
+  const [registro, setRegistro] = useState<Registro>(ultima?.registro ?? 'diana');
 
   const empezar = () => {
     if (!armaId) return;
@@ -88,12 +88,18 @@ export default function NuevaSesion() {
       <Segmented
         value={registro}
         onChange={setRegistro}
-        options={[{ value: 'diana', label: 'Tocando la diana' }, { value: 'teclado', label: 'Con números' }]}
+        options={[
+          { value: 'camara', label: 'Cámara' },
+          { value: 'diana', label: 'Diana' },
+          { value: 'teclado', label: 'Números' },
+        ]}
       />
       <Text style={s.muted}>
-        {registro === 'diana'
-          ? 'Marcas dónde entró cada disparo: la app calcula la puntuación y tu agrupación.'
-          : 'Más rápido: tocas la puntuación de cada disparo (10, 9, 8…). No guarda dónde entró.'}
+        {registro === 'camara'
+          ? 'Pon el móvil en el catalejo apuntando a la diana: la app ve cada impacto nuevo y lo apunta solo, con su puntuación y su sitio.'
+          : registro === 'diana'
+            ? 'Marcas dónde entró cada disparo: la app calcula la puntuación y tu agrupación.'
+            : 'Más rápido: tocas la puntuación de cada disparo (10, 9, 8…). No guarda dónde entró.'}
       </Text>
 
       <Text style={[s.muted, { marginTop: space.sm }]}>Diana: pistola precisión ISSF (25 m / 50 m)</Text>

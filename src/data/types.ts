@@ -73,6 +73,9 @@ export interface Serie {
   disparos: Disparo[];
 }
 
+/** Cómo se apuntan los disparos: tocando la diana, con números o con la cámara en el catalejo. */
+export type Registro = 'diana' | 'teclado' | 'camara';
+
 export interface Sesion {
   id: string;
   fecha: string;
@@ -82,7 +85,7 @@ export interface Sesion {
   municion: string;
   disparosPorSerie: number;
   seriesPrevistas?: number; // sin valor: series libres
-  registro?: 'diana' | 'teclado'; // cómo se apuntan los disparos (por defecto, tocando la diana)
+  registro?: Registro; // cómo se apuntan los disparos (por defecto, tocando la diana)
   series: Serie[];
   terminada: boolean;
 }
