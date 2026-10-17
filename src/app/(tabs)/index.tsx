@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Redirect, router } from 'expo-router';
+import { Avatar } from '@/components/Avatar';
 import { Icon, type IconName } from '@/components/Icon';
 import { Card, Screen, SectionTitle, nivelColor, s } from '@/components/ui';
 import { useStore } from '@/data/store';
@@ -24,7 +25,7 @@ export default function Inicio() {
   return (
     <Screen>
       <View style={st.hello}>
-        <View style={st.avatar}><Icon name="user" color={colors.textMuted} /></View>
+        <Avatar nombre={datos.nombre} />
         <View>
           <Text style={s.h2}>{datos.nombre ? `Hola, ${datos.nombre}` : 'Hola'}</Text>
           <Text style={s.muted}>Todo listo para entrenar</Text>
@@ -102,10 +103,6 @@ export default function Inicio() {
 
 const st = StyleSheet.create({
   hello: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.sm },
-  avatar: {
-    width: 48, height: 48, borderRadius: 24, backgroundColor: colors.card,
-    alignItems: 'center', justifyContent: 'center',
-  },
   tile: { borderRadius: radius.lg, padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md },
   entrenar: { backgroundColor: colors.accent, paddingVertical: space.xl },
   square: { flex: 1, flexDirection: 'column', alignItems: 'flex-start', gap: 6 },

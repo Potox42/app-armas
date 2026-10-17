@@ -3,13 +3,16 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { FotoCampo, useFoto } from '@/components/FotoCampo';
 import { Icon } from '@/components/Icon';
-import { Badge, Button, Card, FakeQr, Row, Screen, Segmented, s } from '@/components/ui';
+import { DatoTarjeta, EstadoTarjeta, Tarjeta, type Tono } from '@/components/Tarjeta';
+import { Button, Card, FakeQr, Screen, Segmented, nivelColor, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { nivelPorDias } from '@/lib/avisos';
 import { diasHasta, formatear, plazo } from '@/lib/fechas';
 import { colors, space } from '@/theme';
 
 type Vista = 'licencias' | 'federacion';
+
+const TONO_LICENCIA: Record<string, Tono> = { F: 'azul', D: 'verde', E: 'naranja' };
 
 export default function Cartera() {
   const store = useStore();
@@ -67,16 +70,19 @@ export default function Cartera() {
           {datos.permiso.licencias.map((l) => {
             const dias = diasHasta(l.caducidad);
             return (
-              <Card key={l.id} style={{ gap: 4 }} onPress={() => router.push(`/licencia?id=${l.id}`)}>
-                <View style={st.cabecera}>
-                  <Text style={st.titulo}>Tipo {l.tipo}</Text>
-                  <Badge nivel={dias < 0 ? 'rojo' : 'verde'}>{dias < 0 ? 'Caducada' : 'Vigente'}</Badge>
-                </View>
-                <Row label="Nº" value={l.numero} />
-                <Row label="Expedición" value={formatear(l.expedicion)} />
-                <Row label="Caducidad" value={formatear(l.caducidad)} />
-                <Badge nivel={nivelPorDias(dias)}>{plazo(l.caducidad)}</Badge>
-              </Card>
+              <Tarjeta
+                key={l.id}
+                tono={TONO_LICENCIA[l.tipo] ?? 'azul'}
+                etiqueta="Licencia de armas"
+                titulo={`Tipo ${l.tipo}`}
+                sello={l.tipo}
+                onPress={() => router.push(`/licencia?id=${l.id}`)}
+                pie={<EstadoTarjeta color={nivelColor(nivelPorDias(dias))} texto={plazo(l.caducidad)} />}
+              >
+                <DatoTarjeta etiqueta="Número" valor={l.numero || '—'} />
+                <DatoTarjeta etiqueta="Expedición" valor={formatear(l.expedicion)} />
+                <DatoTarjeta etiqueta="Caducidad" valor={formatear(l.caducidad)} />
+              </Tarjeta>
             );
           })}
         </>
@@ -84,24 +90,28 @@ export default function Cartera() {
 
       {vista === 'federacion' && (
         <>
-          <Card style={{ gap: 4 }} onPress={() => router.push('/federacion')}>
-            <Text style={st.titulo}>{f.nombre}</Text>
-            <Text style={[s.muted, { marginBottom: space.sm }]}>Carnet de federado · toca para editar</Text>
-            {hayFederacion ? (
-              <>
-                <Row label="Nº de federado" value={f.numeroFederado || '—'} />
-                <Row label="Categoría" value={f.categoria || '—'} />
-                {f.caducidadCarnet ? (
-                  <>
-                    <Row label="Válido hasta" value={formatear(f.caducidadCarnet)} />
-                    <Badge nivel={nivelPorDias(diasHasta(f.caducidadCarnet))}>{plazo(f.caducidadCarnet)}</Badge>
-                  </>
-                ) : null}
-              </>
-            ) : (
+          {hayFederacion ? (
+            <Tarjeta
+              tono="morado"
+              etiqueta={f.nombre}
+              titulo={datos.nombre || 'Carnet de federado'}
+              sello="FED"
+              onPress={() => router.push('/federacion')}
+              pie={f.caducidadCarnet
+                ? <EstadoTarjeta color={nivelColor(nivelPorDias(diasHasta(f.caducidadCarnet)))} texto={plazo(f.caducidadCarnet)} />
+                : undefined}
+            >
+              <DatoTarjeta etiqueta="Nº de federado" valor={f.numeroFederado || '—'} />
+              <DatoTarjeta etiqueta="Categoría" valor={f.categoria || '—'} />
+              <DatoTarjeta etiqueta="Válido hasta" valor={f.caducidadCarnet ? formatear(f.caducidadCarnet) : '—'} />
+            </Tarjeta>
+          ) : (
+            <Card style={{ gap: space.md }}>
+              <Text style={st.titulo}>{f.nombre}</Text>
               <Text style={s.muted}>Añade tu número de federado, la foto del carnet y el QR del recinto.</Text>
-            )}
-          </Card>
+              <Button title="Añadir carnet de federado" onPress={() => router.push('/federacion')} />
+            </Card>
+          )}
           <Card style={{ flexDirection: 'row', gap: space.sm }}>
             <FotoCampo
               etiqueta="Foto del carnet"

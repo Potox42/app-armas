@@ -102,3 +102,24 @@ export function Diana({ disparos, tamano, visibleMm = 360, anteriores = [], onTo
     </Pressable>
   );
 }
+
+/** Diana pequeña para listas: solo la zona negra y los impactos, sin números. */
+export function MiniDiana({ disparos, tamano = 56 }: { disparos: Disparo[]; tamano?: number }) {
+  // Se ve la zona negra con margen; los impactos que caen fuera se pegan al borde.
+  const r = 130;
+  const punto = (r * 2 * 1.5) / tamano; // unos 1,5 px de radio, sea cual sea el tamaño
+  return (
+    <Svg width={tamano} height={tamano} viewBox={`${-r} ${-r} ${r * 2} ${r * 2}`}>
+      <Circle cx={0} cy={0} r={r} fill={PAPEL} />
+      <Circle cx={0} cy={0} r={DIAMETRO_NEGRO_MM / 2} fill={NEGRO} />
+      {[150, 100, 50].map((d) => (
+        <Circle key={d} cx={0} cy={0} r={d / 2} fill="none" stroke={PAPEL} strokeWidth={2} opacity={0.5} />
+      ))}
+      {disparos.map((d, i) => {
+        const dist = Math.hypot(d.x, d.y);
+        const k = dist > r - punto ? (r - punto) / dist : 1;
+        return <Circle key={i} cx={d.x * k} cy={d.y * k} r={punto} fill={colors.accent} stroke="#fff" strokeWidth={punto * 0.25} opacity={0.9} />;
+      })}
+    </Svg>
+  );
+}

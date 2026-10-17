@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { MiniDiana } from '@/components/Diana';
 import { Icon } from '@/components/Icon';
 import { Card, Screen, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
@@ -33,9 +34,10 @@ export default function Entrenar() {
         const disparos = todosLosDisparos(x);
         return (
           <Card key={x.id} onPress={() => router.push(`/sesion/${x.id}`)} style={st.fila}>
+            <View style={st.mini}><MiniDiana disparos={disparos} tamano={52} /></View>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={st.nombre}>{a ? `${a.marca} ${a.modelo}` : 'Arma'} · {x.distancia} m</Text>
-              <Text style={s.muted}>{formatear(x.fecha.slice(0, 10))} · {x.modalidad} · {disparos.length} disparos</Text>
+              <Text style={st.nombre} numberOfLines={1}>{a ? `${a.marca} ${a.modelo}` : 'Arma'} · {x.distancia} m</Text>
+              <Text style={s.muted} numberOfLines={1}>{formatear(x.fecha.slice(0, 10))} · {disparos.length} disparos</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={st.total}>{totalSesion(x)}</Text>
@@ -55,7 +57,8 @@ const st = StyleSheet.create({
   },
   nuevaTitulo: { color: '#fff', fontSize: 18, fontWeight: '700' },
   nuevaSub: { color: 'rgba(255,255,255,0.8)', fontSize: 13 },
-  fila: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  fila: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
+  mini: { borderRadius: 26, overflow: 'hidden' },
   nombre: { color: colors.text, fontSize: 16, fontWeight: '700' },
   total: { color: colors.green, fontSize: 22, fontWeight: '700' },
 });

@@ -7,6 +7,7 @@ import type { Nivel } from '@/lib/avisos';
 import type { TipoArma } from '@/data/types';
 import { colors, radius, space } from '@/theme';
 import { Icon } from './Icon';
+import { SILUETAS } from './siluetas';
 
 export function Screen({ title, back, right, children }: {
   title?: string;
@@ -127,14 +128,18 @@ export function Row({ label, value }: { label: string; value: string }) {
 
 /** Silueta del arma mientras no haya foto real. */
 export function GunArt({ tipo, width = 120 }: { tipo: TipoArma; width?: number }) {
-  const larga = tipo === 'Carabina' || tipo === 'Rifle' || tipo === 'Escopeta';
   return (
-    <Svg width={width} height={width * 0.5} viewBox="0 0 120 60">
-      {larga ? (
-        <Path d="M4 24h78l4-3h28v6H96l-6 4H62l-6 4-26 14-8-2 18-14H4z" fill="#3A4150" stroke="#5A6375" strokeWidth={1} />
-      ) : (
-        <Path d="M20 14h76l4 4v8H62l-4 4-4 0-6 26H30l8-26h-6l-4-4H20z" fill="#3A4150" stroke="#5A6375" strokeWidth={1} />
-      )}
+    <Svg width={width} height={width * 0.5} viewBox="0 0 240 120">
+      {SILUETAS[tipo].map((t, i) => (
+        <Path
+          key={i}
+          d={t.d}
+          fill={t.relleno ?? 'none'}
+          stroke={t.linea ?? 'none'}
+          strokeWidth={t.grosor ?? 0}
+          strokeLinecap="round"
+        />
+      ))}
     </Svg>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Platform, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { Avatar } from '@/components/Avatar';
 import { Icon, type IconName } from '@/components/Icon';
 import { Button, Card, Screen, s } from '@/components/ui';
 import { useStore } from '@/data/store';
@@ -57,9 +58,9 @@ export default function Perfil() {
   return (
     <Screen title="Perfil">
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-        <Icon name="user" size={36} color={colors.textMuted} />
+        <Avatar nombre={datos.nombre} tamano={56} />
         <View>
-          <Text style={s.h2}>{datos.nombre}</Text>
+          <Text style={s.h2}>{datos.nombre || 'Tu perfil'}</Text>
           {datos.federacion.numeroFederado ? (
             <Text style={s.muted}>Federado nº {datos.federacion.numeroFederado}</Text>
           ) : null}
