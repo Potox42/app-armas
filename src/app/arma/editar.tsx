@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Chips } from '@/components/Chips';
 import { FotoCampo } from '@/components/FotoCampo';
@@ -8,6 +8,9 @@ import { Button, Card, Screen, s } from '@/components/ui';
 import { nuevoId, useStore } from '@/data/store';
 import type { Arma, TipoArma } from '@/data/types';
 import { confirmar } from '@/lib/confirmar';
+import { formatear } from '@/lib/fechas';
+import { combinarGuia, leerGuia } from '@/lib/leerGuia';
+import { leerTextos, ocrDisponible } from '@/lib/ocr';
 import { volver } from '@/lib/volver';
 import { colors, space } from '@/theme';
 
@@ -26,6 +29,43 @@ export default function EditarArma() {
   });
   const [intentado, setIntentado] = useState(false);
   const cambiar = (c: Partial<Arma>) => setA((x) => ({ ...x, ...c }));
+  const [leyendo, setLeyendo] = useState(false);
+  const [aviso, setAviso] = useState<{ texto: string; ok: boolean } | null>(null);
+  // Cambia al rellenar con lo leído, para que los campos muestren el valor nuevo.
+  const [version, setVersion] = useState(0);
+
+  const leer = async (foto: string) => {
+    if (!ocrDisponible) return;
+    setLeyendo(true);
+    setAviso(null);
+    const g = combinarGuia((await leerTextos(foto)).map((t) => leerGuia(t)));
+    setLeyendo(false);
+    const licencia = g.licencia && licencias.find((l) => l.tipo === g.licencia);
+    const nombres: [keyof typeof g, string][] = [
+      ['marca', 'marca'], ['modelo', 'modelo'], ['tipo', 'tipo'], ['calibre', 'calibre'],
+      ['numeroSerie', 'nº de serie'], ['numeroGuia', 'nº de guía'], ['fechaGuia', 'fecha'], ['licencia', 'licencia'],
+    ];
+    const leidos = nombres.filter(([k]) => g[k] && (k !== 'licencia' || licencia)).map(([, n]) => n);
+    if (!leidos.length) {
+      setAviso({ ok: false, texto: 'No he podido leer los datos de la guía. Escríbelos a mano o repite la foto con más luz y más cerca.' });
+      return;
+    }
+    // Solo se rellena lo que esté vacío, para no pisar lo que ya hayas escrito.
+    setA((x) => ({
+      ...x,
+      marca: x.marca || g.marca || '',
+      modelo: x.modelo || g.modelo || '',
+      tipo: existente ? x.tipo : g.tipo ?? x.tipo,
+      calibre: x.calibre || g.calibre || '',
+      numeroSerie: x.numeroSerie || g.numeroSerie || '',
+      numeroGuia: x.numeroGuia || g.numeroGuia || '',
+      fechaGuia: x.fechaGuia || g.fechaGuia || '',
+      licenciaId: licencia ? licencia.id : x.licenciaId,
+    }));
+    setVersion((v) => v + 1);
+    const cuando = g.fechaGuia ? ` (expedida el ${formatear(g.fechaGuia)})` : '';
+    setAviso({ ok: true, texto: `He leído: ${leidos.join(', ')}${cuando}. Revisa que esté bien antes de guardar.` });
+  };
 
   const faltan = [
     !a.marca.trim() && 'marca',
@@ -46,27 +86,35 @@ export default function EditarArma() {
       <FotoCampo etiqueta="Foto del arma" fotoId={a.foto} onChange={(foto) => cambiar({ foto })} proporcion={2} />
 
       <View style={formSt.fila}>
-        <View style={{ flex: 1 }}><Campo etiqueta="Marca" valor={a.marca} onChange={(marca) => cambiar({ marca })} placeholder="Walther" /></View>
-        <View style={{ flex: 1 }}><Campo etiqueta="Modelo" valor={a.modelo} onChange={(modelo) => cambiar({ modelo })} placeholder="P22" /></View>
+        <View style={{ flex: 1 }}><Campo key={`marca-${version}`} etiqueta="Marca" valor={a.marca} onChange={(marca) => cambiar({ marca })} placeholder="Walther" /></View>
+        <View style={{ flex: 1 }}><Campo key={`modelo-${version}`} etiqueta="Modelo" valor={a.modelo} onChange={(modelo) => cambiar({ modelo })} placeholder="P22" /></View>
       </View>
 
       <Text style={st.etiqueta}>Tipo</Text>
       <Chips opciones={TIPOS.map((t) => ({ value: t, label: t }))} valor={a.tipo} onChange={(tipo) => cambiar({ tipo })} />
 
       <View style={formSt.fila}>
-        <View style={{ flex: 1 }}><Campo etiqueta="Calibre" valor={a.calibre} onChange={(calibre) => cambiar({ calibre })} placeholder=".22 LR" /></View>
-        <View style={{ flex: 1 }}><Campo etiqueta="Nº de serie" valor={a.numeroSerie} onChange={(numeroSerie) => cambiar({ numeroSerie })} /></View>
+        <View style={{ flex: 1 }}><Campo key={`cal-${version}`} etiqueta="Calibre" valor={a.calibre} onChange={(calibre) => cambiar({ calibre })} placeholder=".22 LR" /></View>
+        <View style={{ flex: 1 }}><Campo key={`serie-${version}`} etiqueta="Nº de serie" valor={a.numeroSerie} onChange={(numeroSerie) => cambiar({ numeroSerie })} /></View>
       </View>
 
       <Card style={{ gap: space.md }}>
         <Text style={st.titulo}>Guía de pertenencia</Text>
+        {ocrDisponible && <Text style={s.muted}>Escanéala y relleno por ti marca, modelo, calibre, nº de serie, nº de guía y fecha.</Text>}
         <View style={formSt.fila}>
-          <FotoCampo etiqueta="Anverso" documento fotoId={a.fotoGuiaAnverso} onChange={(fotoGuiaAnverso) => cambiar({ fotoGuiaAnverso })} />
-          <FotoCampo etiqueta="Reverso" documento fotoId={a.fotoGuiaReverso} onChange={(fotoGuiaReverso) => cambiar({ fotoGuiaReverso })} />
+          <FotoCampo etiqueta="Anverso" documento fotoId={a.fotoGuiaAnverso} onChange={(fotoGuiaAnverso) => cambiar({ fotoGuiaAnverso })} onEscaneado={leer} />
+          <FotoCampo etiqueta="Reverso" documento fotoId={a.fotoGuiaReverso} onChange={(fotoGuiaReverso) => cambiar({ fotoGuiaReverso })} onEscaneado={leer} />
         </View>
+        {leyendo && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+            <ActivityIndicator color={colors.accent} />
+            <Text style={s.muted}>Leyendo la guía…</Text>
+          </View>
+        )}
+        {aviso && <Text style={{ color: aviso.ok ? colors.green : colors.orange }}>{aviso.texto}</Text>}
         <View style={formSt.fila}>
-          <View style={{ flex: 1 }}><Campo etiqueta="Nº de guía" valor={a.numeroGuia} onChange={(numeroGuia) => cambiar({ numeroGuia })} /></View>
-          <View style={{ flex: 1 }}><CampoFecha etiqueta="Fecha de expedición" valor={a.fechaGuia} onChange={(fechaGuia) => cambiar({ fechaGuia })} /></View>
+          <View style={{ flex: 1 }}><Campo key={`guia-${version}`} etiqueta="Nº de guía" valor={a.numeroGuia} onChange={(numeroGuia) => cambiar({ numeroGuia })} /></View>
+          <View style={{ flex: 1 }}><CampoFecha key={`fecha-${version}`} etiqueta="Fecha de expedición" valor={a.fechaGuia} onChange={(fechaGuia) => cambiar({ fechaGuia })} /></View>
         </View>
         <Text style={st.etiqueta}>Licencia a la que va asociada</Text>
         {licencias.length === 0 ? (
