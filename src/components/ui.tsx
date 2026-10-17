@@ -1,58 +1,83 @@
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { bordesNativos, margenArriba } from '@/lib/margenes';
+import { bordesNativos, margenArriba, margenLados } from '@/lib/margenes';
 import type { Href } from 'expo-router';
 import Svg, { Path, Rect } from 'react-native-svg';
 import type { Nivel } from '@/lib/avisos';
 import { volver } from '@/lib/volver';
 import type { TipoArma } from '@/data/types';
 import { colors, radius, space } from '@/theme';
+import { Degradado } from './Degradado';
 import { Icon } from './Icon';
 import { SILUETAS } from './siluetas';
 
-export function Screen({ title, back, right, children }: {
+export function Screen({ title, kicker = 'Tirador deportivo', back, right, compacto, children }: {
   title?: string;
+  compacto?: boolean; // cabecera baja, para el móvil en horizontal
+  kicker?: string; // rótulo pequeño encima del título
   back?: boolean | Href; // true o la pantalla a la que volver si no hay anterior
   right?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <SafeAreaView style={[s.screen, margenArriba()]} edges={bordesNativos(['top'])}>
+    <SafeAreaView
+      style={[s.screen, margenArriba(), compacto && margenLados()]}
+      edges={bordesNativos(compacto ? ['top', 'left', 'right'] : ['top'])}
+    >
+      {/* Brillo azul en la parte alta de la pantalla */}
+      <View style={s.fondo} pointerEvents="none">
+        <Degradado desde={colors.bgTop} hasta={colors.bg} brillo="#2668B8" brilloEn={[0.5, 0]} diagonal={false} />
+      </View>
       {title !== undefined && (
-        <View style={s.header}>
-          <View style={s.headerSide}>
-            {back && (
-              <Pressable onPress={() => volver(back === true ? '/' : back)} hitSlop={12} accessibilityLabel="Volver">
-                <Icon name="back" color={colors.text} />
-              </Pressable>
-            )}
+        <View style={[s.header, compacto && s.headerCompacto]}>
+          {back && (
+            <Pressable onPress={() => volver(back === true ? '/' : back)} hitSlop={12} accessibilityLabel="Volver" style={s.botonRedondo}>
+              <Icon name="back" color={colors.text} size={22} />
+            </Pressable>
+          )}
+          <View style={{ flex: 1 }}>
+            {!compacto && <Text style={s.kicker}>{kicker.toUpperCase()}</Text>}
+            <Text style={[s.headerTitle, compacto && s.headerTitleCompacto]} numberOfLines={compacto ? 1 : 2}>
+              {compacto ? `${title} · ${kicker}` : title}
+            </Text>
           </View>
-          <Text style={s.headerTitle}>{title}</Text>
-          <View style={[s.headerSide, { alignItems: 'flex-end' }]}>{right}</View>
+          {right && <View style={s.botonRedondo}>{right}</View>}
         </View>
       )}
-      <ScrollView contentContainerStyle={s.content}>{children}</ScrollView>
+      <ScrollView contentContainerStyle={[s.content, compacto && s.contentCompacto]}>{children}</ScrollView>
     </SafeAreaView>
   );
 }
 
+/** Rótulo pequeño en mayúsculas y espaciado, como «ÚLTIMA SESIÓN». */
+export function Kicker({ children, color = colors.kicker }: { children: string; color?: string }) {
+  return <Text style={[s.kicker, { color }]}>{children.toUpperCase()}</Text>;
+}
+
 export function Card({ children, style, onPress }: { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void }) {
+  const fondo = <Degradado desde={colors.cardTop} hasta={colors.cardBottom} brillo="#4E9DFF" />;
   if (onPress) {
     return (
-      <Pressable onPress={onPress} style={({ pressed }) => [s.card, style, pressed && { opacity: 0.7 }]}>
+      <Pressable onPress={onPress} style={({ pressed }) => [s.card, style, pressed && { opacity: 0.8, transform: [{ scale: 0.99 }] }]}>
+        {fondo}
         {children}
       </Pressable>
     );
   }
-  return <View style={[s.card, style]}>{children}</View>;
+  return (
+    <View style={[s.card, style]}>
+      {fondo}
+      {children}
+    </View>
+  );
 }
 
-export function SectionTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
+export function SectionTitle({ children, right, kicker }: { children: ReactNode; right?: ReactNode; kicker?: string }) {
   return (
     <View style={s.sectionRow}>
       <Text style={s.sectionTitle}>{children}</Text>
-      {right}
+      {right ?? (kicker ? <Kicker>{kicker}</Kicker> : null)}
     </View>
   );
 }
@@ -86,6 +111,7 @@ export function Segmented<T extends string>({ options, value, onChange }: {
         const active = o.value === value;
         return (
           <Pressable key={o.value} onPress={() => onChange(o.value)} style={[s.segment, active && s.segmentActive]}>
+            {active && <Degradado desde={colors.accentLight} hasta={colors.accentDark} />}
             <Text style={[s.segmentText, active && { color: '#fff' }]}>{o.label}</Text>
           </Pressable>
         );
@@ -109,11 +135,15 @@ export function Button({ title, onPress, variant = 'primary' }: {
   onPress: () => void;
   variant?: 'primary' | 'secondary';
 }) {
+  const principal = variant === 'primary';
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [s.button, variant === 'secondary' && s.buttonSecondary, pressed && { opacity: 0.75 }]}
+      style={({ pressed }) => [s.button, principal ? s.buttonPrimary : s.buttonSecondary, pressed && { transform: [{ scale: 0.985 }], opacity: 0.9 }]}
     >
+      {principal
+        ? <Degradado desde={colors.accentLight} hasta={colors.accentDark} />
+        : <Degradado desde={colors.cardTop} hasta={colors.cardBottom} />}
       <Text style={s.buttonText}>{title}</Text>
     </Pressable>
   );
@@ -196,25 +226,40 @@ export function FakeQr({ size = 160, seed = 7 }: { size?: number; seed?: number 
 }
 
 export const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, paddingVertical: space.md },
-  headerSide: { width: 40 },
-  headerTitle: { flex: 1, textAlign: 'center', color: colors.text, fontSize: 18, fontWeight: '700' },
-  content: { padding: space.lg, gap: space.md, paddingBottom: 40 },
-  card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: space.lg, borderWidth: 1, borderColor: colors.border },
+  screen: { flex: 1, backgroundColor: colors.bg, zIndex: 0 },
+  fondo: { position: 'absolute', left: 0, right: 0, top: 0, height: 420, zIndex: -1 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.sm },
+  headerCompacto: { paddingTop: space.xs, paddingBottom: space.xs },
+  headerTitleCompacto: { fontSize: 18, lineHeight: 22, letterSpacing: -0.3, marginTop: 0 },
+  contentCompacto: { paddingTop: space.xs, paddingBottom: space.lg },
+  kicker: { color: colors.kicker, fontSize: 10, fontWeight: '900', letterSpacing: 2.4 },
+  headerTitle: { color: colors.text, fontSize: 28, lineHeight: 32, fontWeight: '900', letterSpacing: -1, marginTop: 2 },
+  botonRedondo: {
+    width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.cardAlt, borderWidth: 1, borderColor: colors.border,
+  },
+  content: { padding: space.lg, paddingTop: space.sm, gap: space.md, paddingBottom: 48 },
+  card: {
+    backgroundColor: colors.card, borderRadius: radius.lg, padding: space.lg, borderWidth: 1, borderColor: colors.border,
+    overflow: 'hidden', zIndex: 0, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 18, shadowOffset: { width: 0, height: 10 },
+  },
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.sm },
-  sectionTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  sectionTitle: { color: colors.text, fontSize: 19, fontWeight: '800', letterSpacing: -0.4 },
   badge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   badgeText: { fontSize: 12, fontWeight: '700' },
-  segmented: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: radius.md, padding: 4, gap: 4 },
-  segment: { flex: 1, paddingVertical: 8, borderRadius: radius.sm, alignItems: 'center' },
+  segmented: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: radius.md, padding: 4, gap: 4, borderWidth: 1, borderColor: colors.borderSoft },
+  segment: { flex: 1, paddingVertical: 9, borderRadius: radius.sm, alignItems: 'center', overflow: 'hidden', zIndex: 0 },
   segmentActive: { backgroundColor: colors.accent },
   segmentText: { color: colors.textMuted, fontWeight: '600', fontSize: 13 },
   progress: { height: 8, backgroundColor: colors.cardAlt, borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: 8, borderRadius: 4 },
-  button: { backgroundColor: colors.accent, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' },
-  buttonSecondary: { backgroundColor: colors.cardAlt },
-  buttonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  button: { minHeight: 52, borderRadius: 18, paddingVertical: 14, paddingHorizontal: space.lg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', zIndex: 0 },
+  buttonPrimary: {
+    backgroundColor: colors.accent,
+    shadowColor: colors.accentDark, shadowOpacity: 0.45, shadowRadius: 16, shadowOffset: { width: 0, height: 8 },
+  },
+  buttonSecondary: { backgroundColor: colors.cardAlt, borderWidth: 1, borderColor: colors.border },
+  buttonText: { color: '#fff', fontWeight: '900', fontSize: 15, letterSpacing: 0.2, textAlign: 'center' },
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
   rowLabel: { color: colors.textMuted, fontSize: 14 },
   rowValue: { color: colors.text, fontSize: 14, fontWeight: '600' },

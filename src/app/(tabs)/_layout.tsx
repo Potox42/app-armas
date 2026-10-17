@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View, type ColorValue, type GestureResponderEvent } from 'react-native';
 import { Tabs } from 'expo-router/tabs';
+import { Degradado } from '@/components/Degradado';
 import { Icon, type IconName } from '@/components/Icon';
 import { barraPestanasWeb } from '@/lib/margenes';
 import { colors } from '@/theme';
@@ -27,6 +28,7 @@ function BotonEntrenar(props: {
       {({ pressed }) => (
         <>
           <View style={[st.circulo, pressed && { transform: [{ scale: 0.94 }] }]}>
+            <Degradado desde={colors.accentLight} hasta={colors.accentDark} />
             <Icon name="target" size={30} />
           </View>
           <Text style={[st.texto, activo && { color: colors.accent }]}>Entrenar</Text>
@@ -43,7 +45,8 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: [{ backgroundColor: colors.card, borderTopColor: colors.border }, barraPestanasWeb],
+        tabBarStyle: [{ backgroundColor: 'rgba(4,10,16,0.96)', borderTopColor: colors.border }, barraPestanasWeb],
+        tabBarLabelStyle: { fontWeight: '700', fontSize: 10 },
         sceneStyle: { backgroundColor: colors.bg },
       }}
     >
@@ -62,9 +65,9 @@ export default function TabsLayout() {
 const st = StyleSheet.create({
   hueco: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 4 },
   circulo: {
-    width: 60, height: 60, borderRadius: 30, marginTop: -26, alignItems: 'center', justifyContent: 'center',
+    width: 60, height: 60, borderRadius: 22, marginTop: -26, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', zIndex: 0,
     backgroundColor: colors.accent, borderWidth: 4, borderColor: colors.bg,
     shadowColor: colors.accent, shadowOpacity: 0.55, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 8,
   },
-  texto: { color: colors.textMuted, fontSize: 10, fontWeight: '500', marginTop: 2 },
+  texto: { color: colors.textMuted, fontSize: 10, fontWeight: '700', marginTop: 2 },
 });

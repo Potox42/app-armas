@@ -3,7 +3,7 @@
     "name": "Tirador Deportivo",
     "slug": "tirador-deportivo",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "ios": {
@@ -15,7 +15,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0B0F17",
+        "backgroundColor": "#03070B",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -59,13 +59,13 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0B0F17",
+          "backgroundColor": "#03070B",
           "image": "./assets/splash-icon.png",
           "imageWidth": 180
         }
       ]
     ],
     "scheme": "tirador",
-    "backgroundColor": "#0B0F17"
+    "backgroundColor": "#03070B"
   }
 }

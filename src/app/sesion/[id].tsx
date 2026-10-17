@@ -43,6 +43,8 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   const teclado = sesion.registro === 'teclado';
   const camara = sesion.registro === 'camara';
   const valores = serie.disparos.map((d) => d.valor);
+  const { width: ancho, height: alto } = useWindowDimensions();
+  const horizontal = ancho > alto && alto < 600;
 
   const terminar = () => {
     store.terminarSesion(sesion.id);
@@ -53,82 +55,79 @@ function Asistente({ sesion }: { sesion: Sesion }) {
     else store.nuevaSerie(sesion.id);
   };
 
-  return (
-    <Screen
-      title={`Serie ${nSerie}${sesion.seriesPrevistas ? `/${sesion.seriesPrevistas}` : ''} · Disparo ${Math.min(serie.disparos.length + 1, sesion.disparosPorSerie)}/${sesion.disparosPorSerie}`}
-      back="/entrenar"
-    >
-      <Text style={[s.muted, { textAlign: 'center', marginTop: -space.sm }]}>
-        {sesion.distancia} m · {arma ? `${arma.marca} ${arma.modelo}` : ''} · {sesion.modalidad}
-        {sesion.municion ? ` · ${sesion.municion}` : ''}
-      </Text>
+  const titulo = `Serie ${nSerie}${sesion.seriesPrevistas ? `/${sesion.seriesPrevistas}` : ''} · Disparo ${Math.min(serie.disparos.length + 1, sesion.disparosPorSerie)}/${sesion.disparosPorSerie}`;
+  const kicker = `${sesion.modalidad} · ${sesion.distancia} m${arma ? ` · ${arma.marca} ${arma.modelo}` : ''}`;
 
-      <View style={st.datos}>
-        <Dato titulo="Último" valor={ultimo ? String(ultimo.valor) : '–'} grande />
-        <Dato titulo="Serie" valor={`${sumaSerie(serie)}`} />
-        <Dato titulo="Media" valor={serie.disparos.length ? formatoMedia(media(serie.disparos)) : '–'} />
+  const cifras = (
+    <View style={st.datos}>
+      <Dato titulo="Último" valor={ultimo ? String(ultimo.valor) : '–'} grande />
+      <Dato titulo="Serie" valor={`${sumaSerie(serie)}`} />
+      <Dato titulo="Media" valor={serie.disparos.length ? formatoMedia(media(serie.disparos)) : '–'} />
+    </View>
+  );
+
+  const grafica = (valores.length > 0 || teclado) && (
+    <Card style={{ alignItems: 'center', gap: space.xs }}>
+      <Text style={[s.muted, { alignSelf: 'flex-start' }]}>Puntuación por disparo · media en verde</Text>
+      <GraficaDisparos valores={valores} previstos={sesion.disparosPorSerie} alto={horizontal ? 110 : 150} />
+    </Card>
+  );
+
+  const tecladoNumeros = (
+    <>
+      <View style={st.teclado}>
+        {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map((v) => (
+          <Pressable
+            key={v}
+            disabled={completa}
+            onPress={() => store.anadirValor(sesion.id, v)}
+            accessibilityLabel={`Apuntar ${v}`}
+            style={({ pressed }) => [st.tecla, v === 10 && st.teclaDiez, v === 0 && st.teclaCero, completa && { opacity: 0.4 }, pressed && { transform: [{ scale: 0.94 }] }]}
+          >
+            <Text style={[st.teclaTexto, v === 10 && { color: '#fff' }]}>{v === 0 ? 'Fuera' : v}</Text>
+          </Pressable>
+        ))}
       </View>
+      <View style={st.linea}>
+        {Array.from({ length: sesion.disparosPorSerie }, (_, i) => {
+          const v = valores[i];
+          return (
+            <View key={i} style={[st.hueco, v !== undefined && st.huecoLleno, i === valores.length - 1 && st.huecoUltimo]}>
+              <Text style={st.huecoValor}>{v ?? ''}</Text>
+              <Text style={st.huecoNum}>{i + 1}</Text>
+            </View>
+          );
+        })}
+      </View>
+    </>
+  );
 
-      {teclado ? (
-        <>
-          <Card style={{ alignItems: 'center', gap: space.xs }}>
-            <Text style={[s.muted, { alignSelf: 'flex-start' }]}>Puntuación por disparo · media en verde</Text>
-            <GraficaDisparos valores={valores} previstos={sesion.disparosPorSerie} />
-          </Card>
-          <View style={st.teclado}>
-            {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map((v) => (
-              <Pressable
-                key={v}
-                disabled={completa}
-                onPress={() => store.anadirValor(sesion.id, v)}
-                accessibilityLabel={`Apuntar ${v}`}
-                style={({ pressed }) => [st.tecla, v === 10 && st.teclaDiez, v === 0 && st.teclaCero, completa && { opacity: 0.4 }, pressed && { transform: [{ scale: 0.94 }] }]}
-              >
-                <Text style={[st.teclaTexto, v === 10 && { color: '#fff' }]}>{v === 0 ? 'Fuera' : v}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <View style={st.linea}>
-            {Array.from({ length: sesion.disparosPorSerie }, (_, i) => {
-              const v = valores[i];
-              return (
-                <View key={i} style={[st.hueco, v !== undefined && st.huecoLleno, i === valores.length - 1 && st.huecoUltimo]}>
-                  <Text style={st.huecoValor}>{v ?? ''}</Text>
-                  <Text style={st.huecoNum}>{i + 1}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </>
-      ) : (
-        <>
-          {camara && (
-            <CamaraDiana activo={!completa} onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)} />
-          )}
-          <View style={{ alignItems: 'center' }}>
-            <Diana
-              tamano={tamano}
-              disparos={serie.disparos}
-              anteriores={anteriores}
-              onToque={completa ? undefined : (x, y) => store.anadirDisparo(sesion.id, x, y)}
-            />
-          </View>
-          <Text style={[s.muted, { textAlign: 'center' }]}>
-            {completa
-              ? 'Serie completa'
-              : camara
-                ? 'Si la cámara se salta un disparo, tócalo en la diana; si apunta uno de más, pulsa Deshacer.'
-                : 'Toca la diana donde ha entrado el disparo'}
-          </Text>
-          {valores.length > 0 && (
-            <Card style={{ alignItems: 'center', gap: space.xs }}>
-              <Text style={[s.muted, { alignSelf: 'flex-start' }]}>Puntuación por disparo · media en verde</Text>
-              <GraficaDisparos valores={valores} previstos={sesion.disparosPorSerie} />
-            </Card>
-          )}
-        </>
-      )}
+  const camaraVista = camara && (
+    <CamaraDiana activo={!completa} horizontal={horizontal} onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)} />
+  );
 
+  const diana = (lado: number) => (
+    <>
+      <View style={{ alignItems: 'center' }}>
+        <Diana
+          tamano={lado}
+          disparos={serie.disparos}
+          anteriores={anteriores}
+          onToque={completa ? undefined : (x, y) => store.anadirDisparo(sesion.id, x, y)}
+        />
+      </View>
+      <Text style={[s.muted, { textAlign: 'center' }]}>
+        {completa
+          ? 'Serie completa'
+          : camara
+            ? 'Si la cámara se salta un disparo, tócalo en la diana; si apunta uno de más, pulsa Deshacer.'
+            : 'Toca la diana donde ha entrado el disparo'}
+      </Text>
+    </>
+  );
+
+  const botones = (
+    <>
       <View style={st.botones}>
         <View style={{ flex: 1 }}>
           <Button title="Deshacer" variant="secondary" onPress={() => store.deshacerDisparo(sesion.id)} />
@@ -141,8 +140,46 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         </View>
       </View>
       {!ultimaSerie && <Button title="Terminar entrenamiento" variant="secondary" onPress={terminar} />}
-      <BotonBorrar sesion={sesion} />
+    </>
+  );
 
+  // Con el móvil en horizontal (por ejemplo, puesto en el catalejo): la diana o la cámara a la
+  // izquierda y los datos a la derecha, todo a la vista sin desplazarse.
+  if (horizontal) {
+    const ladoDiana = Math.max(160, alto - 110);
+    return (
+      <Screen title={titulo} kicker={kicker} back="/entrenar" compacto>
+        <View style={st.cabina}>
+          <View style={{ flex: 1.5, gap: space.sm }}>
+            {teclado ? tecladoNumeros : camara ? camaraVista : diana(ladoDiana)}
+          </View>
+          <View style={{ flex: 1, gap: space.sm }}>
+            {cifras}
+            {grafica}
+            {botones}
+            <BotonBorrar sesion={sesion} />
+          </View>
+        </View>
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen title={titulo} kicker={kicker} back="/entrenar">
+      {cifras}
+      {teclado ? (
+        <>
+          {grafica}
+          {tecladoNumeros}
+        </>
+      ) : (
+        <>
+          {camaraVista}
+          {diana(tamano)}
+          {grafica}
+        </>
+      )}
+      {botones}
       {!teclado && !camara && (
         <Card style={st.camara} onPress={() => store.cambiarRegistro(sesion.id, 'camara')}>
           <Icon name="target" color={colors.accent} />
@@ -151,6 +188,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
           </Text>
         </Card>
       )}
+      <BotonBorrar sesion={sesion} />
     </Screen>
   );
 }
@@ -358,6 +396,7 @@ const st = StyleSheet.create({
   borrar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm, paddingVertical: space.md },
   borrarTexto: { color: colors.red, fontWeight: '600' },
   camara: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  cabina: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
   teclado: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   tecla: {
     flexBasis: '17%', flexGrow: 1, aspectRatio: 1.15, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center',

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MiniDiana } from '@/components/Diana';
+import { Degradado } from '@/components/Degradado';
 import { Icon } from '@/components/Icon';
 import { Card, Screen, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
@@ -19,6 +20,7 @@ export default function Entrenar() {
         onPress={() => router.push(enCurso ? `/sesion/${enCurso.id}` : '/sesion/nueva')}
         style={({ pressed }) => [st.nueva, pressed && { opacity: 0.8 }]}
       >
+        <Degradado desde={colors.accentLight} hasta={colors.accentDark} brillo="#BFE3FF" />
         <Icon name="target" size={40} />
         <View style={{ flex: 1 }}>
           <Text style={st.nuevaTitulo}>{enCurso ? 'Continuar sesión' : 'Nueva sesión'}</Text>
@@ -52,10 +54,11 @@ export default function Entrenar() {
 
 const st = StyleSheet.create({
   nueva: {
-    backgroundColor: colors.accent, borderRadius: radius.lg, padding: space.lg,
+    backgroundColor: colors.accent, borderRadius: radius.lg, padding: space.lg, overflow: 'hidden', zIndex: 0,
     flexDirection: 'row', alignItems: 'center', gap: space.md,
+    shadowColor: colors.accentDark, shadowOpacity: 0.45, shadowRadius: 16, shadowOffset: { width: 0, height: 8 },
   },
-  nuevaTitulo: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  nuevaTitulo: { color: '#fff', fontSize: 19, fontWeight: '900' },
   nuevaSub: { color: 'rgba(255,255,255,0.8)', fontSize: 13 },
   fila: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
   mini: { borderRadius: 26, overflow: 'hidden' },

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Vigia, type Calibracion, type Gris } from '@/lib/impactos';
 import { colors, radius, space } from '@/theme';
 import type { PropsCamaraDiana } from './CamaraDiana.types';
@@ -21,7 +21,8 @@ const TEXTOS: Record<Estado, string> = {
  * Vídeo de la cámara trasera (con el móvil en el catalejo) que vigila la diana y avisa de cada
  * impacto nuevo con su posición en mm. Todo se procesa en el móvil; no se guarda el vídeo.
  */
-export function CamaraDiana({ activo, onImpacto }: PropsCamaraDiana) {
+export function CamaraDiana({ activo, horizontal, onImpacto }: PropsCamaraDiana) {
+  const { height: altoPantalla } = useWindowDimensions();
   const caja = useRef<unknown>(null); // en la web, el elemento del DOM de la vista
   const [estado, setEstado] = useState<Estado>('arrancando');
   const [ultimo, setUltimo] = useState<number | null>(null);
@@ -130,7 +131,7 @@ export function CamaraDiana({ activo, onImpacto }: PropsCamaraDiana) {
   const ok = estado === 'vigilando';
   return (
     <View style={st.marco}>
-      <View ref={caja as never} style={st.video} />
+      <View ref={caja as never} style={horizontal ? [st.videoHorizontal, { height: Math.max(160, altoPantalla - 170) }] : st.video} />
       <View style={st.pie}>
         {(estado === 'arrancando' || estado === 'calibrando') && <ActivityIndicator color={colors.accent} />}
         <Text style={[st.texto, ok && { color: colors.green }]}>
@@ -158,6 +159,7 @@ export function CamaraDiana({ activo, onImpacto }: PropsCamaraDiana) {
 const st = StyleSheet.create({
   marco: { borderRadius: radius.lg, overflow: 'hidden', backgroundColor: '#000', borderWidth: 1, borderColor: colors.border },
   video: { width: '100%', aspectRatio: 3 / 4, position: 'relative' },
+  videoHorizontal: { width: '100%', position: 'relative' },
   pie: { flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md, backgroundColor: colors.card },
   texto: { flex: 1, color: colors.text, fontSize: 14 },
   boton: { color: colors.accent, fontWeight: '700' },

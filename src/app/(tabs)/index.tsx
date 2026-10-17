@@ -1,10 +1,11 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, type Href } from 'expo-router';
 import { Avatar } from '@/components/Avatar';
 import { Anillo, Cifra } from '@/components/Cifra';
 import { InstalarApp } from '@/components/InstalarApp';
 import { Icon, type IconName } from '@/components/Icon';
-import { Card, Screen, SectionTitle, nivelColor, s } from '@/components/ui';
+import { Degradado } from '@/components/Degradado';
+import { Button, Card, Kicker, Screen, SectionTitle, nivelColor, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { calcularAvisos, type TipoAviso } from '@/lib/avisos';
 import { diasHasta, formatear } from '@/lib/fechas';
@@ -18,6 +19,13 @@ const ICONO_AVISO: Record<TipoAviso, IconName> = {
   pase: 'qr',
   limpieza: 'broom',
 };
+
+const ACCESOS: { titulo: string; texto: string; icono: IconName; ruta: Href }[] = [
+  { titulo: 'Licencias', texto: 'E, F, D con sus fechas', icono: 'id', ruta: '/cartera' },
+  { titulo: 'Mis armas', texto: '', icono: 'gun', ruta: '/armas' },
+  { titulo: 'Entrenar', texto: 'Diana, números o cámara', icono: 'target', ruta: '/entrenar' },
+  { titulo: 'Evolución', texto: 'Medias y tendencia', icono: 'chart', ruta: '/evolucion' },
+];
 
 export default function Inicio() {
   const store = useStore();
@@ -35,27 +43,42 @@ export default function Inicio() {
   return (
     <Screen>
       <View style={st.hello}>
-        <Avatar nombre={datos.nombre} />
-        <View>
-          <Text style={s.h2}>{datos.nombre ? `Hola, ${datos.nombre}` : 'Hola'}</Text>
-          <Text style={s.muted}>Todo listo para entrenar</Text>
+        <View style={{ flex: 1 }}>
+          <Kicker>Tirador deportivo</Kicker>
+          <Text style={st.saludo}>{datos.nombre ? `Hola, ${datos.nombre.split(' ')[0]}` : 'Hola'}</Text>
+          <Text style={s.muted}>Tu centro deportivo personal</Text>
         </View>
+        <Pressable onPress={() => router.push('/perfil')} accessibilityLabel="Perfil">
+          <Avatar nombre={datos.nombre} tamano={46} />
+        </Pressable>
       </View>
 
-      <View style={{ flexDirection: 'row', gap: space.sm }}>
-        <Cifra
-          titulo="Caduca en"
-          valor={proxima ? `${diasHasta(proxima.caducidad)} d` : '—'}
-          detalle={proxima ? `Licencia ${proxima.tipo}` : 'Sin licencias'}
-          color={proxima && diasHasta(proxima.caducidad) <= 120 ? colors.orange : colors.text}
-        />
-        <Cifra titulo="Licencias" valor={String(activas.length)} detalle="en vigor" />
-        <Cifra
-          titulo="Última media"
-          valor={ultima ? formatoMedia(media(todosLosDisparos(ultima))) : '—'}
-          detalle={ultima ? formatear(ultima.fecha.slice(0, 10)).slice(0, 5) : 'Sin sesiones'}
-          color={ultima ? colors.green : colors.text}
-        />
+      <View style={st.hero}>
+        <Degradado desde="#183149" hasta="#07101A" brillo="#5BB3FF" brilloEn={[0.85, 0.08]} />
+        <View style={st.estado}>
+          <View style={[st.punto, { backgroundColor: prioridad ? nivelColor(prioridad.nivel) : colors.green }]} />
+          <Text style={st.estadoTexto}>{prioridad ? 'Tienes algo pendiente' : 'Documentación al día'}</Text>
+        </View>
+        <Text style={st.titular}>Todo lo importante, de un vistazo</Text>
+        <Text style={s.muted}>Licencias, armas, entrenamiento y evolución en un solo sitio.</Text>
+        <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.sm }}>
+          <Cifra
+            titulo="Caduca en"
+            valor={proxima ? `${diasHasta(proxima.caducidad)} d` : '—'}
+            detalle={proxima ? `Licencia ${proxima.tipo}` : 'Sin licencias'}
+            color={proxima && diasHasta(proxima.caducidad) <= 120 ? colors.orange : colors.text}
+          />
+          <Cifra titulo="Licencias" valor={String(activas.length)} detalle="en vigor" />
+          <Cifra
+            titulo="Última media"
+            valor={ultima ? formatoMedia(media(todosLosDisparos(ultima))) : '—'}
+            detalle={ultima ? formatear(ultima.fecha.slice(0, 10)).slice(0, 5) : 'Sin sesiones'}
+            color={ultima ? colors.green : colors.text}
+          />
+        </View>
+        <View style={{ marginTop: space.sm }}>
+          <Button title="◎  Iniciar entrenamiento" onPress={() => router.push('/entrenar')} />
+        </View>
       </View>
 
       {prioridad && (
@@ -75,14 +98,6 @@ export default function Inicio() {
         </Pressable>
       )}
 
-      <Pressable onPress={() => router.push('/entrenar')} style={[st.tile, st.entrenar]}>
-        <Icon name="target" size={44} />
-        <View style={{ flex: 1 }}>
-          <Text style={st.tileTitle}>Entrenar</Text>
-          <Text style={st.tileSub}>Iniciar nueva sesión</Text>
-        </View>
-        <Icon name="chevron" />
-      </Pressable>
 
       {ultima && (
         <>
@@ -111,26 +126,20 @@ export default function Inicio() {
         </>
       )}
 
-      <View style={{ flexDirection: 'row', gap: space.md }}>
-        <Pressable onPress={() => router.push('/armas')} style={[st.tile, st.square, { backgroundColor: colors.cardAlt }]}>
-          <Icon name="gun" size={36} />
-          <Text style={st.tileTitle}>Mis armas</Text>
-          <Text style={st.tileSub}>{datos.armas.length === 1 ? '1 arma registrada' : `${datos.armas.length} armas registradas`}</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/cartera')} style={[st.tile, st.square, { backgroundColor: '#8A4A1F' }]}>
-          <Icon name="wallet" size={36} />
-          <Text style={st.tileTitle}>Mi cartera</Text>
-          <Text style={st.tileSub}>Licencias y Federación</Text>
-        </Pressable>
+      <SectionTitle kicker="Hoy">Centro de control</SectionTitle>
+      <View style={st.rejilla}>
+        {ACCESOS.map((x) => (
+          <Card key={x.titulo} onPress={() => router.push(x.ruta)} style={st.acceso}>
+            <View style={st.accesoIcono}><Icon name={x.icono} size={22} color="#A7D9FF" /></View>
+            <Text style={st.accesoTitulo}>{x.titulo}</Text>
+            <Text style={st.accesoTexto}>
+              {x.titulo === 'Mis armas'
+                ? datos.armas.length === 1 ? '1 arma registrada' : `${datos.armas.length} armas registradas`
+                : x.texto}
+            </Text>
+          </Card>
+        ))}
       </View>
-
-      <Pressable onPress={() => router.push('/evolucion')} style={[st.tile, { backgroundColor: colors.purpleSoft }]}>
-        <Icon name="chart" size={36} />
-        <View style={{ flex: 1 }}>
-          <Text style={st.tileTitle}>Mi evolución</Text>
-          <Text style={st.tileSub}>Estadísticas y resultados</Text>
-        </View>
-      </Pressable>
 
       {store.esEjemplo && (
         <Pressable onPress={() => router.push('/perfil')}>
@@ -177,7 +186,25 @@ export default function Inicio() {
 }
 
 const st = StyleSheet.create({
-  hello: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.sm },
+  hello: { flexDirection: 'row', alignItems: 'flex-end', gap: space.md, marginBottom: space.xs },
+  saludo: { color: colors.text, fontSize: 31, lineHeight: 34, fontWeight: '900', letterSpacing: -1.2, marginTop: 4 },
+  hero: {
+    borderRadius: radius.xl, padding: space.xl - 2, gap: space.sm, overflow: 'hidden', zIndex: 0,
+    borderWidth: 1, borderColor: 'rgba(117,173,225,0.34)',
+    shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 30, shadowOffset: { width: 0, height: 18 },
+  },
+  estado: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  punto: { width: 8, height: 8, borderRadius: 4 },
+  estadoTexto: { color: colors.text, fontSize: 12, fontWeight: '800' },
+  titular: { color: colors.text, fontSize: 32, lineHeight: 33, fontWeight: '900', letterSpacing: -1.3 },
+  rejilla: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
+  acceso: { width: '47.5%', flexGrow: 1, minHeight: 128, gap: 4, padding: space.lg },
+  accesoIcono: {
+    width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#163A60', borderWidth: 1, borderColor: 'rgba(101,175,240,0.2)', marginBottom: space.sm,
+  },
+  accesoTitulo: { color: colors.text, fontSize: 16, fontWeight: '800' },
+  accesoTexto: { color: colors.textMuted, fontSize: 12, lineHeight: 16 },
   tile: { borderRadius: radius.lg, padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md },
   entrenar: { backgroundColor: colors.accent, paddingVertical: space.xl },
   square: { flex: 1, flexDirection: 'column', alignItems: 'flex-start', gap: 6 },

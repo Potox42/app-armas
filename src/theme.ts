@@ -1,21 +1,30 @@
+// Estilo «cabina nocturna»: azul marino casi negro, tarjetas con degradado y brillo azul
+// (inspirado en el prototipo Tirador Pro 3.6 de Rubén).
 export const colors = {
-  bg: '#0B0F17',
-  card: '#141A25',
-  cardAlt: '#1B2332',
-  border: '#263043',
-  text: '#F2F5FA',
-  textMuted: '#98A2B3',
-  accent: '#1E7BFF',
-  accentSoft: '#13305C',
-  green: '#2ECC71',
-  greenSoft: '#123A26',
-  red: '#FF4D4F',
-  redSoft: '#3D1518',
-  orange: '#F59E0B',
-  orangeSoft: '#3A2A0D',
-  purple: '#6D4AFF',
-  purpleSoft: '#241A55',
+  bg: '#03070B',
+  bgTop: '#07121E', // parte alta de la pantalla, donde está el brillo
+  card: '#0E1D2C',
+  cardTop: '#13263A', // degradado de las tarjetas: arriba a la izquierda…
+  cardBottom: '#08131E', // …abajo a la derecha
+  cardAlt: '#152A40',
+  border: '#24405A',
+  borderSoft: 'rgba(117,173,225,0.16)',
+  text: '#F7FBFF',
+  textMuted: '#8CA0B6',
+  kicker: '#7BC3FF', // rótulos pequeños en mayúsculas
+  accent: '#3A8EF0',
+  accentLight: '#58B0FF', // degradado de los botones principales
+  accentDark: '#2266D9',
+  accentSoft: '#12345A',
+  green: '#49DF91',
+  greenSoft: '#173923',
+  red: '#FF7080',
+  redSoft: '#3B1920',
+  orange: '#FFC66D',
+  orangeSoft: '#3C2B0D',
+  purple: '#B7A7FF',
+  purpleSoft: '#2F2853',
 };
 
-export const radius = { sm: 8, md: 12, lg: 16 };
+export const radius = { sm: 10, md: 14, lg: 22, xl: 30 };
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };

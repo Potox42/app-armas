@@ -17,8 +17,8 @@ fs.writeFileSync(path.join(dist, 'manifest.json'), JSON.stringify({
   start_url: `${base}/`,
   scope: `${base}/`,
   display: 'standalone',
-  background_color: '#0B0F17',
-  theme_color: '#0B0F17',
+  background_color: '#03070B',
+  theme_color: '#03070B',
   lang: 'es',
   icons: [192, 512].map((t) => ({ src: `${base}/icono-${t}.png`, sizes: `${t}x${t}`, type: 'image/png' })),
 }, null, 2));
@@ -42,8 +42,8 @@ html = html.replace('</head>', `  <link rel="manifest" href="${base}/manifest.js
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Tirador">
-  <meta name="theme-color" content="#0B0F17">
-  <style>body { background: #0B0F17; }</style>
+  <meta name="theme-color" content="#03070B">
+  <style>body { background: #03070B; }</style>
 </head>`);
 // Pantalla completa sin márgenes bajo la barra de estado del iPhone.
 html = html.replace(/<meta name="viewport" content="([^"]*)"/, (m, c) =>

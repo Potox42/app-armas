@@ -24,3 +24,7 @@ export const barraPestanasWeb = web
 type Borde = 'top' | 'bottom' | 'left' | 'right';
 /** Bordes para SafeAreaView: en el móvil los pedidos; en la web ninguno, porque ya lo hace el CSS. */
 export const bordesNativos = (bordes: Borde[] = ['top', 'bottom', 'left', 'right']): Borde[] => (web ? [] : bordes);
+
+/** En horizontal, el notch del iPhone queda a un lado: margen a izquierda y derecha. */
+export const margenLados = () =>
+  web ? css({ paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }) : undefined;
