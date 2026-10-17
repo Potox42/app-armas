@@ -81,6 +81,7 @@ export interface Sesion {
 export interface Ajustes {
   bloqueo: boolean; // pedir Face ID al abrir la app
   avisos: boolean; // notificaciones locales de caducidades
+  bienvenida?: boolean; // ya se mostró la pantalla de bienvenida
 }
 
 export interface Datos {

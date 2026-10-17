@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { Icon, type IconName } from '@/components/Icon';
 import { Card, Screen, SectionTitle, nivelColor, s } from '@/components/ui';
 import { useStore } from '@/data/store';
@@ -18,6 +18,7 @@ const ICONO_AVISO: Record<TipoAviso, IconName> = {
 export default function Inicio() {
   const store = useStore();
   const { datos } = store;
+  if (!store.ajustes.bienvenida) return <Redirect href="/bienvenida" />;
   const avisos = calcularAvisos(datos).filter((a) => a.nivel !== 'verde' || a.orden < 365).slice(0, 5);
 
   return (
@@ -25,7 +26,7 @@ export default function Inicio() {
       <View style={st.hello}>
         <View style={st.avatar}><Icon name="user" color={colors.textMuted} /></View>
         <View>
-          <Text style={s.h2}>Hola, {datos.nombre}</Text>
+          <Text style={s.h2}>{datos.nombre ? `Hola, ${datos.nombre}` : 'Hola'}</Text>
           <Text style={s.muted}>Todo listo para entrenar</Text>
         </View>
       </View>

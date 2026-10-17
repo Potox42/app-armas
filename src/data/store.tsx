@@ -27,6 +27,7 @@ interface Store {
   guardarFederacion: (f: Federacion) => void;
   empezarDeCero: () => void;
   restaurar: (d: Datos) => void;
+  guardarNombre: (nombre: string) => void;
   ajustes: Ajustes;
   guardarAjustes: (cambios: Partial<Ajustes>) => void;
   esEjemplo: boolean;
@@ -157,6 +158,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       empezarDeCero: () => setDatos((d) => d && { ...datosVacios(d.nombre), ajustes: d.ajustes }),
       // Los ajustes (Face ID, avisos) son de este móvil: no se traen de la copia.
       restaurar: (nuevos) => setDatos((d) => d && { ...completar(nuevos), esEjemplo: false, ajustes: d.ajustes }),
+      guardarNombre: (nombre) => setDatos((d) => d && { ...d, nombre }),
       ajustes: datos.ajustes ?? AJUSTES_INICIALES,
       guardarAjustes: (cambios) => setDatos((d) => d && { ...d, ajustes: { ...(d.ajustes ?? AJUSTES_INICIALES), ...cambios } }),
       esEjemplo: datos.esEjemplo !== false,

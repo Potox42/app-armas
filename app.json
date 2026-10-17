@@ -15,7 +15,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0B0F17",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -55,7 +55,15 @@
           "cameraPermission": "Para fotografiar tus armas y documentos."
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B0F17",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180
+        }
+      ]
     ],
     "scheme": "tirador",
     "backgroundColor": "#0B0F17"
