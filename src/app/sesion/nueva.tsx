@@ -28,7 +28,7 @@ export default function NuevaSesion() {
   };
 
   return (
-    <Screen title="Nueva sesión" back>
+    <Screen title="Nueva sesión" back="/entrenar">
       <Text style={st.paso}>1. Arma</Text>
       {armas.length === 0 && (
         <Card style={{ gap: space.md }}>

@@ -47,7 +47,7 @@ export default function Evolucion() {
   const disparos = puntos.reduce((t, p) => t + todosLosDisparos(p.sesion).length, 0);
 
   return (
-    <Screen title="Mi evolución" back>
+    <Screen title="Mi evolución" back="/entrenar">
       <Segmented
         value={armaId}
         onChange={setArmaId}

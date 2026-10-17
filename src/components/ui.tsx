@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import type { Href } from 'expo-router';
 import Svg, { Path, Rect } from 'react-native-svg';
 import type { Nivel } from '@/lib/avisos';
+import { volver } from '@/lib/volver';
 import type { TipoArma } from '@/data/types';
 import { colors, radius, space } from '@/theme';
 import { Icon } from './Icon';
@@ -11,7 +12,7 @@ import { SILUETAS } from './siluetas';
 
 export function Screen({ title, back, right, children }: {
   title?: string;
-  back?: boolean;
+  back?: boolean | Href; // true o la pantalla a la que volver si no hay anterior
   right?: ReactNode;
   children: ReactNode;
 }) {
@@ -21,7 +22,7 @@ export function Screen({ title, back, right, children }: {
         <View style={s.header}>
           <View style={s.headerSide}>
             {back && (
-              <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Volver">
+              <Pressable onPress={() => volver(back === true ? '/' : back)} hitSlop={12} accessibilityLabel="Volver">
                 <Icon name="back" color={colors.text} />
               </Pressable>
             )}

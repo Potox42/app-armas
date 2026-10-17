@@ -26,7 +26,7 @@ export default function FichaArma() {
   const [registrando, setRegistrando] = useState(false);
 
   if (!arma) {
-    return <Screen title="Arma" back><Text style={s.muted}>No se encuentra esta arma.</Text></Screen>;
+    return <Screen title="Arma" back="/armas"><Text style={s.muted}>No se encuentra esta arma.</Text></Screen>;
   }
 
   const licencia = licenciaDe(store.datos, arma);
@@ -39,7 +39,7 @@ export default function FichaArma() {
   return (
     <Screen
       title={`${arma.marca} ${arma.modelo}`}
-      back
+      back="/armas"
       right={
         <Pressable hitSlop={12} onPress={() => router.push(`/arma/editar?id=${arma.id}`)}>
           <Text style={{ color: colors.accent, fontWeight: '700' }}>Editar</Text>

@@ -82,7 +82,7 @@ export default function Copia() {
   };
 
   return (
-    <Screen title="Copia de seguridad" back>
+    <Screen title="Copia de seguridad" back="/perfil">
       <Text style={s.muted}>
         Tus datos solo están en este móvil. Con una copia cifrada puedes recuperarlos si cambias de iPhone o lo pierdes.
       </Text>

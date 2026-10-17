@@ -1,5 +1,5 @@
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import { Anillo, Cifra } from '@/components/Cifra';
 import { Diana } from '@/components/Diana';
@@ -8,6 +8,7 @@ import { Button, Card, Screen, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import type { Sesion } from '@/data/types';
 import { formatear } from '@/lib/fechas';
+import { volver } from '@/lib/volver';
 import { agrupacion, formatoMedia, media, sumaSerie, todosLosDisparos, totalSesion } from '@/lib/sesiones';
 import { colors, radius, space } from '@/theme';
 
@@ -16,7 +17,7 @@ export default function SesionPantalla() {
   const store = useStore();
   const sesion = store.sesion(id);
   if (!sesion) {
-    return <Screen title="Sesión" back><Text style={s.muted}>No se encuentra esta sesión.</Text></Screen>;
+    return <Screen title="Sesión" back="/entrenar"><Text style={s.muted}>No se encuentra esta sesión.</Text></Screen>;
   }
   return sesion.terminada ? <Resumen sesion={sesion} /> : <Asistente sesion={sesion} />;
 }
@@ -41,7 +42,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   };
 
   return (
-    <Screen title={`Serie ${nSerie} · Disparo ${Math.min(serie.disparos.length + 1, sesion.disparosPorSerie)}/${sesion.disparosPorSerie}`} back>
+    <Screen title={`Serie ${nSerie} · Disparo ${Math.min(serie.disparos.length + 1, sesion.disparosPorSerie)}/${sesion.disparosPorSerie}`} back="/entrenar">
       <Text style={[s.muted, { textAlign: 'center', marginTop: -space.sm }]}>
         {sesion.distancia} m · {arma ? `${arma.marca} ${arma.modelo}` : ''} · {sesion.modalidad}
       </Text>
@@ -102,7 +103,7 @@ function Resumen({ sesion }: { sesion: Sesion }) {
   const masAlto = Math.max(1, ...reparto.map((r) => r.n), resto);
 
   return (
-    <Screen title="Resultado" back>
+    <Screen title="Resultado" back="/entrenar">
       <View style={st.hero}>
         <Anillo valor={total} maximo={maximo} tamano={170} grosor={14} color={colors.green}>
           <Text style={st.total}>{total}</Text>
@@ -161,7 +162,7 @@ function Resumen({ sesion }: { sesion: Sesion }) {
         </View>
       </Card>
 
-      <Button title="Volver a Entrenar" onPress={() => router.back()} />
+      <Button title="Volver a Entrenar" onPress={() => volver('/entrenar')} />
     </Screen>
   );
 }

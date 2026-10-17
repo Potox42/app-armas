@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { volver } from '@/lib/volver';
 import { Chips } from '@/components/Chips';
 import { Campo, CampoFecha, formSt } from '@/components/Formulario';
 import { FotoCampo } from '@/components/FotoCampo';
@@ -59,11 +60,11 @@ export default function EditarLicencia() {
     setIntentado(true);
     if (!valida) return;
     store.guardarLicencia({ ...l, numero: l.numero.trim(), caducidad });
-    router.back();
+    volver('/cartera');
   };
 
   return (
-    <Screen title={existente ? `Licencia ${l.tipo}` : 'Nueva licencia'} back>
+    <Screen title={existente ? `Licencia ${l.tipo}` : 'Nueva licencia'} back="/cartera">
       <Card style={{ gap: space.sm }}>
         <Text style={st.titulo}>Foto de la licencia</Text>
         <Text style={s.muted}>
@@ -130,7 +131,7 @@ export default function EditarLicencia() {
               : 'Se borrará esta licencia.',
             () => {
               store.borrarLicencia(l.id);
-              router.back();
+              volver('/cartera');
             },
           )}
         />

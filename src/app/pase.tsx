@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AppState, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { volver } from '@/lib/volver';
 import * as Brightness from 'expo-brightness';
 import { useFoto } from '@/components/FotoCampo';
 import { FakeQr } from '@/components/ui';
@@ -36,7 +37,7 @@ export default function Pase() {
   }, []);
 
   return (
-    <Pressable style={st.fondo} onPress={() => router.back()}>
+    <Pressable style={st.fondo} onPress={() => volver('/cartera')}>
       <Text style={st.titulo}>{f.nombre}</Text>
       <View style={st.qr}>
         {qr ? <Image source={{ uri: qr }} style={{ width: 300, height: 300 }} resizeMode="contain" /> : <FakeQr size={280} />}

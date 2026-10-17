@@ -8,6 +8,7 @@ import { Button, Card, Screen, s } from '@/components/ui';
 import { nuevoId, useStore } from '@/data/store';
 import type { Arma, TipoArma } from '@/data/types';
 import { confirmar } from '@/lib/confirmar';
+import { volver } from '@/lib/volver';
 import { colors, space } from '@/theme';
 
 const TIPOS: TipoArma[] = ['Pistola', 'Revólver', 'Carabina', 'Rifle', 'Escopeta'];
@@ -37,11 +38,11 @@ export default function EditarArma() {
     setIntentado(true);
     if (faltan.length) return;
     store.guardarArma({ ...a, marca: a.marca.trim(), modelo: a.modelo.trim() });
-    router.back();
+    volver(existente ? `/arma/${existente.id}` : '/armas');
   };
 
   return (
-    <Screen title={existente ? 'Editar arma' : 'Nueva arma'} back>
+    <Screen title={existente ? 'Editar arma' : 'Nueva arma'} back={existente ? `/arma/${existente.id}` : '/armas'}>
       <FotoCampo etiqueta="Foto del arma" fotoId={a.foto} onChange={(foto) => cambiar({ foto })} proporcion={2} />
 
       <View style={formSt.fila}>

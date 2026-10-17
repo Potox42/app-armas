@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { volver } from '@/lib/volver';
 import { FotoCampo } from '@/components/FotoCampo';
 import { Campo, CampoFecha, formSt } from '@/components/Formulario';
 import { Button, Card, Screen } from '@/components/ui';
@@ -14,7 +14,7 @@ export default function EditarFederacion() {
   const cambiar = (c: Partial<Federacion>) => setF((x) => ({ ...x, ...c }));
 
   return (
-    <Screen title="Federación" back>
+    <Screen title="Federación" back="/cartera">
       <Campo etiqueta="Federación" valor={f.nombre} onChange={(nombre) => cambiar({ nombre })} />
       <Card style={{ gap: space.md }}>
         <Text style={st.titulo}>Carnet de federado</Text>
@@ -34,7 +34,7 @@ export default function EditarFederacion() {
         <Campo etiqueta="Código del pase (opcional)" valor={f.codigoPase} onChange={(codigoPase) => cambiar({ codigoPase })} />
         <CampoFecha etiqueta="Pase válido hasta" valor={f.caducidadPase} onChange={(caducidadPase) => cambiar({ caducidadPase })} />
       </Card>
-      <Button title="Guardar" onPress={() => { store.guardarFederacion(f); router.back(); }} />
+      <Button title="Guardar" onPress={() => { store.guardarFederacion(f); volver('/cartera'); }} />
     </Screen>
   );
 }
