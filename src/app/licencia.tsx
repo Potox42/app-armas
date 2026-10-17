@@ -73,7 +73,7 @@ export default function EditarLicencia() {
       // Reverso: la tabla manda, una fila por licencia.
       for (const f of d.filas) {
         const tipo = f.tipo ?? TIPOS.find((t) => !licencias.some((l) => l.tipo === t));
-        if (!f.tipo) sinLetra++;
+        if (!f.tipo || f.dudosa) sinLetra++;
         if (tipo) poner(tipo, f.desde, f.hasta);
       }
       // Tarjetas sin tabla con un tipo y sus fechas.
@@ -95,7 +95,7 @@ export default function EditarLicencia() {
     setAviso(leido.length
       ? {
           ok: true,
-          texto: `He leído ${leido.length > 1 ? `${leido.slice(0, -1).join(', ')} y ${leido[leido.length - 1]}` : leido[0]}.${sinLetra ? ' En alguna fila no he podido leer la letra: revisa el tipo.' : ''} Revisa que esté bien antes de guardar.`,
+          texto: `He leído ${leido.length > 1 ? `${leido.slice(0, -1).join(', ')} y ${leido[leido.length - 1]}` : leido[0]}.${sinLetra ? ' En alguna fila no he leído bien la letra y la he deducido: revisa el tipo.' : ''} Revisa que esté bien antes de guardar.`,
         }
       : { ok: false, texto: 'No he podido leer los datos. Escríbelos a mano o repite la foto con más luz y más cerca.' });
   };

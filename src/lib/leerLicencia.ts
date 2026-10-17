@@ -5,6 +5,7 @@ export interface FilaLicencia {
   tipo?: TipoLicencia; // sin tipo si el OCR no ha leído la letra
   desde: string; // ISO
   hasta: string; // ISO
+  dudosa?: boolean; // la letra se ha deducido por el orden de la tarjeta
 }
 
 export interface DatosLeidos {
@@ -64,11 +65,35 @@ function masAnios(isoFecha: string, n: number): string {
 const FECHA = /\b(\d{1,2})\s?[/.\-]\s?(\d{1,2}|\d{2}(?=\d{4}))\s?[/.\-]?\s?(\d{4})\b/g;
 const LETRA = /(?:^|[^A-Z])([FDE])(?:[^A-Z]|$)/;
 
+/** Orden de las filas en la tabla del reverso de la tarjeta. */
+const ORDEN: TipoLicencia[] = ['E', 'F', 'D'];
+
+/**
+ * Pone una letra distinta a cada fila. Si el OCR ha leído letras repetidas (una E leída como F)
+ * o no ha leído alguna, se reparten siguiendo el orden de la tarjeta (E, F, D) respetando las
+ * letras que sí cuadran. Las filas cuya letra se ha deducido quedan marcadas como dudosas.
+ */
+export function repartirTipos(filas: FilaLicencia[]): FilaLicencia[] {
+  const leidas = filas.map((f) => f.tipo);
+  const unicas = leidas.every((t, i) => t && leidas.indexOf(t) === i);
+  if (unicas || filas.length > ORDEN.length) return filas;
+  // Todas las formas de elegir letras en orden para estas filas; gana la que más letras leídas respeta.
+  const opciones: TipoLicencia[][] = [];
+  const elegir = (desde: number, actual: TipoLicencia[]) => {
+    if (actual.length === filas.length) return void opciones.push(actual);
+    for (let i = desde; i < ORDEN.length; i++) elegir(i + 1, [...actual, ORDEN[i]]);
+  };
+  elegir(0, []);
+  const aciertos = (o: TipoLicencia[]) => o.filter((t, i) => t === leidas[i]).length;
+  const mejor = opciones.reduce((a, b) => (aciertos(b) > aciertos(a) ? b : a));
+  return filas.map((f, i) => (mejor[i] === f.tipo ? f : { ...f, tipo: mejor[i], dudosa: true }));
+}
+
 /**
  * Filas de la tabla del reverso (como en el carné de conducir): «E 11-05-2022 11-05-2027».
  * Cada línea con dos fechas separadas por unos 5 años es una licencia: la primera fecha es
  * «válida desde» y la segunda «válida hasta». La letra (F, D o E) va delante en la misma línea o,
- * si el OCR la ha partido, sola en la línea anterior. Si no se lee la letra, la fila queda sin tipo.
+ * si el OCR la ha partido, sola en la línea anterior.
  */
 export function filasDe(texto: string): FilaLicencia[] {
   const filas: FilaLicencia[] = [];
@@ -86,9 +111,10 @@ export function filasDe(texto: string): FilaLicencia[] {
     letraSuelta = undefined;
     // Creíble: posterior a 1990 y con una validez de hasta 5 años (con algo de margen).
     const creible = desde >= '1990-01-01' && hasta > masAnios(desde, 1) && hasta <= masAnios(desde, 6);
-    if (creible && !filas.some((x) => (tipo && x.tipo === tipo) || x.hasta === hasta)) filas.push({ tipo, desde, hasta });
+    // Una letra repetida no descarta la fila: suele ser otra licencia con la letra mal leída.
+    if (creible && !filas.some((x) => x.desde === desde && x.hasta === hasta)) filas.push({ tipo, desde, hasta });
   }
-  return filas;
+  return repartirTipos(filas);
 }
 
 /**
@@ -150,13 +176,31 @@ export function leerLicencia(
 }
 
 /**
- * Junta varias lecturas de la misma foto: cada dato se toma de la primera que lo tenga,
- * y la tabla del reverso, de la que más filas haya leído.
+ * Junta varias lecturas de la misma foto: cada dato se toma de la primera que lo tenga.
+ * La tabla del reverso parte de la lectura con más filas (y más letras seguras) y se completa
+ * con las filas que solo haya visto otra lectura.
  */
 export function combinar(lecturas: DatosLeidos[]): DatosLeidos {
   const r: DatosLeidos = { filas: [] };
+  const seguras = (d: DatosLeidos) => d.filas.filter((f) => f.tipo && !f.dudosa).length;
+  const base = [...lecturas].sort((a, b) => b.filas.length - a.filas.length || seguras(b) - seguras(a))[0];
+  if (base) {
+    const filas = [...base.filas];
+    for (const d of lecturas) {
+      for (const f of d.filas) {
+        const i = filas.findIndex((x) => x.desde === f.desde && x.hasta === f.hasta);
+        // Misma fila: si aquí la letra es dudosa y en la otra lectura es segura, gana la segura.
+        if (i >= 0) {
+          if (f.tipo && !f.dudosa && filas[i].dudosa) filas[i] = f;
+        } else if (!filas.some((x) => x.hasta === f.hasta)) {
+          filas.push(f);
+        }
+      }
+    }
+    // Si al juntar se repite alguna letra, se vuelven a repartir.
+    r.filas = repartirTipos(filas);
+  }
   for (const d of lecturas) {
-    if (d.filas.length > r.filas.length) r.filas = d.filas;
     r.tipo ??= d.tipo;
     r.numero ??= d.numero;
     r.nif ??= d.nif;
@@ -165,11 +209,10 @@ export function combinar(lecturas: DatosLeidos[]): DatosLeidos {
     r.caducidad ??= d.caducidad;
   }
   // Si hay tabla, sus fechas mandan sobre las sueltas.
-  const conTabla = lecturas.find((d) => d.filas === r.filas && d.filas.length);
-  if (conTabla) {
-    r.tipo = conTabla.tipo ?? r.tipo;
-    r.expedicion = conTabla.expedicion;
-    r.caducidad = conTabla.caducidad;
+  if (base?.filas.length) {
+    r.tipo = base.tipo ?? r.tipo;
+    r.expedicion = base.expedicion;
+    r.caducidad = base.caducidad;
   }
   return r;
 }
