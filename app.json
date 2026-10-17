@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "Tirador Deportivo",
+    "slug": "tirador-deportivo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "es.ozono3.tirador",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Usamos Face ID para proteger tus documentos de armas."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "es.ozono3.tirador"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "asyncRoutes": false
+        }
+      ],
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Usamos Face ID para proteger tus documentos de armas."
+        }
+      ],
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Para guardar fotos de tus armas y documentos.",
+          "cameraPermission": "Para fotografiar tus armas y documentos."
+        }
+      ]
+    ],
+    "scheme": "tirador",
+    "backgroundColor": "#0B0F17"
+  }
+}

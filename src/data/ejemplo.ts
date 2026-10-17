@@ -1,0 +1,84 @@
+import { hoyISO, sumarAnios, sumarDias } from '@/lib/fechas';
+import type { Datos } from './types';
+
+// Datos ficticios para la vista previa. Las fechas se calculan desde hoy
+// para que los avisos siempre se vean con sentido.
+export function datosDeEjemplo(): Datos {
+  const hoy = hoyISO();
+  const cadF = sumarDias(hoy, 92);
+  const cadD = sumarDias(hoy, 570);
+  const cadE = sumarDias(hoy, 890);
+
+  return {
+    nombre: 'Rubén',
+    permiso: {
+      numero: '12345678-F',
+      licencias: [
+        { id: 'lic-f', tipo: 'F', numero: '12345678-F', expedicion: sumarAnios(cadF, -5), caducidad: cadF },
+        { id: 'lic-d', tipo: 'D', numero: '87654321-D', expedicion: sumarAnios(cadD, -5), caducidad: cadD },
+        { id: 'lic-e', tipo: 'E', numero: '11223344-E', expedicion: sumarAnios(cadE, -5), caducidad: cadE },
+      ],
+    },
+    armas: [
+      {
+        id: 'walther-p22',
+        marca: 'Walther',
+        modelo: 'P22',
+        tipo: 'Pistola',
+        calibre: '.22 LR',
+        numeroSerie: 'WA123456',
+        numeroGuia: '1234567-A',
+        fechaGuia: sumarAnios(hoy, -4),
+        licenciaId: 'lic-f',
+        disparosTotales: 1842,
+        intervaloLimpieza: 500,
+        limpiezas: [
+          { id: 'l4', fecha: sumarDias(hoy, -7), tipo: 'Completa', disparos: 1500 },
+          { id: 'l3', fecha: sumarDias(hoy, -73), tipo: 'Básica', disparos: 1320 },
+          { id: 'l2', fecha: sumarDias(hoy, -123), tipo: 'Completa', disparos: 820 },
+          { id: 'l1', fecha: sumarDias(hoy, -190), tipo: 'Básica', disparos: 320 },
+        ],
+      },
+      {
+        id: 'pardini-sp',
+        marca: 'Pardini',
+        modelo: 'SP',
+        tipo: 'Pistola',
+        calibre: '.22 LR',
+        numeroSerie: 'PA998877',
+        numeroGuia: '2345678-B',
+        fechaGuia: sumarAnios(hoy, -3),
+        licenciaId: 'lic-f',
+        disparosTotales: 3210,
+        intervaloLimpieza: 500,
+        limpiezas: [
+          { id: 'p1', fecha: sumarDias(hoy, -40), tipo: 'Completa', disparos: 2780 },
+        ],
+      },
+      {
+        id: 'anschutz-1907',
+        marca: 'Anschütz',
+        modelo: '1907',
+        tipo: 'Carabina',
+        calibre: '.22 LR',
+        numeroSerie: 'AN554433',
+        numeroGuia: '3456789-C',
+        fechaGuia: sumarAnios(hoy, -2),
+        licenciaId: 'lic-f',
+        disparosTotales: 2450,
+        intervaloLimpieza: 800,
+        limpiezas: [
+          { id: 'a1', fecha: sumarDias(hoy, -20), tipo: 'Completa', disparos: 2300 },
+        ],
+      },
+    ],
+    federacion: {
+      nombre: 'Federación Madrileña de Tiro Olímpico',
+      numeroFederado: '12345',
+      categoria: 'Senior',
+      caducidadCarnet: sumarDias(hoy, 118),
+      codigoPase: 'FMTO-12345-2026',
+      caducidadPase: sumarDias(hoy, 118),
+    },
+  };
+}
