@@ -49,9 +49,16 @@ function recorteEnFoto(m: LayoutRectangle, vista: { width: number; height: numbe
   };
 }
 
-async function aDataUri(uri: string, recorte?: ReturnType<typeof recorteEnFoto>): Promise<string> {
+/**
+ * Recorta (si hay recuadro) y reduce la foto. El tamaño se lee de la propia imagen: en el iPhone,
+ * la cámara web informa del tamaño en horizontal aunque la foto salga en vertical.
+ */
+async function aDataUri(uri: string, recuadro?: { marco: LayoutRectangle; vista: { width: number; height: number } }): Promise<string> {
   const ctx = ImageManipulator.manipulate(uri);
-  if (recorte) ctx.crop(recorte);
+  if (recuadro) {
+    const original = await ImageManipulator.manipulate(uri).renderAsync();
+    ctx.crop(recorteEnFoto(recuadro.marco, recuadro.vista, { width: original.width, height: original.height }));
+  }
   ctx.resize({ width: ANCHO_FINAL });
   const img = await ctx.renderAsync();
   const r = await img.saveAsync({ format: SaveFormat.JPEG, compress: 0.85, base64: true });
@@ -82,7 +89,7 @@ export function Escaner({ visible, titulo, proporcion = TARJETA, onFoto, onCerra
     setError(null);
     try {
       const foto = await camara.current.takePictureAsync({ quality: 0.9 });
-      setResultado(await aDataUri(foto.uri, recorteEnFoto(m, vista, foto)));
+      setResultado(await aDataUri(foto.uri, { marco: m, vista }));
     } catch (e) {
       console.error(e);
       setError('No se pudo hacer la foto. Inténtalo otra vez.');

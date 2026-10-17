@@ -72,14 +72,16 @@ export function leerLicencia(texto: string, hoy = new Date().toISOString().slice
 
   // Número: primero el que va detrás de «Nº», «NUM.» o «NÚMERO»; si no, una cifra larga
   // que no sea una fecha ni tenga forma de DNI/NIE.
-  const sinFechas = t.replace(/\b\d{1,2}\s?[/.\-]\s?\d{1,2}\s?[/.\-]\s?\d{4}\b/g, ' ');
+  // Se quitan también el NIF/NIE del titular (05285531-Q, X1234567-L), que no es el número de licencia.
+  const sinFechas = t
+    .replace(/\b\d{1,2}\s?[/.\-]\s?\d{1,2}\s?[/.\-]\s?\d{4}\b/g, ' ')
+    .replace(/\b[XYZ0-9]\d{7}\s?-?\s?[A-Z]\b/g, ' ');
   const etiquetado = sinFechas.match(/\b(?:N[º°O]\.?|NUM\.?|N[ÚU]MERO)\s*(?:DE\s+LICENCIA)?\s*[:.]?\s*([A-Z]{0,3}[\s-]?\d[\d\s.\-/]{4,}[A-Z]?)\b/);
   if (etiquetado) {
     r.numero = etiquetado[1].replace(/[\s.]/g, '');
   } else {
-    const dni = /^\d{8}[A-Z]$|^[XYZ]\d{7}[A-Z]$/;
-    const candidato = [...sinFechas.matchAll(/\b[A-Z]{0,3}-?\d{6,}[A-Z]?\b/g)].map((m) => m[0]).find((c) => !dni.test(c));
-    if (candidato) r.numero = candidato;
+    const candidato = sinFechas.match(/\b[A-Z]{0,3}-?\d{6,}[A-Z]?\b/);
+    if (candidato) r.numero = candidato[0];
   }
   return r;
 }

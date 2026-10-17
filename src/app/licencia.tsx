@@ -53,7 +53,8 @@ export default function EditarLicencia() {
       caducidad: x.caducidad || d.caducidad || '',
     }));
     setVersion((v) => v + 1);
-    setAviso({ ok: true, texto: `He leído: ${encontrados.join(', ')}. Revisa que esté bien antes de guardar.` });
+    const falta = d.numero ? '' : ' No veo el número en esta cara: escanea también la otra.';
+    setAviso({ ok: true, texto: `He leído: ${encontrados.join(', ')}.${falta} Revisa que esté bien antes de guardar.` });
   };
 
   const guardar = () => {
