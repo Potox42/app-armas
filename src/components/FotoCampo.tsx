@@ -3,6 +3,7 @@ import { Alert, Image, Platform, Pressable, StyleSheet, Text } from 'react-nativ
 import * as ImagePicker from 'expo-image-picker';
 import { guardarFoto, leerFoto } from '@/data/db';
 import { colors, radius } from '@/theme';
+import { Escaner } from './Escaner';
 import { Icon } from './Icon';
 
 async function elegir(origen: 'camara' | 'galeria'): Promise<string | null> {
@@ -25,6 +26,8 @@ interface Props {
   etiqueta: string;
   onChange: (fotoId: string | undefined) => void;
   proporcion?: number; // ancho / alto
+  documento?: boolean; // tarjeta o documento: se fotografía con el recuadro y se recorta
+  onEscaneado?: (dataUri: string) => void; // para leer los datos de la foto recién hecha
 }
 
 /** Carga una foto guardada (o null mientras no hay). */
@@ -42,28 +45,41 @@ export function useFoto(fotoId?: string): string | null {
 }
 
 /** Hueco de foto: muestra la imagen guardada (cifrada) y permite hacer, elegir o quitar la foto. */
-export function FotoCampo({ fotoId, etiqueta, onChange, proporcion = 1.58 }: Props) {
+export function FotoCampo({ fotoId, etiqueta, onChange, proporcion = 1.58, documento, onEscaneado }: Props) {
   const uri = useFoto(fotoId);
+  const [escaneando, setEscaneando] = useState(false);
 
-  const poner = async (origen: 'camara' | 'galeria') => {
-    const datos = await elegir(origen);
-    if (!datos) return;
+  const guardar = async (datos: string) => {
     const id = `foto-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
     // La foto anterior no se borra aquí: el formulario aún puede cancelarse sin guardar.
     await guardarFoto(id, datos);
     onChange(id);
   };
 
+  const poner = async (origen: 'camara' | 'galeria') => {
+    const datos = await elegir(origen);
+    if (datos) await guardar(datos);
+  };
+
+  const escaneado = async (datos: string) => {
+    setEscaneando(false);
+    await guardar(datos);
+    onEscaneado?.(datos);
+  };
+
   const quitar = () => onChange(undefined);
 
   const tocar = () => {
-    // En la vista previa web no hay menú nativo: se abre directamente el selector de archivos.
+    // En web no hay menú nativo: los documentos abren el escáner (que tiene «Galería») y el resto, el selector.
     if (Platform.OS === 'web') {
-      poner('galeria');
+      if (documento) setEscaneando(true);
+      else poner('galeria');
       return;
     }
     Alert.alert(etiqueta, undefined, [
-      { text: 'Hacer foto', onPress: () => poner('camara') },
+      documento
+        ? { text: 'Escanear con recuadro', onPress: () => setEscaneando(true) }
+        : { text: 'Hacer foto', onPress: () => poner('camara') },
       { text: 'Elegir de la galería', onPress: () => poner('galeria') },
       ...(fotoId ? [{ text: 'Quitar foto', style: 'destructive' as const, onPress: quitar }] : []),
       { text: 'Cancelar', style: 'cancel' as const },
@@ -71,17 +87,20 @@ export function FotoCampo({ fotoId, etiqueta, onChange, proporcion = 1.58 }: Pro
   };
 
   return (
-    <Pressable onPress={tocar} style={[st.hueco, { aspectRatio: proporcion }, uri && st.conFoto]}>
-      {uri ? (
-        <Image source={{ uri }} style={st.imagen} resizeMode="cover" accessibilityLabel={etiqueta} />
-      ) : (
-        <>
-          <Icon name="doc" color={colors.textMuted} size={28} />
-          <Text style={st.texto}>{etiqueta}</Text>
-          <Text style={st.ayuda}>Toca para añadir foto</Text>
-        </>
-      )}
-    </Pressable>
+    <>
+      <Escaner visible={escaneando} titulo={etiqueta} proporcion={proporcion} onFoto={escaneado} onCerrar={() => setEscaneando(false)} />
+      <Pressable onPress={tocar} style={[st.hueco, { aspectRatio: proporcion }, uri && st.conFoto]}>
+        {uri ? (
+          <Image source={{ uri }} style={st.imagen} resizeMode="cover" accessibilityLabel={etiqueta} />
+        ) : (
+          <>
+            <Icon name="doc" color={colors.textMuted} size={28} />
+            <Text style={st.texto}>{etiqueta}</Text>
+            <Text style={st.ayuda}>{documento ? 'Toca para escanear' : 'Toca para añadir foto'}</Text>
+          </>
+        )}
+      </Pressable>
+    </>
   );
 }
 

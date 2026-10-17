@@ -110,11 +110,13 @@ export default function FichaArma() {
             <View style={{ flexDirection: 'row', gap: space.sm }}>
               <FotoCampo
                 etiqueta="Anverso"
+                documento
                 fotoId={arma.fotoGuiaAnverso}
                 onChange={(fotoGuiaAnverso) => store.guardarArma({ ...arma, fotoGuiaAnverso })}
               />
               <FotoCampo
                 etiqueta="Reverso"
+                documento
                 fotoId={arma.fotoGuiaReverso}
                 onChange={(fotoGuiaReverso) => store.guardarArma({ ...arma, fotoGuiaReverso })}
               />

@@ -63,6 +63,7 @@ async function clave(contrasena: string, sal: Uint8Array, iteraciones: number) {
 export function idsDeFotos(d: Datos): string[] {
   const ids = [
     d.permiso.fotoAnverso, d.permiso.fotoReverso, d.federacion.fotoCarnet, d.federacion.fotoQr,
+    ...d.permiso.licencias.flatMap((l) => [l.fotoAnverso, l.fotoReverso]),
     ...d.armas.flatMap((a) => [a.foto, a.fotoGuiaAnverso, a.fotoGuiaReverso]),
   ];
   return [...new Set(ids.filter((x): x is string => !!x))];

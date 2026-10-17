@@ -60,8 +60,8 @@ export default function EditarArma() {
       <Card style={{ gap: space.md }}>
         <Text style={st.titulo}>Guía de pertenencia</Text>
         <View style={formSt.fila}>
-          <FotoCampo etiqueta="Anverso" fotoId={a.fotoGuiaAnverso} onChange={(fotoGuiaAnverso) => cambiar({ fotoGuiaAnverso })} />
-          <FotoCampo etiqueta="Reverso" fotoId={a.fotoGuiaReverso} onChange={(fotoGuiaReverso) => cambiar({ fotoGuiaReverso })} />
+          <FotoCampo etiqueta="Anverso" documento fotoId={a.fotoGuiaAnverso} onChange={(fotoGuiaAnverso) => cambiar({ fotoGuiaAnverso })} />
+          <FotoCampo etiqueta="Reverso" documento fotoId={a.fotoGuiaReverso} onChange={(fotoGuiaReverso) => cambiar({ fotoGuiaReverso })} />
         </View>
         <View style={formSt.fila}>
           <View style={{ flex: 1 }}><Campo etiqueta="Nº de guía" valor={a.numeroGuia} onChange={(numeroGuia) => cambiar({ numeroGuia })} /></View>

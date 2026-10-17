@@ -23,6 +23,16 @@ fs.writeFileSync(path.join(dist, 'manifest.json'), JSON.stringify({
   icons: [192, 512].map((t) => ({ src: `${base}/icono-${t}.png`, sizes: `${t}x${t}`, type: 'image/png' })),
 }, null, 2));
 
+// Lectura de texto de documentos (src/lib/ocr.web.ts): motor y español servidos desde la propia web.
+const ocr = path.join(dist, 'ocr');
+fs.mkdirSync(ocr, { recursive: true });
+const nm = path.join(__dirname, '..', 'node_modules');
+for (const f of ['tesseract.min.js', 'worker.min.js']) fs.copyFileSync(path.join(nm, 'tesseract.js', 'dist', f), path.join(ocr, f));
+for (const f of fs.readdirSync(path.join(nm, 'tesseract.js-core')).filter((x) => x.endsWith('-lstm.wasm.js'))) {
+  fs.copyFileSync(path.join(nm, 'tesseract.js-core', f), path.join(ocr, f));
+}
+fs.copyFileSync(path.join(nm, '@tesseract.js-data', 'spa', '4.0.0_best_int', 'spa.traineddata.gz'), path.join(ocr, 'spa.traineddata.gz'));
+
 let html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
 html = html.replace('<html lang="en">', '<html lang="es">');
 html = html.replace(/<title>[^<]*<\/title>/, '<title>Tirador Deportivo</title>');

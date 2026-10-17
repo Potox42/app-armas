@@ -6,6 +6,8 @@ export interface Licencia {
   numero: string;
   expedicion: string; // ISO yyyy-mm-dd
   caducidad: string;
+  fotoAnverso?: string;
+  fotoReverso?: string;
 }
 
 export interface PermisoArmas {

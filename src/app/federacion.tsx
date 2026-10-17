@@ -18,7 +18,7 @@ export default function EditarFederacion() {
       <Campo etiqueta="Federación" valor={f.nombre} onChange={(nombre) => cambiar({ nombre })} />
       <Card style={{ gap: space.md }}>
         <Text style={st.titulo}>Carnet de federado</Text>
-        <FotoCampo etiqueta="Foto del carnet" fotoId={f.fotoCarnet} onChange={(fotoCarnet) => cambiar({ fotoCarnet })} />
+        <FotoCampo etiqueta="Foto del carnet" documento fotoId={f.fotoCarnet} onChange={(fotoCarnet) => cambiar({ fotoCarnet })} />
         <View style={formSt.fila}>
           <View style={{ flex: 1 }}><Campo etiqueta="Nº de federado" valor={f.numeroFederado} onChange={(numeroFederado) => cambiar({ numeroFederado })} /></View>
           <View style={{ flex: 1 }}><Campo etiqueta="Categoría" valor={f.categoria} onChange={(categoria) => cambiar({ categoria })} placeholder="Senior" /></View>

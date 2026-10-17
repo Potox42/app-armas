@@ -51,11 +51,13 @@ export default function Cartera() {
             <View style={{ flexDirection: 'row', gap: space.sm }}>
               <FotoCampo
                 etiqueta="Anverso"
+                documento
                 fotoId={datos.permiso.fotoAnverso}
                 onChange={(fotoAnverso) => store.actualizarPermiso({ fotoAnverso })}
               />
               <FotoCampo
                 etiqueta="Reverso"
+                documento
                 fotoId={datos.permiso.fotoReverso}
                 onChange={(fotoReverso) => store.actualizarPermiso({ fotoReverso })}
               />
@@ -115,6 +117,7 @@ export default function Cartera() {
           <Card style={{ flexDirection: 'row', gap: space.sm }}>
             <FotoCampo
               etiqueta="Foto del carnet"
+              documento
               fotoId={f.fotoCarnet}
               onChange={(fotoCarnet) => store.guardarFederacion({ ...f, fotoCarnet })}
             />
