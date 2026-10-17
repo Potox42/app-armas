@@ -54,7 +54,8 @@
           "photosPermission": "Para guardar fotos de tus armas y documentos.",
           "cameraPermission": "Para fotografiar tus armas y documentos."
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "scheme": "tirador",
     "backgroundColor": "#0B0F17"

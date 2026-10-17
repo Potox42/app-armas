@@ -26,6 +26,7 @@ interface Store {
   actualizarPermiso: (cambios: Partial<PermisoArmas>) => void;
   guardarFederacion: (f: Federacion) => void;
   empezarDeCero: () => void;
+  restaurar: (d: Datos) => void;
   ajustes: Ajustes;
   guardarAjustes: (cambios: Partial<Ajustes>) => void;
   esEjemplo: boolean;
@@ -154,6 +155,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       actualizarPermiso: (cambios) => setDatos((d) => d && { ...d, permiso: { ...d.permiso, ...cambios } }),
       guardarFederacion: (f) => setDatos((d) => d && { ...d, federacion: f }),
       empezarDeCero: () => setDatos((d) => d && { ...datosVacios(d.nombre), ajustes: d.ajustes }),
+      // Los ajustes (Face ID, avisos) son de este móvil: no se traen de la copia.
+      restaurar: (nuevos) => setDatos((d) => d && { ...completar(nuevos), esEjemplo: false, ajustes: d.ajustes }),
       ajustes: datos.ajustes ?? AJUSTES_INICIALES,
       guardarAjustes: (cambios) => setDatos((d) => d && { ...d, ajustes: { ...(d.ajustes ?? AJUSTES_INICIALES), ...cambios } }),
       esEjemplo: datos.esEjemplo !== false,

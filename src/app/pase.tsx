@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Brightness from 'expo-brightness';
 import { useFoto } from '@/components/FotoCampo';
@@ -12,6 +12,14 @@ export default function Pase() {
   const { datos } = useStore();
   const f = datos.federacion;
   const qr = useFoto(f.fotoQr);
+
+  // Al salir de la app se cierra el pase, para que el bloqueo con Face ID lo tape al volver.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (e) => {
+      if (e === 'background' && router.canGoBack()) router.back();
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;

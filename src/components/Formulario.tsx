@@ -3,13 +3,14 @@ import { StyleSheet, Text, TextInput, View, type KeyboardTypeOptions } from 'rea
 import { deTexto, formatear } from '@/lib/fechas';
 import { colors, radius, space } from '@/theme';
 
-export function Campo({ etiqueta, valor, onChange, placeholder, teclado, error }: {
+export function Campo({ etiqueta, valor, onChange, placeholder, teclado, error, secreto }: {
   etiqueta: string;
   valor: string;
   onChange: (v: string) => void;
   placeholder?: string;
   teclado?: KeyboardTypeOptions;
   error?: string;
+  secreto?: boolean;
 }) {
   return (
     <View style={{ gap: 6 }}>
@@ -20,6 +21,9 @@ export function Campo({ etiqueta, valor, onChange, placeholder, teclado, error }
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
         keyboardType={teclado}
+        secureTextEntry={secreto}
+        autoCapitalize={secreto ? 'none' : undefined}
+        autoCorrect={secreto ? false : undefined}
         style={[st.input, error && { borderColor: colors.red }]}
       />
       {error && <Text style={st.error}>{error}</Text>}

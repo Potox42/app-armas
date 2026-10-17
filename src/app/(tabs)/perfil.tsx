@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Platform, Switch, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { Icon, type IconName } from '@/components/Icon';
 import { Button, Card, Screen, s } from '@/components/ui';
 import { useStore } from '@/data/store';
@@ -10,7 +11,6 @@ import { colors, space } from '@/theme';
 
 const PENDIENTE: { icon: IconName; titulo: string; detalle: string }[] = [
   { icon: 'shield', titulo: 'Datos cifrados en el móvil', detalle: 'Nada sale del teléfono' },
-  { icon: 'doc', titulo: 'Copia de seguridad cifrada', detalle: 'Exportar e importar tus datos' },
 ];
 
 function avisar(titulo: string, texto: string) {
@@ -83,6 +83,14 @@ export default function Perfil() {
         {ajustes.avisos && avisosDisponibles && (
           <Button title="Enviar un aviso de prueba" variant="secondary" onPress={() => { avisoDePrueba().catch(() => {}); }} />
         )}
+      </Card>
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }} onPress={() => router.push('/copia')}>
+        <Icon name="doc" color={colors.accent} />
+        <View style={{ flex: 1 }}>
+          <Text style={s.text}>Copia de seguridad cifrada</Text>
+          <Text style={s.muted}>Guarda o recupera tus datos con contraseña</Text>
+        </View>
+        <Icon name="chevron" color={colors.textMuted} />
       </Card>
       {PENDIENTE.map((p) => (
         <Card key={p.titulo} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
