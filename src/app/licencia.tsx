@@ -10,8 +10,8 @@ import { nuevoId, useStore } from '@/data/store';
 import type { Licencia, TipoLicencia } from '@/data/types';
 import { confirmar } from '@/lib/confirmar';
 import { formatear, sumarAnios } from '@/lib/fechas';
-import { leerLicencia } from '@/lib/leerLicencia';
-import { leerTexto, ocrDisponible } from '@/lib/ocr';
+import { combinar, leerLicencia, type FilaLicencia } from '@/lib/leerLicencia';
+import { leerTextos, ocrDisponible } from '@/lib/ocr';
 import { colors, space } from '@/theme';
 
 export default function EditarLicencia() {
@@ -22,6 +22,8 @@ export default function EditarLicencia() {
   const [intentado, setIntentado] = useState(false);
   const [leyendo, setLeyendo] = useState(false);
   const [aviso, setAviso] = useState<{ texto: string; ok: boolean } | null>(null);
+  // Licencias que aparecen en la tabla del reverso, para poder elegir cuál es esta ficha.
+  const [filas, setFilas] = useState<FilaLicencia[]>([]);
   // Cambia al rellenar con lo leído, para que los campos de fecha muestren el valor nuevo.
   const [version, setVersion] = useState(0);
   const armas = store.datos.armas.filter((a) => a.licenciaId === l.id);
@@ -35,26 +37,37 @@ export default function EditarLicencia() {
     if (!ocrDisponible) return;
     setLeyendo(true);
     setAviso(null);
-    const texto = await leerTexto(foto);
+    const textos = await leerTextos(foto);
     setLeyendo(false);
-    const d = texto ? leerLicencia(texto) : {};
+    const d = combinar(textos.map((t) => leerLicencia(t, undefined, l.tipo)));
     const encontrados = [d.tipo && 'tipo', d.numero && 'número', d.expedicion && 'expedición', d.caducidad && 'caducidad']
       .filter(Boolean) as string[];
     if (encontrados.length === 0) {
-      setAviso({ ok: false, texto: 'No he podido leer los datos. Escríbelos a mano o repite la foto con más luz.' });
+      setAviso({ ok: false, texto: 'No he podido leer los datos. Escríbelos a mano o repite la foto con más luz y más cerca.' });
       return;
     }
     // Solo se rellena lo que esté vacío, para no pisar lo que ya hayas escrito.
+    // La tabla del reverso sí manda en el tipo y la caducidad: es el dato oficial de cada licencia.
+    const delReverso = d.filas.length > 0;
     setL((x) => ({
       ...x,
       tipo: d.tipo ?? x.tipo,
       numero: x.numero || d.numero || '',
       expedicion: x.expedicion || d.expedicion || '',
-      caducidad: x.caducidad || d.caducidad || '',
+      caducidad: (delReverso ? d.caducidad : undefined) || x.caducidad || d.caducidad || '',
     }));
     setVersion((v) => v + 1);
-    const falta = d.numero ? '' : ' No veo el número en esta cara: escanea también la otra.';
-    setAviso({ ok: true, texto: `He leído: ${encontrados.join(', ')}.${falta} Revisa que esté bien antes de guardar.` });
+    setFilas(d.filas.length > 1 ? d.filas : []);
+    const varias = d.filas.length > 1
+      ? ` Tu tarjeta tiene ${d.filas.length} licencias: he rellenado la ${d.tipo ?? 'que caduca más tarde'}. Si no es esta, elige abajo; las demás puedes darlas de alta aparte.`
+      : '';
+    setAviso({ ok: true, texto: `He leído: ${encontrados.join(', ')}.${varias} Revisa que esté bien antes de guardar.` });
+  };
+
+  const usarFila = (f: FilaLicencia) => {
+    setL((x) => ({ ...x, tipo: f.tipo ?? x.tipo, expedicion: f.desde, caducidad: f.hasta }));
+    setVersion((v) => v + 1);
+    setAviso({ ok: true, texto: `He puesto las fechas de la licencia ${f.tipo ?? `que caduca el ${formatear(f.hasta)}`}. Revisa que esté bien antes de guardar.` });
   };
 
   const guardar = () => {
@@ -70,7 +83,7 @@ export default function EditarLicencia() {
         <Text style={st.titulo}>Foto de la licencia</Text>
         <Text style={s.muted}>
           {ocrDisponible
-            ? 'Escanea el anverso y leeré el número, el tipo y las fechas por ti.'
+            ? 'Escanea las dos caras y leeré el tipo y las fechas por ti.'
             : 'Escanea las dos caras para tenerlas siempre a mano.'}
         </Text>
         <View style={formSt.fila}>
@@ -96,6 +109,18 @@ export default function EditarLicencia() {
           </View>
         )}
         {aviso && <Text style={{ color: aviso.ok ? colors.green : colors.orange }}>{aviso.texto}</Text>}
+        {filas.length > 1 && (
+          <View style={{ gap: space.xs }}>
+            {filas.map((f) => (
+              <Button
+                key={f.hasta}
+                title={`Usar licencia ${f.tipo ?? '(letra sin leer)'} · hasta ${formatear(f.hasta)}`}
+                variant={f.hasta === l.caducidad ? 'primary' : 'secondary'}
+                onPress={() => usarFila(f)}
+              />
+            ))}
+          </View>
+        )}
       </Card>
 
       <Text style={st.etiqueta}>Tipo</Text>

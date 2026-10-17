@@ -3,6 +3,6 @@
 
 export const ocrDisponible = false;
 
-export async function leerTexto(_dataUri: string): Promise<string | null> {
-  return null;
+export async function leerTextos(_dataUri: string): Promise<string[]> {
+  return [];
 }

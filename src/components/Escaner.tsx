@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
+import { ajustarTarjeta } from '@/lib/ajustarTarjeta';
+import { subirResolucion } from '@/lib/camaraWeb';
 import { colors, radius, space } from '@/theme';
 import { Button } from './ui';
 
@@ -89,7 +91,8 @@ export function Escaner({ visible, titulo, proporcion = TARJETA, onFoto, onCerra
     setError(null);
     try {
       const foto = await camara.current.takePictureAsync({ quality: 0.9 });
-      setResultado(await aDataUri(foto.uri, { marco: m, vista }));
+      const recortada = await aDataUri(foto.uri, { marco: m, vista });
+      setResultado((await ajustarTarjeta(recortada)) ?? recortada);
     } catch (e) {
       console.error(e);
       setError('No se pudo hacer la foto. Inténtalo otra vez.');
@@ -138,7 +141,10 @@ export function Escaner({ visible, titulo, proporcion = TARJETA, onFoto, onCerra
                 ref={camara}
                 style={StyleSheet.absoluteFill}
                 facing="back"
-                onCameraReady={() => setLista(true)}
+                onCameraReady={() => {
+                  setLista(true);
+                  subirResolucion();
+                }}
               />
             )}
             {vista.width > 0 && (
