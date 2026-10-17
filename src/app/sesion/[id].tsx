@@ -1,6 +1,7 @@
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
+import { Anillo, Cifra } from '@/components/Cifra';
 import { Diana } from '@/components/Diana';
 import { Icon } from '@/components/Icon';
 import { Button, Card, Screen, SectionTitle, s } from '@/components/ui';
@@ -8,7 +9,7 @@ import { useStore } from '@/data/store';
 import type { Sesion } from '@/data/types';
 import { formatear } from '@/lib/fechas';
 import { agrupacion, formatoMedia, media, sumaSerie, todosLosDisparos, totalSesion } from '@/lib/sesiones';
-import { colors, space } from '@/theme';
+import { colors, radius, space } from '@/theme';
 
 export default function SesionPantalla() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -92,57 +93,87 @@ function Resumen({ sesion }: { sesion: Sesion }) {
   const arma = store.arma(sesion.armaId);
   const disparos = todosLosDisparos(sesion);
   const sumas = sesion.series.map(sumaSerie);
-  const mejor = disparos.reduce((m, d) => Math.max(m, d.valor), 0);
+  const total = totalSesion(sesion);
+  const maximo = disparos.length * 10;
   const g = agrupacion(disparos);
+  // Cuántos disparos de cada valor, del 10 hacia abajo.
+  const reparto = [10, 9, 8, 7, 6].map((v) => ({ v, n: disparos.filter((d) => d.valor === v).length }));
+  const resto = disparos.filter((d) => d.valor < 6).length;
+  const masAlto = Math.max(1, ...reparto.map((r) => r.n), resto);
 
   return (
-    <Screen title="Entrenamiento" back>
-      <View style={{ alignItems: 'center', gap: 4 }}>
-        <View style={st.ok}><Icon name="check" size={28} /></View>
-        <Text style={s.h2}>Entrenamiento completado</Text>
-        <Text style={s.muted}>
-          {formatear(sesion.fecha.slice(0, 10))} · {sesion.fecha.slice(11, 16)}
+    <Screen title="Resultado" back>
+      <View style={st.hero}>
+        <Anillo valor={total} maximo={maximo} tamano={170} grosor={14} color={colors.green}>
+          <Text style={st.total}>{total}</Text>
+          <Text style={s.muted}>de {maximo}</Text>
+        </Anillo>
+        <Text style={st.heroArma}>{arma ? `${arma.marca} ${arma.modelo}` : 'Arma'}</Text>
+        <Text style={[s.muted, { textAlign: 'center' }]}>
+          {formatear(sesion.fecha.slice(0, 10))} · {sesion.fecha.slice(11, 16)} · {sesion.modalidad} · {sesion.distancia} m
+          {sesion.municion ? `\n${sesion.municion}` : ''}
         </Text>
       </View>
 
-      <Card style={{ gap: 4 }}>
-        <Text style={st.titulo}>{arma ? `${arma.marca} ${arma.modelo}` : 'Arma'}</Text>
-        <Text style={s.muted}>
-          {sesion.modalidad} · {sesion.distancia} m · {sesion.series.length} series × {sesion.disparosPorSerie} disparos
-          {sesion.municion ? ` · ${sesion.municion}` : ''}
-        </Text>
+      <View style={st.datos}>
+        <Cifra titulo="Media" valor={formatoMedia(media(disparos))} color={colors.green} />
+        <Cifra titulo="Dieces" valor={String(reparto[0].n)} detalle={`de ${disparos.length}`} />
+        <Cifra titulo="Agrupación" valor={`${Math.round(g.radio)} mm`} detalle="radio medio" />
+      </View>
+
+      <SectionTitle>Series</SectionTitle>
+      <View style={st.series}>
+        {sumas.map((v, i) => {
+          const max = sesion.series[i].disparos.length * 10;
+          const p = max ? v / max : 0;
+          return (
+            <View key={i} style={st.serie}>
+              <Text style={st.serieNum}>S{i + 1}</Text>
+              <Text style={[st.serieValor, { color: p >= 0.9 ? colors.green : p >= 0.8 ? colors.text : colors.orange }]}>{v}</Text>
+            </View>
+          );
+        })}
+      </View>
+      {sumas.length > 1 && <Card><GraficaSeries sumas={sumas} maximo={sesion.disparosPorSerie * 10} /></Card>}
+
+      <SectionTitle>Reparto de impactos</SectionTitle>
+      <Card style={{ gap: space.sm }}>
+        {[...reparto.map((r) => ({ etiqueta: String(r.v), n: r.n })), { etiqueta: '<6', n: resto }].map((r) => (
+          <View key={r.etiqueta} style={st.barraFila}>
+            <Text style={st.barraEtiqueta}>{r.etiqueta}</Text>
+            <View style={st.barraFondo}>
+              <View style={[st.barra, { width: `${(r.n / masAlto) * 100}%` }]} />
+            </View>
+            <Text style={st.barraN}>{r.n}</Text>
+          </View>
+        ))}
       </Card>
-
-      <View style={st.datos}>
-        <Dato titulo="Puntuación total" valor={`${totalSesion(sesion)} / ${disparos.length * 10}`} grande ancho={1.7} />
-        <Dato titulo="Media" valor={formatoMedia(media(disparos))} />
-        <Dato titulo="Mejor disparo" valor={String(mejor)} />
-      </View>
-
-      {sumas.length > 1 && (
-        <>
-          <SectionTitle>Puntuación por serie</SectionTitle>
-          <Card><GraficaSeries sumas={sumas} maximo={sesion.disparosPorSerie * 10} /></Card>
-        </>
-      )}
-
-      <View style={st.datos}>
-        <Dato titulo="Agrupación media" valor={`${Math.round(g.radio)} mm`} />
-        <Dato titulo="Centro de impacto" valor={`${horizontal(g.cx)}\n${vertical(g.cy)}`} ancho={1.3} />
-      </View>
 
       <SectionTitle>Todos los impactos</SectionTitle>
       <View style={{ alignItems: 'center' }}>
-        <Diana tamano={tamano} disparos={[]} anteriores={disparos} />
+        <Diana tamano={tamano} disparos={[]} anteriores={disparos} grupo={g} />
       </View>
+      <Card style={st.centro}>
+        <Icon name="target" color={colors.accent} />
+        <View style={{ flex: 1 }}>
+          <Text style={s.text}>Centro de impactos</Text>
+          <Text style={s.muted}>{consejo(g.cx, g.cy)}</Text>
+        </View>
+      </Card>
 
       <Button title="Volver a Entrenar" onPress={() => router.back()} />
     </Screen>
   );
 }
 
-const horizontal = (x: number) => (Math.abs(x) < 1 ? 'centrado' : `${Math.round(Math.abs(x))} mm ${x > 0 ? 'dcha.' : 'izq.'}`);
-const vertical = (y: number) => (Math.abs(y) < 1 ? 'centrado' : `${Math.round(Math.abs(y))} mm ${y > 0 ? 'abajo' : 'arriba'}`);
+/** Dónde queda el centro del grupo respecto al centro de la diana. */
+function consejo(cx: number, cy: number): string {
+  if (Math.hypot(cx, cy) < 8) return 'Grupo centrado: no hace falta corregir miras.';
+  return `El grupo queda ${horizontal(cx)} y ${vertical(cy)} del centro.`;
+}
+
+const horizontal = (x: number) => (Math.abs(x) < 1 ? 'centrado en horizontal' : `${Math.round(Math.abs(x))} mm a la ${x > 0 ? 'derecha' : 'izquierda'}`);
+const vertical = (y: number) => (Math.abs(y) < 1 ? 'centrado en vertical' : `${Math.round(Math.abs(y))} mm ${y > 0 ? 'abajo' : 'arriba'}`);
 
 function Dato({ titulo, valor, grande, ancho = 1 }: { titulo: string; valor: string; grande?: boolean; ancho?: number }) {
   return (
@@ -191,8 +222,20 @@ const st = StyleSheet.create({
   botones: { flexDirection: 'row', gap: space.sm },
   camara: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   titulo: { color: colors.text, fontSize: 16, fontWeight: '700' },
-  ok: {
-    width: 48, height: 48, borderRadius: 24, backgroundColor: colors.green,
-    alignItems: 'center', justifyContent: 'center',
+  hero: { alignItems: 'center', gap: 4, paddingVertical: space.md },
+  total: { color: colors.text, fontSize: 44, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  heroArma: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: space.md },
+  series: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  serie: {
+    flexBasis: 48, flexGrow: 1, alignItems: 'center', paddingVertical: space.sm, borderRadius: radius.md,
+    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
   },
+  serieNum: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
+  serieValor: { fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  barraFila: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  barraEtiqueta: { width: 28, color: colors.text, fontWeight: '700', textAlign: 'right' },
+  barraFondo: { flex: 1, height: 12, borderRadius: 6, backgroundColor: colors.cardAlt, overflow: 'hidden' },
+  barra: { height: '100%', borderRadius: 6, backgroundColor: colors.accent },
+  barraN: { width: 28, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  centro: { flexDirection: 'row', alignItems: 'center', gap: space.md },
 });

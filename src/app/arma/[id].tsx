@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Cifra } from '@/components/Cifra';
+import { MiniDiana } from '@/components/Diana';
 import { Icon } from '@/components/Icon';
 import { FotoArma } from '@/components/FotoArma';
 import { FotoCampo } from '@/components/FotoCampo';
@@ -11,9 +13,10 @@ import { useStore } from '@/data/store';
 import type { Limpieza } from '@/data/types';
 import { disparosDesdeLimpieza, licenciaDe, nivelPorDias, proximaRevista } from '@/lib/avisos';
 import { diasHasta, formatear, mesAnio, plazo } from '@/lib/fechas';
+import { formatoMedia, media, todosLosDisparos, totalSesion } from '@/lib/sesiones';
 import { colors, radius, space } from '@/theme';
 
-type Vista = 'documentacion' | 'mantenimiento';
+type Vista = 'mantenimiento' | 'documentacion' | 'entrenamientos';
 
 export default function FichaArma() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -29,6 +32,9 @@ export default function FichaArma() {
   const licencia = licenciaDe(store.datos, arma);
   const revista = proximaRevista(store.datos, arma);
   const desde = disparosDesdeLimpieza(arma);
+  const limpiar = desde >= arma.intervaloLimpieza;
+  const sesiones = store.datos.sesiones.filter((x) => x.armaId === arma.id && x.terminada);
+  const ultimos = sesiones.slice(0, 5).flatMap(todosLosDisparos);
 
   return (
     <Screen
@@ -40,24 +46,62 @@ export default function FichaArma() {
         </Pressable>
       }
     >
-      <Card style={st.cabecera}>
-        <FotoArma arma={arma} ancho={130} />
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={s.h2}>{arma.marca} {arma.modelo}</Text>
-          <Text style={s.muted}>{arma.tipo} · {arma.calibre}</Text>
-          <Text style={s.muted}>Nº de guía: {arma.numeroGuia}</Text>
-          <Text style={s.muted}>{arma.disparosTotales.toLocaleString('es-ES')} disparos</Text>
+      <View style={st.hero}>
+        <FotoArma arma={arma} ancho={240} />
+        <Text style={st.heroNombre}>{arma.marca} {arma.modelo}</Text>
+        <Text style={s.muted}>{arma.tipo} · {arma.calibre} · Guía {arma.numeroGuia}</Text>
+        <View style={[st.estado, { backgroundColor: limpiar ? colors.orangeSoft : colors.greenSoft }]}>
+          <View style={[st.punto, { backgroundColor: limpiar ? colors.orange : colors.green }]} />
+          <Text style={{ color: limpiar ? colors.orange : colors.green, fontWeight: '700' }}>
+            {limpiar ? 'Toca limpiar' : 'Operativa'}
+          </Text>
         </View>
-      </Card>
+      </View>
+
+      <View style={st.cifras}>
+        <Cifra titulo="Disparos" valor={arma.disparosTotales.toLocaleString('es-ES')} />
+        <Cifra titulo="Tiradas" valor={String(sesiones.length)} />
+        <Cifra
+          titulo="Media"
+          valor={ultimos.length ? formatoMedia(media(ultimos)) : '–'}
+          detalle={ultimos.length ? 'últimos 5' : undefined}
+          color={colors.green}
+        />
+      </View>
 
       <Segmented
         value={vista}
         onChange={setVista}
         options={[
-          { value: 'documentacion', label: 'Documentación' },
-          { value: 'mantenimiento', label: 'Mantenimiento' },
+          { value: 'mantenimiento', label: 'Cuidado' },
+          { value: 'documentacion', label: 'Papeles' },
+          { value: 'entrenamientos', label: 'Tiradas' },
         ]}
       />
+
+      {vista === 'entrenamientos' && (
+        <>
+          {sesiones.length === 0 && (
+            <Card><Text style={s.muted}>Aún no has entrenado con esta arma.</Text></Card>
+          )}
+          {sesiones.map((x) => {
+            const d = todosLosDisparos(x);
+            return (
+              <Card key={x.id} onPress={() => router.push(`/sesion/${x.id}`)} style={st.tirada}>
+                <View style={st.mini}><MiniDiana disparos={d} tamano={44} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.text}>{formatear(x.fecha.slice(0, 10))}</Text>
+                  <Text style={s.muted}>{x.modalidad} · {x.distancia} m · {d.length} disparos</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ color: colors.green, fontSize: 18, fontWeight: '800' }}>{totalSesion(x)}</Text>
+                  <Text style={s.muted}>media {formatoMedia(media(d))}</Text>
+                </View>
+              </Card>
+            );
+          })}
+        </>
+      )}
 
       {vista === 'documentacion' && (
         <>
@@ -122,8 +166,8 @@ export default function FichaArma() {
           </Card>
 
           <Card style={{ gap: space.sm }}>
-            <Text style={st.titulo}>Sumar disparos de hoy</Text>
-            <Text style={s.muted}>Hasta que llegue el diario de entrenamiento, súmalos a mano.</Text>
+            <Text style={st.titulo}>Sumar disparos sueltos</Text>
+            <Text style={s.muted}>Los entrenamientos se suman solos. Si has tirado sin registrarlo, añádelos aquí.</Text>
             <View style={{ flexDirection: 'row', gap: space.sm }}>
               {[50, 100, 200].map((n) => (
                 <Pressable key={n} style={st.chip} onPress={() => store.sumarDisparos(arma.id, n)}>
@@ -175,7 +219,19 @@ function RegistrarLimpieza({ onSave, onCancel }: {
 }
 
 const st = StyleSheet.create({
-  cabecera: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  hero: {
+    alignItems: 'center', gap: 4, paddingVertical: space.lg, backgroundColor: colors.card,
+    borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border,
+  },
+  heroNombre: { color: colors.text, fontSize: 24, fontWeight: '800', marginTop: space.sm },
+  estado: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: space.sm,
+    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
+  },
+  punto: { width: 8, height: 8, borderRadius: 4 },
+  cifras: { flexDirection: 'row', gap: space.sm },
+  tirada: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
+  mini: { borderRadius: 22, overflow: 'hidden' },
   titulo: { color: colors.text, fontSize: 16, fontWeight: '700' },
   entre: { flexDirection: 'row', justifyContent: 'space-between' },
   chip: {

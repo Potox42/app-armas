@@ -12,6 +12,7 @@ interface Props {
   tamano: number; // px
   visibleMm?: number; // diámetro de diana que se ve
   anteriores?: Disparo[]; // disparos de series anteriores, en gris
+  grupo?: { cx: number; cy: number; radio: number }; // centro y radio medio del grupo
   onToque?: (x: number, y: number) => void;
 }
 
@@ -19,7 +20,7 @@ const PAPEL = '#EDE6D6';
 const NEGRO = '#151515';
 
 /** Diana ISSF de pistola 25 m precisión dibujada a escala real, en milímetros. */
-export function Diana({ disparos, tamano, visibleMm = 360, anteriores = [], onToque }: Props) {
+export function Diana({ disparos, tamano, visibleMm = 360, anteriores = [], grupo, onToque }: Props) {
   const r = visibleMm / 2;
   const escala = tamano / visibleMm; // px por mm
 
@@ -87,6 +88,12 @@ export function Diana({ disparos, tamano, visibleMm = 360, anteriores = [], onTo
         {anteriores.map((d, i) => (
           <Circle key={`a${i}`} cx={d.x} cy={d.y} r={CALIBRE_22_MM / 2} fill="#8A8F99" opacity={0.6} />
         ))}
+        {grupo && grupo.radio > 0 && (
+          <G>
+            <Circle cx={grupo.cx} cy={grupo.cy} r={grupo.radio} fill={colors.accent} fillOpacity={0.12} stroke={colors.accent} strokeWidth={1.5} strokeDasharray="4 3" />
+            <Circle cx={grupo.cx} cy={grupo.cy} r={3} fill={colors.accent} stroke="#fff" strokeWidth={1} />
+          </G>
+        )}
         {disparos.map((d, i) => {
           const ultimo = i === disparos.length - 1;
           return (
