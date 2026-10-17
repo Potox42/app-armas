@@ -78,8 +78,14 @@ export interface Sesion {
   terminada: boolean;
 }
 
+export interface Ajustes {
+  bloqueo: boolean; // pedir Face ID al abrir la app
+  avisos: boolean; // notificaciones locales de caducidades
+}
+
 export interface Datos {
   nombre: string;
+  ajustes?: Ajustes;
   permiso: PermisoArmas;
   armas: Arma[];
   federacion: Federacion;

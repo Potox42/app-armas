@@ -3,7 +3,7 @@ import { puntuar } from '@/lib/diana';
 import { hoyISO } from '@/lib/fechas';
 import { cargarDatos, guardarDatos } from './db';
 import { datosDeEjemplo } from './ejemplo';
-import type { Arma, Datos, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Sesion } from './types';
+import type { Ajustes, Arma, Datos, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Sesion } from './types';
 
 // Los datos se cargan de la base de datos cifrada al arrancar y se guardan en cada cambio.
 // Mientras no existan las pantallas de alta, el primer arranque parte del ejemplo.
@@ -26,8 +26,12 @@ interface Store {
   actualizarPermiso: (cambios: Partial<PermisoArmas>) => void;
   guardarFederacion: (f: Federacion) => void;
   empezarDeCero: () => void;
+  ajustes: Ajustes;
+  guardarAjustes: (cambios: Partial<Ajustes>) => void;
   esEjemplo: boolean;
 }
+
+const AJUSTES_INICIALES: Ajustes = { bloqueo: false, avisos: false };
 
 export const nuevoId = (prefijo: string) => `${prefijo}-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 
@@ -149,7 +153,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setDatos((d) => d && { ...d, permiso: { ...d.permiso, licencias: d.permiso.licencias.filter((x) => x.id !== id) } }),
       actualizarPermiso: (cambios) => setDatos((d) => d && { ...d, permiso: { ...d.permiso, ...cambios } }),
       guardarFederacion: (f) => setDatos((d) => d && { ...d, federacion: f }),
-      empezarDeCero: () => setDatos((d) => d && datosVacios(d.nombre)),
+      empezarDeCero: () => setDatos((d) => d && { ...datosVacios(d.nombre), ajustes: d.ajustes }),
+      ajustes: datos.ajustes ?? AJUSTES_INICIALES,
+      guardarAjustes: (cambios) => setDatos((d) => d && { ...d, ajustes: { ...(d.ajustes ?? AJUSTES_INICIALES), ...cambios } }),
       esEjemplo: datos.esEjemplo !== false,
     };
   }, [datos]);
