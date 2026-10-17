@@ -54,9 +54,34 @@ export interface Federacion {
   fotoQr?: string;
 }
 
+export type Modalidad = 'Precisión' | 'Tiro rápido' | 'Standard' | 'Otra';
+
+export interface Disparo {
+  x: number; // mm desde el centro, positivo a la derecha
+  y: number; // mm desde el centro, positivo hacia abajo
+  valor: number;
+}
+
+export interface Serie {
+  disparos: Disparo[];
+}
+
+export interface Sesion {
+  id: string;
+  fecha: string;
+  armaId: string;
+  modalidad: Modalidad;
+  distancia: number; // metros
+  municion: string;
+  disparosPorSerie: number;
+  series: Serie[];
+  terminada: boolean;
+}
+
 export interface Datos {
   nombre: string;
   permiso: PermisoArmas;
   armas: Arma[];
   federacion: Federacion;
+  sesiones: Sesion[];
 }

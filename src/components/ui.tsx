@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import Svg, { Path, Rect } from 'react-native-svg';
@@ -34,7 +34,7 @@ export function Screen({ title, back, right, children }: {
   );
 }
 
-export function Card({ children, style, onPress }: { children: ReactNode; style?: ViewStyle; onPress?: () => void }) {
+export function Card({ children, style, onPress }: { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void }) {
   if (onPress) {
     return (
       <Pressable onPress={onPress} style={({ pressed }) => [s.card, style, pressed && { opacity: 0.7 }]}>
@@ -150,20 +150,26 @@ export function DocPlaceholder({ label }: { label: string }) {
   );
 }
 
-/** QR de ejemplo (dibujo, no escaneable) hasta que se guarde el real. */
-export function FakeQr({ size = 160, seed = 7 }: { size?: number; seed?: number }) {
-  const n = 21;
-  const cells: ReactNode[] = [];
+function patronQr(n: number, seed: number): [number, number][] {
   let x = seed;
   const rnd = () => ((x = (x * 9301 + 49297) % 233280) / 233280);
   const finder = (i: number, j: number) =>
     (i < 7 && j < 7) || (i < 7 && j >= n - 7) || (i >= n - 7 && j < 7);
+  const celdas: [number, number][] = [];
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
-      if (finder(i, j)) continue;
-      if (rnd() > 0.5) cells.push(<Rect key={`${i}-${j}`} x={j} y={i} width={1} height={1} fill="#000" />);
+      if (!finder(i, j) && rnd() > 0.5) celdas.push([i, j]);
     }
   }
+  return celdas;
+}
+
+/** QR de ejemplo (dibujo, no escaneable) hasta que se guarde el real. */
+export function FakeQr({ size = 160, seed = 7 }: { size?: number; seed?: number }) {
+  const n = 21;
+  const cells = patronQr(n, seed).map(([i, j]) => (
+    <Rect key={`${i}-${j}`} x={j} y={i} width={1} height={1} fill="#000" />
+  ));
   const box = (cx: number, cy: number) => (
     <>
       <Rect x={cx} y={cy} width={7} height={7} fill="#000" />

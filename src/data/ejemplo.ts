@@ -1,8 +1,45 @@
+import { puntuar } from '@/lib/diana';
 import { hoyISO, sumarAnios, sumarDias } from '@/lib/fechas';
-import type { Datos } from './types';
+import type { Datos, Serie, Sesion } from './types';
 
 // Datos ficticios para la vista previa. Las fechas se calculan desde hoy
 // para que los avisos siempre se vean con sentido.
+// Generador pseudoaleatorio con semilla: el ejemplo sale siempre igual.
+function aleatorio(semilla: number) {
+  let x = semilla;
+  return () => ((x = (x * 9301 + 49297) % 233280) / 233280);
+}
+
+function seriesDeEjemplo(semilla: number, dispersion: number): Serie[] {
+  const r = aleatorio(semilla);
+  const normal = () => Math.sqrt(-2 * Math.log(r() || 1e-6)) * Math.cos(2 * Math.PI * r());
+  return Array.from({ length: 6 }, () => ({
+    disparos: Array.from({ length: 10 }, () => {
+      const x = normal() * dispersion + 4;
+      const y = normal() * dispersion - 6;
+      return { x, y, valor: puntuar(x, y) };
+    }),
+  }));
+}
+
+function sesionesDeEjemplo(hoy: string): Sesion[] {
+  return [
+    { dias: -3, dispersion: 30, semilla: 11 },
+    { dias: -10, dispersion: 33, semilla: 23 },
+    { dias: -17, dispersion: 36, semilla: 37 },
+  ].map(({ dias, dispersion, semilla }) => ({
+    id: `ejemplo-${semilla}`,
+    fecha: `${sumarDias(hoy, dias)}T10:14:00`,
+    armaId: 'walther-p22',
+    modalidad: 'Precisión',
+    distancia: 25,
+    municion: 'RWS R50 .22 LR',
+    disparosPorSerie: 10,
+    series: seriesDeEjemplo(semilla, dispersion),
+    terminada: true,
+  }));
+}
+
 export function datosDeEjemplo(): Datos {
   const hoy = hoyISO();
   const cadF = sumarDias(hoy, 92);
@@ -80,5 +117,6 @@ export function datosDeEjemplo(): Datos {
       codigoPase: 'FMTO-12345-2026',
       caducidadPase: sumarDias(hoy, 118),
     },
+    sesiones: sesionesDeEjemplo(hoy),
   };
 }
