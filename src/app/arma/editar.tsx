@@ -74,7 +74,6 @@ export default function EditarArma() {
 
   const faltan = [
     !a.marca.trim() && 'marca',
-    !a.modelo.trim() && 'modelo',
     !a.numeroGuia.trim() && 'nº de guía',
     !a.licenciaId && 'licencia',
   ].filter(Boolean) as string[];
@@ -92,7 +91,7 @@ export default function EditarArma() {
 
       <View style={formSt.fila}>
         <View style={{ flex: 1 }}><Campo key={`marca-${version}`} etiqueta="Marca" valor={a.marca} onChange={(marca) => cambiar({ marca })} placeholder="Walther" /></View>
-        <View style={{ flex: 1 }}><Campo key={`modelo-${version}`} etiqueta="Modelo" valor={a.modelo} onChange={(modelo) => cambiar({ modelo })} placeholder="P22" /></View>
+        <View style={{ flex: 1 }}><Campo key={`modelo-${version}`} etiqueta="Modelo (opcional)" valor={a.modelo} onChange={(modelo) => cambiar({ modelo })} placeholder="P22" /></View>
       </View>
 
       <Text style={st.etiqueta}>Tipo</Text>
