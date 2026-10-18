@@ -33,7 +33,7 @@ const ACCESOS: { titulo: string; texto: string; icono: IconName; ruta: Href }[] 
 ];
 
 const rutaAviso = (a: Aviso): Href =>
-  a.armaId ? `/arma/${a.armaId}` : a.tipo === 'revista' ? '/armas' : a.tipo === 'competicion' ? '/competiciones' : '/cartera';
+  a.armaId ? `/arma/${a.armaId}` : a.tipo === 'revista' ? '/armas' : a.tipo === 'competicion' ? '/competiciones' : a.tipo === 'municion' ? '/municion' : '/cartera';
 
 export default function Inicio() {
   const store = useStore();

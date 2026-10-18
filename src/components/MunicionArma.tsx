@@ -7,13 +7,14 @@ import { useStore } from '@/data/store';
 import type { Arma, MovimientoMunicion } from '@/data/types';
 import { confirmar } from '@/lib/confirmar';
 import { formatear, hoyISO } from '@/lib/fechas';
-import { estadoMunicion, LIMITES, type EstadoMunicion } from '@/lib/municion';
+import { depositoDe, estadoMunicion, LIMITES, type DepositoCalibre, type EstadoMunicion } from '@/lib/municion';
 import { colors, radius, space } from '@/theme';
 
 const color = (usado: number, max: number) => (usado > max ? colors.red : usado >= max * 0.8 ? colors.orange : colors.green);
 
-/** Barras de cupo del año y de cartuchos en casa. */
-export function ResumenMunicion({ m }: { m: EstadoMunicion }) {
+/** Barras de cupo del año (de esta arma) y de cartuchos en casa (de su calibre). */
+export function ResumenMunicion({ m, deposito }: { m: EstadoMunicion; deposito?: DepositoCalibre }) {
+  const compartido = (deposito?.armas.length ?? 0) > 1;
   return (
     <View style={{ gap: space.md }}>
       {m.cupo !== null ? (
@@ -27,14 +28,22 @@ export function ResumenMunicion({ m }: { m: EstadoMunicion }) {
       ) : (
         <Text style={s.muted}>Los cartuchos de caza no tienen límite de compra al año.</Text>
       )}
-      <Barra
-        titulo="En casa"
-        valor={`${m.enCasa} de ${m.maxDeposito}`}
-        detalle={m.enCasa > m.maxDeposito ? `Te sobran ${m.enCasa - m.maxDeposito}` : `Caben ${m.maxDeposito - m.enCasa} más`}
-        pct={m.enCasa / m.maxDeposito}
-        tono={m.enCasa > m.maxDeposito ? colors.red : m.enCasa >= m.maxDeposito * 0.8 ? colors.orange : colors.green}
-      />
+      {deposito && <BarraDeposito d={deposito} titulo={compartido ? `En casa · ${deposito.calibre} (${deposito.armas.length} armas)` : 'En casa'} />}
     </View>
+  );
+}
+
+/** Cartuchos en casa frente a lo que se puede guardar. */
+export function BarraDeposito({ d, titulo }: { d: DepositoCalibre; titulo: string }) {
+  const sobran = d.enCasa - d.maxDeposito;
+  return (
+    <Barra
+      titulo={titulo}
+      valor={`${d.enCasa} de ${d.maxDeposito}`}
+      detalle={sobran > 0 ? `Te sobran ${sobran}` : `Caben ${-sobran} más`}
+      pct={d.maxDeposito ? d.enCasa / d.maxDeposito : 0}
+      tono={sobran > 0 ? colors.red : d.enCasa >= d.maxDeposito * 0.8 ? colors.orange : colors.green}
+    />
   );
 }
 
@@ -82,7 +91,7 @@ export function MunicionArma({ arma }: { arma: Arma }) {
   return (
     <>
       <Card style={{ gap: space.md }}>
-        <ResumenMunicion m={m} />
+        <ResumenMunicion m={m} deposito={depositoDe(store.datos.armas, arma)} />
       </Card>
 
       <Card style={{ gap: space.md }}>

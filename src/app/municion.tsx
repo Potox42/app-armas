@@ -1,16 +1,36 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { ResumenMunicion } from '@/components/MunicionArma';
+import { BarraDeposito, ResumenMunicion } from '@/components/MunicionArma';
 import { Card, Screen, s } from '@/components/ui';
 import { useStore } from '@/data/store';
-import { estadoMunicion, LIMITES } from '@/lib/municion';
+import { depositoPorCalibre, estadoMunicion, LIMITES } from '@/lib/municion';
 import { colors, space } from '@/theme';
 
 /** Munición de todas tus armas: cupo del año y cartuchos en casa. */
 export default function Municion() {
   const { datos } = useStore();
+  const calibres = depositoPorCalibre(datos.armas);
+  const total = calibres.reduce((t, g) => ({ enCasa: t.enCasa + g.enCasa, max: t.max + g.maxDeposito }), { enCasa: 0, max: 0 });
   return (
     <Screen title="Munición" kicker="Control" back="/">
+      {calibres.length > 0 && (
+        <Card style={{ gap: space.md }}>
+          <Text style={st.nombre}>En casa</Text>
+          {calibres.map((g) => (
+            <BarraDeposito
+              key={g.calibre}
+              d={g}
+              titulo={g.armas.length > 1 ? `${g.calibre} · ${g.armas.length} armas` : `${g.calibre} · ${`${g.armas[0].marca} ${g.armas[0].modelo}`.trim()}`}
+            />
+          ))}
+          {calibres.length > 1 && (
+            <Text style={s.muted}>Total: {total.enCasa} cartuchos en casa; podrías guardar hasta {total.max} entre todos los calibres.</Text>
+          )}
+          <Text style={[s.muted, { fontSize: 12 }]}>
+            Las armas del mismo calibre comparten cartuchos, así que se suma lo que puede guardar cada una.
+          </Text>
+        </Card>
+      )}
       {datos.armas.length === 0 && (
         <Card><Text style={s.muted}>Añade tus armas en la pestaña Armas para llevar el control de su munición.</Text></Card>
       )}

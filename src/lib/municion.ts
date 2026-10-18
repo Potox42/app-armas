@@ -53,3 +53,30 @@ export function estadoMunicion(arma: Arma, hoy = hoyISO()): EstadoMunicion {
     maxDeposito: arma.maxDeposito ?? limite.deposito,
   };
 }
+
+/** Cartuchos en casa de un mismo calibre: las armas que lo usan suman lo que pueden guardar. */
+export interface DepositoCalibre {
+  calibre: string;
+  armas: Arma[];
+  enCasa: number;
+  maxDeposito: number;
+}
+
+const claveCalibre = (c: string) => c.replace(/[\s.]/g, '').toLowerCase() || '?';
+
+export function depositoPorCalibre(armas: Arma[]): DepositoCalibre[] {
+  const grupos = new Map<string, DepositoCalibre>();
+  for (const a of armas) {
+    const m = estadoMunicion(a);
+    const k = claveCalibre(a.calibre);
+    const g = grupos.get(k) ?? { calibre: a.calibre.trim() || 'Sin calibre', armas: [], enCasa: 0, maxDeposito: 0 };
+    g.armas.push(a);
+    g.enCasa += m.enCasa;
+    g.maxDeposito += m.maxDeposito;
+    grupos.set(k, g);
+  }
+  return [...grupos.values()];
+}
+
+export const depositoDe = (armas: Arma[], arma: Arma) =>
+  depositoPorCalibre(armas).find((g) => g.armas.some((a) => a.id === arma.id))!;
