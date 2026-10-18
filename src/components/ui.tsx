@@ -235,7 +235,7 @@ export const s = StyleSheet.create({
   kicker: { color: colors.kicker, fontSize: 10, fontWeight: '900', letterSpacing: 2.4 },
   headerTitle: { color: colors.text, fontSize: 28, lineHeight: 32, fontWeight: '900', letterSpacing: -1, marginTop: 2 },
   botonRedondo: {
-    width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+    minWidth: 42, height: 42, paddingHorizontal: 10, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
     backgroundColor: colors.cardAlt, borderWidth: 1, borderColor: colors.border,
   },
   content: { padding: space.lg, paddingTop: space.sm, gap: space.md, paddingBottom: 48 },

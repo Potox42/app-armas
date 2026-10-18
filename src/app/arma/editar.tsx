@@ -48,7 +48,7 @@ export default function EditarArma() {
     const licencia = g.licencia && licencias.find((l) => l.tipo === g.licencia);
     const nombres: [keyof typeof g, string][] = [
       ['marca', 'marca'], ['modelo', 'modelo'], ['tipo', 'tipo'], ['calibre', 'calibre'],
-      ['numeroSerie', 'nº de serie'], ['numeroGuia', 'nº de guía'], ['fechaGuia', 'fecha'], ['licencia', 'licencia'],
+      ['numeroSerie', 'nº de identificación'], ['numeroGuia', 'nº de guía'], ['fechaGuia', 'fecha'], ['licencia', 'licencia'],
     ];
     const leidos = nombres.filter(([k]) => g[k] && (k !== 'licencia' || licencia)).map(([, n]) => n);
     if (!leidos.length) {
@@ -100,12 +100,12 @@ export default function EditarArma() {
 
       <View style={formSt.fila}>
         <View style={{ flex: 1 }}><Campo key={`cal-${version}`} etiqueta="Calibre" valor={a.calibre} onChange={(calibre) => cambiar({ calibre })} placeholder=".22 LR" /></View>
-        <View style={{ flex: 1 }}><Campo key={`serie-${version}`} etiqueta="Nº de serie" valor={a.numeroSerie} onChange={(numeroSerie) => cambiar({ numeroSerie })} /></View>
+        <View style={{ flex: 1 }}><Campo key={`serie-${version}`} etiqueta="Nº de identificación" valor={a.numeroSerie} onChange={(numeroSerie) => cambiar({ numeroSerie })} /></View>
       </View>
 
       <Card style={{ gap: space.md }}>
         <Text style={st.titulo}>Guía de pertenencia</Text>
-        {ocrDisponible && <Text style={s.muted}>Escanéala y relleno por ti marca, modelo, calibre, nº de serie, nº de guía y fecha.</Text>}
+        {ocrDisponible && <Text style={s.muted}>Escanéala y relleno por ti marca, modelo, calibre, nº de identificación, nº de guía y fecha.</Text>}
         <View style={formSt.fila}>
           <FotoCampo etiqueta="Anverso" documento fotoId={a.fotoGuiaAnverso} onChange={(fotoGuiaAnverso) => cambiar({ fotoGuiaAnverso })} onEscaneado={leer} />
           <FotoCampo etiqueta="Reverso" documento fotoId={a.fotoGuiaReverso} onChange={(fotoGuiaReverso) => cambiar({ fotoGuiaReverso })} onEscaneado={leer} />

@@ -125,7 +125,7 @@ export default function FichaArma() {
             <Row label="Marca" value={arma.marca} />
             <Row label="Modelo" value={arma.modelo} />
             <Row label="Calibre" value={arma.calibre} />
-            <Row label="Nº de serie" value={arma.numeroSerie} />
+            <Row label="Nº de identificación" value={arma.numeroSerie} />
             <Row label="Fecha de expedición" value={arma.fechaGuia ? formatear(arma.fechaGuia) : '—'} />
             <Row label="Licencia" value={licencia ? `Tipo ${licencia.tipo}` : '—'} />
           </Card>
