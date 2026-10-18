@@ -23,3 +23,12 @@ export async function elegirArchivo(): Promise<string | null> {
     if (archivo.exists) archivo.delete();
   }
 }
+
+/** Comparte un evento .ics para añadirlo al calendario del móvil. */
+export async function abrirEnCalendario(nombre: string, ics: string): Promise<void> {
+  const archivo = new File(Paths.cache, nombre);
+  if (archivo.exists) archivo.delete();
+  archivo.create();
+  archivo.write(ics);
+  await Sharing.shareAsync(archivo.uri, { mimeType: 'text/calendar', UTI: 'com.apple.ical.ics', dialogTitle: 'Añadir al calendario' });
+}

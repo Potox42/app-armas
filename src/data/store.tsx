@@ -3,7 +3,7 @@ import { puntuar } from '@/lib/diana';
 import { hoyISO } from '@/lib/fechas';
 import { cargarDatos, guardarDatos } from './db';
 import { datosDeEjemplo } from './ejemplo';
-import type { Ajustes, Arma, Datos, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Registro, Sesion } from './types';
+import type { Ajustes, Arma, Competicion, Datos, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Registro, Sesion } from './types';
 
 // Los datos se cargan de la base de datos cifrada al arrancar y se guardan en cada cambio.
 // Mientras no existan las pantallas de alta, el primer arranque parte del ejemplo.
@@ -24,6 +24,8 @@ interface Store {
   cambiarRegistro: (sesionId: string, registro: Registro) => void;
   guardarArma: (arma: Arma) => void;
   borrarArma: (id: string) => void;
+  guardarCompeticion: (c: Competicion) => void;
+  borrarCompeticion: (id: string) => void;
   guardarLicencia: (licencia: Licencia) => void;
   borrarLicencia: (id: string) => void;
   actualizarPermiso: (cambios: Partial<PermisoArmas>) => void;
@@ -51,6 +53,7 @@ function datosVacios(nombre: string): Datos {
       numeroFederado: '', categoria: '', caducidadCarnet: '', codigoPase: '', caducidadPase: '',
     },
     sesiones: [],
+    competiciones: [],
     esEjemplo: false,
   };
 }
@@ -64,7 +67,7 @@ function completar(d: Datos): Datos {
     fotoAnverso: d.permiso.fotoAnverso ?? conFotos?.fotoAnverso,
     fotoReverso: d.permiso.fotoReverso ?? conFotos?.fotoReverso,
   };
-  return { ...d, permiso, sesiones: d.sesiones ?? [], esEjemplo: d.esEjemplo ?? true };
+  return { ...d, permiso, sesiones: d.sesiones ?? [], competiciones: d.competiciones ?? [], esEjemplo: d.esEjemplo ?? true };
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -168,6 +171,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             : [...d.armas, arma],
         }),
       borrarArma: (id) => setDatos((d) => d && { ...d, armas: d.armas.filter((a) => a.id !== id) }),
+      guardarCompeticion: (c) =>
+        setDatos((d) => {
+          if (!d) return d;
+          const todas = d.competiciones ?? [];
+          return {
+            ...d,
+            competiciones: todas.some((x) => x.id === c.id) ? todas.map((x) => (x.id === c.id ? c : x)) : [...todas, c],
+          };
+        }),
+      borrarCompeticion: (id) => setDatos((d) => d && { ...d, competiciones: (d.competiciones ?? []).filter((x) => x.id !== id) }),
       guardarLicencia: (l) =>
         setDatos((d) => d && {
           ...d,

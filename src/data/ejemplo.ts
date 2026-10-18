@@ -124,6 +124,12 @@ export function datosDeEjemplo(): Datos {
       caducidadPase: sumarDias(hoy, 118),
     },
     sesiones: sesionesDeEjemplo(hoy),
+    competiciones: [
+      { id: 'c1', fecha: sumarDias(hoy, 3), hora: '09:00', categoria: 'Preparatoria', modalidad: 'Pistola 25 m', inscrito: true },
+      { id: 'c2', fecha: sumarDias(hoy, 10), hora: '09:30', categoria: 'Regional', modalidad: 'Pistola Aire 10 m', inscrito: false },
+      { id: 'c3', fecha: sumarDias(hoy, 24), categoria: 'Complementaria', modalidad: 'Arma Corta .22', inscrito: true },
+      { id: 'c4', fecha: sumarDias(hoy, -14), hora: '09:00', categoria: 'Preparatoria', modalidad: 'Pistola Standard', inscrito: true },
+    ],
     esEjemplo: true,
   };
 }

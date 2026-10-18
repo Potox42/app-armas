@@ -1,4 +1,5 @@
 import type { Datos } from '@/data/types';
+import { comienzo, competiciones } from './competiciones';
 import { deISO, formatear } from './fechas';
 
 export interface AvisoProgramado {
@@ -48,6 +49,29 @@ export function planAvisos(datos: Datos, ahora = new Date()): AvisoProgramado[] 
     (c) => `Caduca ${c} (${formatear(f.caducidadCarnet)}).`);
   if (f.caducidadPase !== f.caducidadCarnet) {
     anadir('pase', f.caducidadPase, 'Pase al recinto', (c) => `Caduca ${c} (${formatear(f.caducidadPase)}).`);
+  }
+
+  // Competiciones a las que estás apuntado: una semana antes, el día antes y 2 horas antes.
+  for (const c of competiciones(datos)) {
+    if (!c.inscrito) continue;
+    const empieza = comienzo(c);
+    const titulo = `${c.categoria}: ${c.modalidad}`;
+    const donde = c.lugar ? ` en ${c.lugar}` : '';
+    const aLas = c.hora ? ` a las ${c.hora}` : '';
+    const antes = (dias: number, hora: number) => {
+      const d = deISO(c.fecha);
+      d.setDate(d.getDate() - dias);
+      d.setHours(hora, 0, 0, 0);
+      return d;
+    };
+    const avisos: [string, Date, string][] = [
+      ['7', antes(7, HORA), `Dentro de una semana (${formatear(c.fecha)})${aLas}${donde}.`],
+      ['1', antes(1, 19), `Es mañana${aLas}${donde}. Prepara arma, munición, licencia y guía.`],
+      ['0', c.hora ? new Date(empieza.getTime() - 2 * 3600 * 1000) : antes(0, 8), `Hoy${aLas}${donde}. ¡Suerte!`],
+    ];
+    for (const [id, fecha, cuerpo] of avisos) {
+      if (fecha > ahora) plan.push({ id: `competicion-${c.id}-${id}`, fecha, titulo, cuerpo });
+    }
   }
 
   return plan.sort((a, b) => a.fecha.getTime() - b.fecha.getTime()).slice(0, MAXIMO);

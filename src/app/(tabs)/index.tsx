@@ -7,12 +7,14 @@ import { Icon, type IconName } from '@/components/Icon';
 import { Degradado } from '@/components/Degradado';
 import { Button, Card, Kicker, Screen, SectionTitle, nivelColor, s } from '@/components/ui';
 import { useStore } from '@/data/store';
-import { calcularAvisos, type TipoAviso } from '@/lib/avisos';
+import { calcularAvisos, type Aviso, type TipoAviso } from '@/lib/avisos';
+import { competiciones, fechaCorta, repartir } from '@/lib/competiciones';
 import { diasHasta, formatear } from '@/lib/fechas';
 import { formatoMedia, media, sumaSerie, todosLosDisparos, totalSesion } from '@/lib/sesiones';
 import { colors, radius, space } from '@/theme';
 
 const ICONO_AVISO: Record<TipoAviso, IconName> = {
+  competicion: 'calendar',
   licencia: 'id',
   revista: 'shield',
   carnet: 'id',
@@ -25,7 +27,11 @@ const ACCESOS: { titulo: string; texto: string; icono: IconName; ruta: Href }[] 
   { titulo: 'Mis armas', texto: '', icono: 'gun', ruta: '/armas' },
   { titulo: 'Entrenar', texto: 'Diana, números o cámara', icono: 'target', ruta: '/entrenar' },
   { titulo: 'Evolución', texto: 'Medias y tendencia', icono: 'chart', ruta: '/evolucion' },
+  { titulo: 'Competiciones', texto: 'Tu calendario y avisos', icono: 'calendar', ruta: '/competiciones' },
 ];
+
+const rutaAviso = (a: Aviso): Href =>
+  a.armaId ? `/arma/${a.armaId}` : a.tipo === 'revista' ? '/armas' : a.tipo === 'competicion' ? '/competiciones' : '/cartera';
 
 export default function Inicio() {
   const store = useStore();
@@ -37,6 +43,7 @@ export default function Inicio() {
   const activas = datos.permiso.licencias.filter((l) => diasHasta(l.caducidad) >= 0);
   const proxima = [...activas].sort((a, b) => a.caducidad.localeCompare(b.caducidad))[0];
   const ultima = datos.sesiones.find((x) => x.terminada);
+  const siguiente = repartir(competiciones(datos)).proximas.find((c) => c.inscrito);
   const armaUltima = ultima && store.arma(ultima.armaId);
   const sumas = ultima ? ultima.series.map(sumaSerie) : [];
 
@@ -83,7 +90,7 @@ export default function Inicio() {
 
       {prioridad && (
         <Pressable
-          onPress={() => router.push(prioridad.armaId ? `/arma/${prioridad.armaId}` : prioridad.tipo === 'revista' ? '/armas' : '/cartera')}
+          onPress={() => router.push(rutaAviso(prioridad))}
           style={[st.prioridad, { borderColor: nivelColor(prioridad.nivel) }]}
         >
           <View style={[st.avisoIcon, { backgroundColor: nivelColor(prioridad.nivel), width: 44, height: 44 }]}>
@@ -135,7 +142,9 @@ export default function Inicio() {
             <Text style={st.accesoTexto}>
               {x.titulo === 'Mis armas'
                 ? datos.armas.length === 1 ? '1 arma registrada' : `${datos.armas.length} armas registradas`
-                : x.texto}
+                : x.titulo === 'Competiciones' && siguiente
+                  ? `Próxima: ${fechaCorta(siguiente.fecha)} · ${siguiente.modalidad}`
+                  : x.texto}
             </Text>
           </Card>
         ))}
@@ -165,7 +174,7 @@ export default function Inicio() {
         {resto.map((a, i) => (
           <Pressable
             key={a.id}
-            onPress={() => router.push(a.armaId ? `/arma/${a.armaId}` : a.tipo === 'revista' ? '/armas' : '/cartera')}
+            onPress={() => router.push(rutaAviso(a))}
             style={[st.aviso, i > 0 && st.avisoBorder]}
           >
             <View style={[st.avisoIcon, { backgroundColor: nivelColor(a.nivel) }]}>

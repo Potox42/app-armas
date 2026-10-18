@@ -1,8 +1,9 @@
 import type { Arma, Datos, Licencia } from '@/data/types';
+import { competiciones, cuandoEs } from './competiciones';
 import { diasHasta, mesAnio, plazo } from './fechas';
 
 export type Nivel = 'rojo' | 'naranja' | 'verde';
-export type TipoAviso = 'licencia' | 'revista' | 'carnet' | 'pase' | 'limpieza';
+export type TipoAviso = 'licencia' | 'revista' | 'carnet' | 'pase' | 'limpieza' | 'competicion';
 
 export interface Aviso {
   id: string;
@@ -90,6 +91,21 @@ export function calcularAvisos(datos: Datos): Aviso[] {
         armaId: a.id,
       });
     }
+  }
+
+  // Competiciones a las que estás apuntado, durante las dos semanas anteriores.
+  for (const c of competiciones(datos)) {
+    const dias = diasHasta(c.fecha);
+    if (!c.inscrito || dias < 0 || dias > 14) continue;
+    avisos.push({
+      id: `competicion-${c.id}`,
+      tipo: 'competicion',
+      titulo: `${c.categoria}: ${c.modalidad}`,
+      detalle: `${cuandoEs(c.fecha)}${c.hora ? ` a las ${c.hora}` : ''}${c.lugar ? ` · ${c.lugar}` : ''}`,
+      fecha: c.fecha,
+      nivel: dias <= 2 ? 'naranja' : 'verde',
+      orden: dias,
+    });
   }
 
   const f = datos.federacion;

@@ -16,3 +16,12 @@ export async function elegirArchivo(): Promise<string | null> {
   if (a.file) return a.file.text();
   return (await fetch(a.uri)).text();
 }
+
+/** Abre un evento .ics: Safari en el iPhone ofrece «Añadir al calendario». */
+export async function abrirEnCalendario(_nombre: string, ics: string): Promise<void> {
+  const a = document.createElement('a');
+  a.href = `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.click();
+}

@@ -3,7 +3,7 @@ import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 export type IconName =
   | 'home' | 'target' | 'gun' | 'wallet' | 'user' | 'chevron' | 'back'
   | 'chart' | 'shield' | 'id' | 'broom' | 'qr' | 'check' | 'plus' | 'doc' | 'lock'
-  | 'trash' | 'flash' | 'share';
+  | 'trash' | 'flash' | 'share' | 'calendar';
 
 interface Props {
   name: IconName;
@@ -58,6 +58,13 @@ export function Icon({ name, size = 24, color = '#fff' }: Props) {
       )}
       {name === 'check' && <Path d="M5 12.5l4.5 4.5L19 7" {...p} strokeWidth={2.5} />}
       {name === 'plus' && <Path d="M12 5v14M5 12h14" {...p} />}
+      {name === 'calendar' && (
+        <>
+          <Rect x={3} y={5} width={18} height={16} rx={2} {...p} />
+          <Path d="M3 10h18M8 3v4M16 3v4" {...p} />
+          <Circle cx={12} cy={15} r={1.6} fill={color} />
+        </>
+      )}
       {name === 'doc' && (
         <>
           <Path d="M6 3h8l5 5v13H6z" {...p} />

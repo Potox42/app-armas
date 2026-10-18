@@ -90,6 +90,20 @@ export interface Sesion {
   terminada: boolean;
 }
 
+/** Tipos de competición, como los del calendario de la federación (p. ej. fmto.es). */
+export type CategoriaCompeticion = 'Preparatoria' | 'Complementaria' | 'Regional' | 'Nacional' | 'Trofeo' | 'Otra';
+
+export interface Competicion {
+  id: string;
+  fecha: string; // ISO yyyy-mm-dd
+  hora?: string; // HH:MM
+  categoria: CategoriaCompeticion;
+  modalidad: string; // «Pistola 25 m», «Pistola Aire 10 m»…
+  lugar?: string;
+  inscrito: boolean; // apuntado: se avisa antes
+  notas?: string;
+}
+
 export interface Ajustes {
   bloqueo: boolean; // pedir Face ID al abrir la app
   avisos: boolean; // notificaciones locales de caducidades
@@ -103,5 +117,6 @@ export interface Datos {
   armas: Arma[];
   federacion: Federacion;
   sesiones: Sesion[];
+  competiciones?: Competicion[]; // sin valor en datos de versiones anteriores
   esEjemplo?: boolean; // true mientras se usan los datos de ejemplo
 }
