@@ -31,7 +31,13 @@ export function Campo({ etiqueta, valor, onChange, placeholder, teclado, error, 
   );
 }
 
-/** Fecha escrita como dd/mm/aaaa. Devuelve la fecha ISO, o '' si está vacía o mal escrita. */
+/** «25102026» -> «25/10/2026»: las barras se ponen solas al escribir los números. */
+export function conBarras(texto: string): string {
+  const n = texto.replace(/\D/g, '').slice(0, 8);
+  return [n.slice(0, 2), n.slice(2, 4), n.slice(4)].filter(Boolean).join('/');
+}
+
+/** Fecha dd/mm/aaaa escrita solo con números. Devuelve la fecha ISO, o '' si está vacía o mal escrita. */
 export function CampoFecha({ etiqueta, valor, onChange, obligatorio }: {
   etiqueta: string;
   valor: string; // ISO o ''
@@ -40,17 +46,18 @@ export function CampoFecha({ etiqueta, valor, onChange, obligatorio }: {
 }) {
   const [texto, setTexto] = useState(valor ? formatear(valor) : '');
   const iso = deTexto(texto);
-  const error = texto && !iso ? 'Escribe la fecha como dd/mm/aaaa' : obligatorio && !texto ? 'Obligatoria' : undefined;
+  const error = texto && !iso ? 'Escribe día, mes y año: 8 números' : obligatorio && !texto ? 'Obligatoria' : undefined;
   return (
     <Campo
       etiqueta={etiqueta}
       valor={texto}
       placeholder="dd/mm/aaaa"
-      teclado="numbers-and-punctuation"
+      teclado="number-pad"
       error={error}
       onChange={(t) => {
-        setTexto(t);
-        onChange(deTexto(t) ?? '');
+        const f = conBarras(t);
+        setTexto(f);
+        onChange(deTexto(f) ?? '');
       }}
     />
   );
