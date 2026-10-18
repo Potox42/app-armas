@@ -9,7 +9,8 @@ import type { PropsFotoDiana } from './FotoDiana.types';
 const LADO = 1000; // lado mayor de la imagen que se analiza
 
 interface Marca { xPx: number; yPx: number; veces: number }
-interface Foto { lienzo: HTMLCanvasElement; cal: Calibracion }
+interface Grupo { xPx: number; yPx: number; radioPx: number }
+interface Foto { lienzo: HTMLCanvasElement; cal: Calibracion; grupos: Grupo[] }
 
 type Estado = 'inicio' | 'leyendo' | 'sin-diana' | 'revisar';
 
@@ -51,8 +52,10 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
           return;
         }
         const agujeros = buscarAgujeros(g, cal, modelo, calibre);
-        setFoto({ lienzo, cal });
-        setMarcas(agujeros.map((a) => ({ xPx: a.xPx, yPx: a.yPx, veces: a.veces })));
+        // Los grupos (muchos agujeros juntos) no se cuentan: se señalan para que el tirador marque los suyos.
+        const grupos = agujeros.filter((a) => a.grupo).map((a) => ({ xPx: a.xPx, yPx: a.yPx, radioPx: a.grupo!.radioPx }));
+        setFoto({ lienzo, cal, grupos });
+        setMarcas(agujeros.filter((a) => !a.grupo).map((a) => ({ xPx: a.xPx, yPx: a.yPx, veces: a.veces })));
         setElegida(null);
         setEstado('revisar');
       }, 30);
@@ -88,6 +91,7 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
     // Se ve el negro con margen y cualquier agujero que quede fuera.
     let mitad = Math.max(cal.rx, cal.ry) * 1.3;
     for (const m of marcas) mitad = Math.max(mitad, Math.hypot(m.xPx - cal.cx, m.yPx - cal.cy) + 4 * rBala);
+    for (const g of foto.grupos) mitad = Math.max(mitad, Math.hypot(g.xPx - cal.cx, g.yPx - cal.cy) + g.radioPx + 4 * rBala);
     vista.current = { x0: cal.cx - mitad, y0: cal.cy - mitad, lado: 2 * mitad };
     const css = raiz.getBoundingClientRect().width;
     lienzo.width = css * devicePixelRatio;
@@ -104,6 +108,16 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
     const [ex, ey] = aPantalla(cal.cx, cal.cy);
     c.ellipse(ex, ey, cal.rx * k, cal.ry * k, 0, 0, Math.PI * 2);
     c.stroke();
+    c.strokeStyle = '#FF9F0A';
+    c.lineWidth = 2 * devicePixelRatio;
+    c.setLineDash([6 * devicePixelRatio, 4 * devicePixelRatio]);
+    for (const g of foto.grupos) {
+      const [gx, gy] = aPantalla(g.xPx, g.yPx);
+      c.beginPath();
+      c.arc(gx, gy, g.radioPx * k + rBala * k, 0, Math.PI * 2);
+      c.stroke();
+    }
+    c.setLineDash([]);
     const r = Math.max(rBala * k * 1.4, 7 * devicePixelRatio);
     c.font = `bold ${12 * devicePixelRatio}px -apple-system, sans-serif`;
     c.textAlign = 'center';
@@ -207,6 +221,12 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
         Revisa la foto: toca un agujero sin marcar para añadirlo y toca un círculo rojo para quitarlo o decir que
         entraron varios disparos juntos. El círculo verde es el negro de la diana: si no encaja, repite la foto.
       </Text>
+      {foto && foto.grupos.length > 0 && (
+        <Text style={{ color: colors.orange, fontSize: 13 }}>
+          Dentro del círculo naranja hay muchos agujeros juntos y no los puedo contar uno a uno. Toca cada agujero
+          de esta serie para marcarlo.
+        </Text>
+      )}
       {n !== faltan && faltan > 0 && (
         <Text style={{ color: colors.orange, fontSize: 13 }}>
           {n < faltan ? `Faltan ${faltan - n} para completar la serie.` : `Son ${n - faltan} más de los que quedan en la serie.`}
