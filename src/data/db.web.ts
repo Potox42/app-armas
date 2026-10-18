@@ -33,6 +33,8 @@ async function abrir() {
   const pet = indexedDB.open(BD, 1);
   pet.onupgradeneeded = () => pet.result.createObjectStore(ALMACEN);
   const db = await peticion(pet);
+  // Pide al navegador que no borre estos datos cuando le falte espacio.
+  navigator.storage?.persist?.().catch(() => {});
   let clave = (await peticion(almacen(db, 'readonly').get('clave'))) as CryptoKey | undefined;
   if (!clave) {
     clave = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);

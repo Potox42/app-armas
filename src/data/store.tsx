@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Pressable, Text, View } from 'react-native';
 import { puntuar } from '@/lib/diana';
+import { colors, space } from '@/theme';
 import { hoyISO } from '@/lib/fechas';
 import { cargarDatos, guardarDatos } from './db';
 import { datosDeEjemplo } from './ejemplo';
@@ -75,15 +77,22 @@ const StoreContext = createContext<Store | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [datos, setDatos] = useState<Datos | null>(null);
   const cargado = useRef(false);
+  // Si no se pueden leer los datos guardados no se sigue con el ejemplo: al tocar algo se
+  // guardaría encima y se perderían. Se avisa y se deja reintentar.
+  const [fallo, setFallo] = useState(false);
+  const [intento, setIntento] = useState(0);
 
   useEffect(() => {
     cargarDatos()
-      .then((guardados) => setDatos(guardados ? completar(guardados) : datosDeEjemplo()))
+      .then((guardados) => {
+        setFallo(false);
+        setDatos(guardados ? completar(guardados) : datosDeEjemplo());
+      })
       .catch((e) => {
         console.error('No se pudo abrir la base de datos', e);
-        setDatos(datosDeEjemplo());
+        setFallo(true);
       });
-  }, []);
+  }, [intento]);
 
   useEffect(() => {
     if (!datos) return;
@@ -218,6 +227,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [datos]);
 
+  if (fallo) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', padding: space.xl, gap: space.md }}>
+        <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800' }}>No he podido abrir tus datos</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 15 }}>
+          Siguen guardados en el móvil; no se ha borrado nada. Cierra la app del todo y vuelve a abrirla, o toca Reintentar.
+        </Text>
+        <Pressable onPress={() => setIntento((n) => n + 1)} style={{ backgroundColor: colors.accent, borderRadius: 14, padding: space.md, alignItems: 'center' }}>
+          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>Reintentar</Text>
+        </Pressable>
+      </View>
+    );
+  }
   if (!store) return null;
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }
