@@ -11,6 +11,7 @@ import { confirmar } from '@/lib/confirmar';
 import { formatear } from '@/lib/fechas';
 import { combinarGuia, leerGuia } from '@/lib/leerGuia';
 import { leerDocumento, ocrDisponible } from '@/lib/ocr';
+import { ARMAS_POR_CLASE } from '@/lib/papeles';
 import { volver } from '@/lib/volver';
 import { colors, space } from '@/theme';
 
@@ -130,6 +131,18 @@ export default function EditarArma() {
             onChange={(licenciaId) => cambiar({ licenciaId })}
           />
         )}
+        {(() => {
+          // Con la licencia F: ¿cabe una más según su clase?
+          const l = licencias.find((x) => x.id === a.licenciaId);
+          const maximo = l?.tipo === 'F' && l.categoria ? ARMAS_POR_CLASE[l.categoria] : undefined;
+          if (!l || maximo === undefined) return null;
+          const con = store.datos.armas.filter((x) => x.licenciaId === l.id && x.id !== a.id).length + 1;
+          return con > maximo ? (
+            <Text style={{ color: colors.orange, fontSize: 13 }}>
+              Con esta serían {con} armas en la licencia F, y la {l.categoria}ª clase permite {maximo === 1 ? 'una' : `hasta ${maximo}`}.
+            </Text>
+          ) : null;
+        })()}
       </Card>
 
       <View style={formSt.fila}>

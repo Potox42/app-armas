@@ -41,6 +41,7 @@ export interface MovimientoMunicion {
   cartuchos: number;
   enRecinto?: boolean; // compra hecha y gastada en el club: no cuenta para el cupo ni entra en casa
   nota?: string;
+  sesionId?: string; // gasto apuntado al terminar un entrenamiento: se borra con él
 }
 
 export interface Arma {
@@ -105,6 +106,7 @@ export interface Sesion {
   calibreMm?: number; // diámetro de la bala para la regla de «toca la línea» (sin valor: el de la diana)
   series: Serie[];
   terminada: boolean;
+  gasto?: 'casa' | 'no'; // al terminar: se restaron los cartuchos de casa o se dijo que no
 }
 
 /** Tipos de competición, como los del calendario de la federación (p. ej. fmto.es). */
@@ -119,6 +121,32 @@ export interface Competicion {
   lugar?: string;
   inscrito: boolean; // apuntado: se avisa antes
   notas?: string;
+  // Resultado, cuando ya ha pasado
+  participado?: boolean; // sin valor: se supone que sí si estabas apuntado
+  puntos?: number;
+  puesto?: number;
+  participantes?: number;
+  armaId?: string;
+}
+
+/** Otros papeles con fecha: seguro, certificado médico… */
+export type TipoDocumento = 'Seguro' | 'Certificado médico' | 'Otro';
+
+export interface Documento {
+  id: string;
+  tipo: TipoDocumento;
+  nombre: string; // «Seguro de responsabilidad civil», «Certificado médico»…
+  caducidad?: string; // ISO
+  numero?: string;
+  foto?: string;
+  nota?: string;
+}
+
+/** Lista de «qué llevar» al campo: lo que ya está marcado. */
+export interface ListaCampo {
+  hechos: string[];
+  propios?: string[]; // cosas añadidas por el tirador
+  armas?: string[]; // las armas que vas a llevar
 }
 
 export interface Ajustes {
@@ -127,6 +155,7 @@ export interface Ajustes {
   bienvenida?: boolean; // ya se mostró la pantalla de bienvenida
   ultimaCopia?: string; // ISO: última copia de seguridad guardada desde este móvil
   pin?: { sal: string; hash: string; largo: number }; // bloqueo con PIN en la versión web (SHA-256 con sal)
+  campo?: ListaCampo;
 }
 
 export interface Datos {
@@ -137,5 +166,6 @@ export interface Datos {
   federacion: Federacion;
   sesiones: Sesion[];
   competiciones?: Competicion[]; // sin valor en datos de versiones anteriores
+  documentos?: Documento[]; // seguro, certificado médico… (sin valor en versiones anteriores)
   esEjemplo?: boolean; // true mientras se usan los datos de ejemplo
 }

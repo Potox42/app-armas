@@ -23,6 +23,7 @@ const ICONO_AVISO: Record<TipoAviso, IconName> = {
   limpieza: 'broom',
   copia: 'lock',
   actividad: 'target',
+  documento: 'doc',
 };
 
 const ACCESOS: { titulo: string; texto: string; icono: IconName; ruta: Href }[] = [
@@ -35,7 +36,7 @@ const ACCESOS: { titulo: string; texto: string; icono: IconName; ruta: Href }[] 
 ];
 
 const rutaAviso = (a: Aviso): Href =>
-  a.armaId ? `/arma/${a.armaId}` : a.tipo === 'revista' ? '/armas' : a.tipo === 'competicion' || a.tipo === 'actividad' ? '/competiciones' : a.tipo === 'copia' ? '/copia' : a.tipo === 'municion' ? '/municion' : '/cartera';
+  a.armaId ? `/arma/${a.armaId}` : a.tipo === 'revista' ? '/armas' : a.tipo === 'competicion' || a.tipo === 'actividad' ? '/competiciones' : a.tipo === 'copia' ? '/copia' : a.tipo === 'municion' ? '/municion' : a.tipo === 'documento' ? '/cartera?vista=otros' : '/cartera';
 
 export default function Inicio() {
   const store = useStore();
@@ -91,6 +92,13 @@ export default function Inicio() {
         <View style={{ marginTop: space.sm }}>
           <Button title="◎  Iniciar entrenamiento" onPress={() => router.push('/entrenar')} />
         </View>
+        <Button
+          title={siguiente && diasHasta(siguiente.fecha) <= 1
+            ? `${diasHasta(siguiente.fecha) === 0 ? 'Hoy' : 'Mañana'} compites: prepara lo que llevar`
+            : 'Voy al campo: pase, papeles y qué llevar'}
+          variant="secondary"
+          onPress={() => router.push('/campo')}
+        />
       </View>
 
       {prioridad && (

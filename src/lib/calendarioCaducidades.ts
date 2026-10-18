@@ -11,7 +11,7 @@ interface Caducidad {
   nota?: string;
 }
 
-/** Documentos con fecha de caducidad: licencias (con su revista de armas), carnet federativo y pase. */
+/** Documentos con fecha de caducidad: licencias (con su revista de armas), carnet federativo, pase y otros papeles. */
 export function caducidades(datos: Datos): Caducidad[] {
   const lista: Caducidad[] = [];
   for (const l of datos.permiso.licencias) {
@@ -29,6 +29,9 @@ export function caducidades(datos: Datos): Caducidad[] {
   const f = datos.federacion;
   if (f.caducidadCarnet) lista.push({ id: 'carnet', nombre: 'el carnet federativo', fecha: f.caducidadCarnet });
   if (f.caducidadPase && f.caducidadPase !== f.caducidadCarnet) lista.push({ id: 'pase', nombre: 'el pase del recinto', fecha: f.caducidadPase });
+  for (const d of datos.documentos ?? []) {
+    if (d.caducidad) lista.push({ id: `doc-${d.id}`, nombre: `«${d.nombre}»`, fecha: d.caducidad });
+  }
   return lista;
 }
 

@@ -58,7 +58,7 @@ export function datosDeEjemplo(): Datos {
       expedicion: sumarAnios(cadE, -5),
       licencias: [
         { id: 'lic-e', tipo: 'E', expedicion: sumarAnios(cadE, -5), caducidad: cadE },
-        { id: 'lic-f', tipo: 'F', categoria: '3', expedicion: sumarAnios(cadF, -5), caducidad: cadF },
+        { id: 'lic-f', tipo: 'F', categoria: '2', expedicion: sumarAnios(cadF, -5), caducidad: cadF },
         { id: 'lic-d', tipo: 'D', expedicion: sumarAnios(cadD, -5), caducidad: cadD },
       ],
     },
@@ -134,7 +134,7 @@ export function datosDeEjemplo(): Datos {
       { id: 'c1', fecha: sumarDias(hoy, 3), hora: '09:00', categoria: 'Preparatoria', modalidad: 'Pistola 25 m', inscrito: true },
       { id: 'c2', fecha: sumarDias(hoy, 10), hora: '09:30', categoria: 'Regional', modalidad: 'Pistola Aire 10 m', inscrito: false },
       { id: 'c3', fecha: sumarDias(hoy, 24), categoria: 'Complementaria', modalidad: 'Arma Corta .22', inscrito: true },
-      { id: 'c4', fecha: sumarDias(hoy, -14), hora: '09:00', categoria: 'Preparatoria', modalidad: 'Pistola Standard', inscrito: true },
+      { id: 'c4', fecha: sumarDias(hoy, -14), hora: '09:00', categoria: 'Preparatoria', modalidad: 'Pistola Standard', inscrito: true, puntos: 538, puesto: 6, participantes: 31, armaId: 'pardini-sp' },
     ],
     esEjemplo: true,
   };

@@ -7,7 +7,8 @@ import { Button, Card, Screen, s } from '@/components/ui';
 import { nuevoId, useStore } from '@/data/store';
 import type { Competicion } from '@/data/types';
 import { abrirEnCalendario } from '@/lib/archivo';
-import { archivoCalendario, CATEGORIAS, competiciones, deHora, MODALIDADES } from '@/lib/competiciones';
+import { archivoCalendario, CATEGORIAS, competiciones, deHora, MODALIDADES, participo } from '@/lib/competiciones';
+import { hoyISO } from '@/lib/fechas';
 import { confirmar } from '@/lib/confirmar';
 import { volver } from '@/lib/volver';
 import { colors, space } from '@/theme';
@@ -24,6 +25,11 @@ export default function EditarCompeticion() {
   const [horaTexto, setHoraTexto] = useState(existente?.hora ?? '');
   const [intentado, setIntentado] = useState(false);
   const cambiar = (x: Partial<Competicion>) => setC((v) => ({ ...v, ...x }));
+  const pasada = !!c.fecha && c.fecha <= hoyISO();
+  const numero = (t: string) => {
+    const n = Number(t.replace(/\D/g, ''));
+    return t.replace(/\D/g, '') ? n : undefined;
+  };
 
   const hora = deHora(horaTexto);
   const errorHora = horaTexto.trim() && !hora ? 'Escribe la hora como 9:30' : undefined;
@@ -78,6 +84,17 @@ export default function EditarCompeticion() {
       <Campo etiqueta="Lugar (opcional)" valor={c.lugar ?? ''} onChange={(lugar) => cambiar({ lugar })} placeholder="Campo de tiro" />
       <Campo etiqueta="Notas (opcional)" valor={c.notas ?? ''} onChange={(notas) => cambiar({ notas })} placeholder="Dorsal, tanda, puesto…" />
 
+      {store.datos.armas.length > 1 && (
+        <>
+          <Text style={st.etiqueta}>Arma (opcional)</Text>
+          <Chips
+            opciones={store.datos.armas.map((a) => ({ value: a.id, label: `${a.marca} ${a.modelo}` }))}
+            valor={c.armaId}
+            onChange={(armaId) => cambiar({ armaId: armaId === c.armaId ? undefined : armaId })}
+          />
+        </>
+      )}
+
       <Card style={st.apuntado}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={s.text}>Me he apuntado</Text>
@@ -90,14 +107,48 @@ export default function EditarCompeticion() {
         />
       </Card>
 
+      {pasada && (
+        <Card style={{ gap: space.md }}>
+          <View style={st.apuntado}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={s.text}>Participé</Text>
+              <Text style={[s.muted, { fontSize: 13 }]}>Cuenta como actividad deportiva para el aviso de la licencia F.</Text>
+            </View>
+            <Switch
+              value={participo(c)}
+              onValueChange={(participado) => cambiar({ participado })}
+              trackColor={{ true: colors.green, false: colors.cardAlt }}
+            />
+          </View>
+          {participo(c) && (
+            <>
+              <View style={formSt.fila}>
+                <View style={{ flex: 1.2 }}>
+                  <Campo etiqueta="Puntos" valor={c.puntos?.toString() ?? ''} onChange={(t) => cambiar({ puntos: numero(t) })} teclado="number-pad" placeholder="540" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Campo etiqueta="Puesto" valor={c.puesto?.toString() ?? ''} onChange={(t) => cambiar({ puesto: numero(t) })} teclado="number-pad" placeholder="5" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Campo etiqueta="De" valor={c.participantes?.toString() ?? ''} onChange={(t) => cambiar({ participantes: numero(t) })} teclado="number-pad" placeholder="40" />
+                </View>
+              </View>
+            </>
+          )}
+        </Card>
+      )}
+
       {intentado && faltan.length > 0 && <Text style={{ color: colors.red }}>Falta: {faltan.join(', ')}.</Text>}
       <Button title="Guardar" onPress={guardar} />
-      {c.inscrito && <Button title="Añadir al calendario del iPhone" variant="secondary" onPress={alCalendario} />}
-      {c.inscrito && (
+      {c.inscrito && !pasada && <Button title="Añadir al calendario del iPhone" variant="secondary" onPress={alCalendario} />}
+      {c.inscrito && !pasada && (
         <Text style={[s.muted, { fontSize: 13 }]}>
           Se añade a la app Calendario con dos avisos: el día antes y 2 horas antes de empezar (si no pones hora, el
           mismo día por la mañana).
         </Text>
+      )}
+      {existente && c.inscrito && !pasada && (
+        <Button title="Preparar lo que llevar" variant="secondary" onPress={() => router.push('/campo')} />
       )}
       {existente && (
         <Button

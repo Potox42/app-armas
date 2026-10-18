@@ -1,10 +1,10 @@
 import type { Arma, Datos, Licencia } from '@/data/types';
-import { competiciones, cuandoEs } from './competiciones';
+import { competiciones, cuandoEs, historial } from './competiciones';
 import { diasHasta, hoyISO, mesAnio, plazo } from './fechas';
 import { estadoMunicion } from './municion';
 
 export type Nivel = 'rojo' | 'naranja' | 'verde';
-export type TipoAviso = 'licencia' | 'revista' | 'carnet' | 'pase' | 'limpieza' | 'competicion' | 'municion' | 'copia' | 'actividad';
+export type TipoAviso = 'licencia' | 'revista' | 'carnet' | 'pase' | 'limpieza' | 'competicion' | 'municion' | 'copia' | 'actividad' | 'documento';
 
 export interface Aviso {
   id: string;
@@ -131,6 +131,15 @@ export function calcularAvisos(datos: Datos): Aviso[] {
 
   const copia = avisoCopia(datos);
   if (copia) avisos.push(copia);
+  for (const d of datos.documentos ?? []) {
+    if (!d.caducidad) continue;
+    const dias = diasHasta(d.caducidad);
+    avisos.push({
+      id: `documento-${d.id}`, tipo: 'documento', titulo: d.nombre, detalle: plazo(d.caducidad),
+      fecha: d.caducidad, nivel: nivelPorDias(dias), orden: dias,
+    });
+  }
+
   const actividad = avisoActividad(datos);
   if (actividad) avisos.push(actividad);
 
@@ -184,14 +193,13 @@ export function avisoCopia(datos: Datos, hoy = hoyISO()): Aviso | null {
 
 /**
  * Licencia F: se pierde tras un año sin actividad deportiva de tiro (art. 138 del Reglamento de
- * Armas, RD 137/1993). Se mira la última competición pasada a la que estabas apuntado: naranja a
+ * Armas, RD 137/1993). Se mira la última competición pasada en la que participaste: naranja a
  * los 9 meses, rojo al año. Es un recordatorio: qué tiradas valen lo certifica la federación.
  */
 export function avisoActividad(datos: Datos, hoy = hoyISO()): Aviso | null {
   const f = datos.permiso.licencias.find((l) => l.tipo === 'F' && diasHasta(l.caducidad, hoy) >= 0);
   if (!f) return null;
-  const pasadas = competiciones(datos).filter((c) => c.inscrito && c.fecha <= hoy);
-  const ultima = pasadas.reduce<string | null>((m, c) => (!m || c.fecha > m ? c.fecha : m), null);
+  const ultima = historial(datos, hoy)[0]?.fecha ?? null;
   const dias = ultima ? -diasHasta(ultima, hoy) : null;
   if (dias !== null && dias < 270) return null;
   const meses = dias === null ? 0 : Math.floor(dias / 30.4);

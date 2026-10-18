@@ -1,23 +1,27 @@
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Chips } from '@/components/Chips';
 import { FotoCampo, useFoto } from '@/components/FotoCampo';
 import { Icon } from '@/components/Icon';
 import { AvisosCalendario } from '@/components/AvisosCalendario';
 import { DocumentoLicencia } from '@/components/DocumentoLicencia';
 import { DatoTarjeta, EstadoTarjeta, Tarjeta } from '@/components/Tarjeta';
-import { Button, Card, FakeQr, Screen, Segmented, nivelColor, s } from '@/components/ui';
+import { Badge, Button, Card, FakeQr, Screen, Segmented, nivelColor, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { nivelPorDias } from '@/lib/avisos';
 import { diasHasta, formatear, plazo } from '@/lib/fechas';
+import { cupoArmasF } from '@/lib/papeles';
 import { colors, space } from '@/theme';
 
-type Vista = 'licencias' | 'federacion';
+type Vista = 'licencias' | 'federacion' | 'otros';
 
 export default function Cartera() {
   const store = useStore();
   const { datos } = store;
-  const [vista, setVista] = useState<Vista>('licencias');
+  const { vista: inicial } = useLocalSearchParams<{ vista?: Vista }>();
+  const [vista, setVista] = useState<Vista>(inicial ?? 'licencias');
+  const documentos = datos.documentos ?? [];
   const f = datos.federacion;
   const qr = useFoto(f.fotoQr);
   const hayFederacion = !!(f.numeroFederado || f.caducidadCarnet || f.fotoCarnet || f.fotoQr);
@@ -28,8 +32,8 @@ export default function Cartera() {
       right={
         <Pressable
           hitSlop={12}
-          accessibilityLabel={vista === 'licencias' ? 'Editar licencia' : 'Editar federación'}
-          onPress={() => router.push(vista === 'licencias' ? '/licencia' : '/federacion')}
+          accessibilityLabel={vista === 'licencias' ? 'Editar licencia' : vista === 'federacion' ? 'Editar federación' : 'Añadir documento'}
+          onPress={() => router.push(vista === 'licencias' ? '/licencia' : vista === 'federacion' ? '/federacion' : '/documento/editar')}
         >
           <Icon name="plus" color={colors.text} />
         </Pressable>
@@ -41,6 +45,7 @@ export default function Cartera() {
         options={[
           { value: 'licencias', label: 'Licencias' },
           { value: 'federacion', label: 'Federación' },
+          { value: 'otros', label: 'Otros' },
         ]}
       />
 
@@ -68,6 +73,32 @@ export default function Cartera() {
               />
             </View>
           )}
+          <ArmasLicenciaF />
+        </>
+      )}
+
+      {vista === 'otros' && (
+        <>
+          {documentos.length === 0 && (
+            <Card style={{ gap: space.sm }}>
+              <Text style={s.text}>Otros papeles</Text>
+              <Text style={s.muted}>
+                Guarda aquí el seguro, el certificado médico o cualquier otro documento que quieras tener a mano. Si tiene
+                fecha de caducidad, te aviso antes.
+              </Text>
+            </Card>
+          )}
+          {documentos.map((d) => (
+            <Card key={d.id} style={st.doc} onPress={() => router.push({ pathname: '/documento/editar', params: { id: d.id } })}>
+              <Icon name={d.tipo === 'Seguro' ? 'shield' : 'doc'} color={colors.accent} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={s.text}>{d.nombre}</Text>
+                <Text style={s.muted}>{d.tipo}{d.numero ? ` · ${d.numero}` : ''}</Text>
+              </View>
+              {d.caducidad ? <Badge nivel={nivelPorDias(diasHasta(d.caducidad))}>{plazo(d.caducidad)}</Badge> : null}
+            </Card>
+          ))}
+          <Button title="+  Añadir documento" onPress={() => router.push('/documento/editar')} />
         </>
       )}
 
@@ -130,7 +161,49 @@ export default function Cartera() {
   );
 }
 
+/**
+ * Armas con la licencia F frente a las que permite su clase (art. 132 del Reglamento de Armas).
+ * Si no se sabe la clase, se pregunta aquí mismo.
+ */
+function ArmasLicenciaF() {
+  const store = useStore();
+  const cupo = cupoArmasF(store.datos);
+  if (!cupo) return null;
+  const { licencia, armas, maximo } = cupo;
+  if (maximo === null) {
+    return (
+      <Card style={{ gap: space.sm }}>
+        <Text style={s.text}>¿De qué clase es tu licencia F?</Text>
+        <Text style={s.muted}>Así te digo cuántas armas de concurso permite y cuántas tienes ya.</Text>
+        <Chips
+          opciones={['1', '2', '3'].map((c) => ({ value: c, label: `${c}ª clase` }))}
+          valor={undefined}
+          onChange={(categoria) => store.guardarLicencia({ ...licencia, categoria })}
+        />
+      </Card>
+    );
+  }
+  const lleno = armas >= maximo;
+  return (
+    <Card style={{ gap: space.sm }} onPress={() => router.push('/armas')}>
+      <View style={st.doc}>
+        <Text style={[s.text, { flex: 1 }]}>Armas con tu licencia F ({licencia.categoria}ª clase)</Text>
+        <Text style={{ color: armas > maximo ? colors.red : lleno ? colors.orange : colors.green, fontSize: 18, fontWeight: '900' }}>
+          {armas} de {maximo}
+        </Text>
+      </View>
+      <Text style={[s.muted, { fontSize: 13 }]}>
+        {armas > maximo
+          ? `Tienes más armas apuntadas con la F de las que permite la ${licencia.categoria}ª clase. Revisa a qué licencia va cada una.`
+          : `La ${licencia.categoria}ª clase permite ${maximo === 1 ? 'un arma' : `hasta ${maximo} armas`} de concurso (art. 132 del Reglamento de Armas).`}
+        {' '}Para cada arma más hace falta autorización previa de la Intervención de Armas.
+      </Text>
+    </Card>
+  );
+}
+
 const st = StyleSheet.create({
+  doc: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   titulo: { color: colors.text, fontSize: 16, fontWeight: '700' },
   cabecera: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 });

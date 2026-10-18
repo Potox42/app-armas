@@ -21,7 +21,7 @@ function cuando(dias: number): string {
   return 'en 3 meses';
 }
 
-/** Recordatorios con fecha (licencias, revistas, carnet y pase), ordenados y sin los ya pasados. */
+/** Recordatorios con fecha (licencias, revistas, carnet, pase y otros papeles), ordenados y sin los ya pasados. */
 export function planAvisos(datos: Datos, ahora = new Date()): AvisoProgramado[] {
   const plan: AvisoProgramado[] = [];
   const anadir = (id: string, iso: string, titulo: string, texto: (c: string) => string) => {
@@ -49,6 +49,10 @@ export function planAvisos(datos: Datos, ahora = new Date()): AvisoProgramado[] 
     (c) => `Caduca ${c} (${formatear(f.caducidadCarnet)}).`);
   if (f.caducidadPase !== f.caducidadCarnet) {
     anadir('pase', f.caducidadPase, 'Pase al recinto', (c) => `Caduca ${c} (${formatear(f.caducidadPase)}).`);
+  }
+
+  for (const d of datos.documentos ?? []) {
+    if (d.caducidad) anadir(`doc-${d.id}`, d.caducidad, d.nombre, (c) => `Caduca ${c} (${formatear(d.caducidad!)}).`);
   }
 
   // Competiciones a las que estás apuntado: una semana antes, el día antes y 2 horas antes.

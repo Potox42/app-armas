@@ -17,6 +17,7 @@ import { confirmar } from '@/lib/confirmar';
 import { disparosDesdeLimpieza, licenciaDe, nivelPorDias, proximaRevista } from '@/lib/avisos';
 import { diasHasta, formatear, mesAnio, plazo } from '@/lib/fechas';
 import { formatoMedia, media, todosLosDisparos, totalSesion } from '@/lib/sesiones';
+import { cupoArmasF } from '@/lib/papeles';
 import { colors, radius, space } from '@/theme';
 
 type Vista = 'mantenimiento' | 'documentacion' | 'entrenamientos' | 'municion';
@@ -111,6 +112,7 @@ export default function FichaArma() {
 
       {vista === 'documentacion' && (
         <>
+          <PapelesDeLaArma armaId={arma.id} />
           <Card style={{ gap: space.sm }}>
             <Text style={st.titulo}>Guía de pertenencia</Text>
             <View style={{ flexDirection: 'row', gap: space.sm }}>
@@ -214,6 +216,50 @@ export default function FichaArma() {
   );
 }
 
+/**
+ * De qué papeles depende el arma: su guía, la licencia a la que va (si caduca, no se puede usar ni
+ * pasar revista) y, con la licencia F, cuántas armas ocupa de las que permite su clase.
+ */
+function PapelesDeLaArma({ armaId }: { armaId: string }) {
+  const store = useStore();
+  const arma = store.arma(armaId)!;
+  const licencia = licenciaDe(store.datos, arma);
+  const cupo = licencia?.tipo === 'F' ? cupoArmasF(store.datos) : null;
+  const f = store.datos.federacion;
+  const filas: { titulo: string; detalle: string; fecha?: string; ruta: '/cartera' | '/licencia' }[] = [];
+  filas.push({
+    titulo: arma.numeroGuia ? `Guía de pertenencia nº ${arma.numeroGuia}` : 'Guía de pertenencia sin número',
+    detalle: arma.fotoGuiaAnverso ? 'Con foto' : 'Sin foto: añádela abajo',
+    ruta: '/cartera',
+  });
+  filas.push(licencia
+    ? { titulo: `Licencia ${licencia.tipo}${licencia.categoria ? ` (${licencia.categoria}ª clase)` : ''}`, detalle: 'Su caducidad marca la revista', fecha: licencia.caducidad, ruta: '/licencia' }
+    : { titulo: 'Sin licencia asignada', detalle: 'Elige su licencia en Editar', ruta: '/licencia' });
+  if (licencia?.tipo === 'F' && f.caducidadCarnet) {
+    filas.push({ titulo: 'Carnet federativo', detalle: 'La licencia F va ligada a tu actividad federada', fecha: f.caducidadCarnet, ruta: '/cartera' });
+  }
+  return (
+    <Card style={{ gap: space.sm }}>
+      <Text style={st.titulo}>De qué depende esta arma</Text>
+      {filas.map((x, i) => (
+        <Pressable key={x.titulo} onPress={() => router.push(x.ruta)} style={[st.dep, i > 0 && st.histBorder]}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.text}>{x.titulo}</Text>
+            <Text style={[s.muted, { fontSize: 12 }]}>{x.detalle}</Text>
+          </View>
+          {x.fecha ? <Badge nivel={nivelPorDias(diasHasta(x.fecha))}>{plazo(x.fecha)}</Badge> : null}
+        </Pressable>
+      ))}
+      {cupo && cupo.maximo !== null && (
+        <Text style={[s.muted, { fontSize: 12 }]}>
+          Con tu licencia F tienes {cupo.armas} {cupo.armas === 1 ? 'arma' : 'armas'}; la {cupo.licencia.categoria}ª clase permite{' '}
+          {cupo.maximo === 1 ? 'una' : `hasta ${cupo.maximo}`}.
+        </Text>
+      )}
+    </Card>
+  );
+}
+
 function RegistrarLimpieza({ onSave, onCancel }: {
   onSave: (tipo: Limpieza['tipo']) => void;
   onCancel: () => void;
@@ -238,6 +284,7 @@ function RegistrarLimpieza({ onSave, onCancel }: {
 }
 
 const st = StyleSheet.create({
+  dep: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm },
   hero: {
     alignItems: 'center', gap: 4, paddingVertical: space.lg, backgroundColor: colors.card,
     borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border,

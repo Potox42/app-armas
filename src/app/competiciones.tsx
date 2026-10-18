@@ -4,8 +4,8 @@ import { Icon } from '@/components/Icon';
 import { Button, Card, Screen, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import type { Competicion } from '@/data/types';
-import { competiciones, cuandoEs, repartir } from '@/lib/competiciones';
-import { deISO } from '@/lib/fechas';
+import { competiciones, cuandoEs, historial, participo, repartir, textoResultado } from '@/lib/competiciones';
+import { deISO, hoyISO } from '@/lib/fechas';
 import { avisosDisponibles } from '@/lib/notificaciones';
 import { colors, radius, space } from '@/theme';
 
@@ -16,6 +16,9 @@ export default function Competiciones() {
   const store = useStore();
   const { proximas, pasadas } = repartir(competiciones(store.datos));
   const nueva = () => router.push('/competicion/editar');
+  const anio = hoyISO().slice(0, 4);
+  const esteAnio = historial(store.datos).filter((c) => c.fecha.startsWith(anio));
+  const puestos = esteAnio.map((c) => c.puesto).filter((p): p is number => p !== undefined);
 
   return (
     <Screen
@@ -53,6 +56,15 @@ export default function Competiciones() {
       )}
 
       {pasadas.length > 0 && <SectionTitle>Pasadas</SectionTitle>}
+      {pasadas.length > 0 && (
+        <Card style={{ gap: 4 }}>
+          <Text style={s.text}>
+            {esteAnio.length === 0 ? `En ${anio} aún no has participado en ninguna` : `${esteAnio.length} ${esteAnio.length === 1 ? 'tirada' : 'tiradas'} en ${anio}`}
+            {puestos.length ? ` · mejor puesto: ${Math.min(...puestos)}º` : ''}
+          </Text>
+          <Text style={[s.muted, { fontSize: 13 }]}>Entra en cada una para apuntar si participaste, tus puntos y tu puesto.</Text>
+        </Card>
+      )}
       {pasadas.map((c) => (
         <Fila key={c.id} c={c} pasada />
       ))}
@@ -62,8 +74,10 @@ export default function Competiciones() {
 
 function Fila({ c, pasada, onApuntar }: { c: Competicion; pasada?: boolean; onApuntar?: () => void }) {
   const d = deISO(c.fecha);
+  const tiro = pasada && participo(c);
+  const resultado = tiro ? textoResultado(c) : '';
   return (
-    <Card onPress={() => router.push({ pathname: '/competicion/editar', params: { id: c.id } })} style={[st.fila, pasada && { opacity: 0.6 }]}>
+    <Card onPress={() => router.push({ pathname: '/competicion/editar', params: { id: c.id } })} style={[st.fila, pasada && !tiro && { opacity: 0.6 }]}>
       <View style={[st.dia, c.inscrito && !pasada && st.diaApuntado]}>
         <Text style={st.diaNum}>{d.getDate()}</Text>
         <Text style={st.diaMes}>{MESES[d.getMonth()]}</Text>
@@ -75,6 +89,11 @@ function Fila({ c, pasada, onApuntar }: { c: Competicion; pasada?: boolean; onAp
           {pasada ? cuandoEs(c.fecha) : `${cuandoEs(c.fecha)}${c.hora ? ` · ${c.hora}` : ''}`}
           {c.lugar ? ` · ${c.lugar}` : ''}
         </Text>
+        {tiro && (
+          <Text style={{ color: resultado ? colors.green : colors.accent, fontSize: 13, fontWeight: '700' }}>
+            {resultado || 'Añade tu resultado'}
+          </Text>
+        )}
       </View>
       {!pasada && onApuntar && (
         <Pressable
@@ -87,7 +106,7 @@ function Fila({ c, pasada, onApuntar }: { c: Competicion; pasada?: boolean; onAp
           <Text style={[st.apuntarTexto, c.inscrito && { color: colors.green }]}>{c.inscrito ? 'Apuntado' : 'Apuntarme'}</Text>
         </Pressable>
       )}
-      {pasada && c.inscrito && <Icon name="check" size={18} color={colors.textMuted} />}
+      {tiro && <Icon name="check" size={18} color={colors.green} />}
     </Card>
   );
 }

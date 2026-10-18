@@ -299,6 +299,8 @@ function Resumen({ sesion }: { sesion: Sesion }) {
         <Text style={s.muted}>{lectura.texto}</Text>
       </Card>
 
+      {arma && disparos.length > 0 && <GastoMunicion sesion={sesion} n={disparos.length} />}
+
       {sumas.length > 1 && (
         <View style={st.datos}>
           <Cifra titulo="Mejor serie" valor={String(ex.sumas[ex.mejor])} detalle={`serie ${ex.mejor + 1}`} color={colors.green} />
@@ -354,6 +356,44 @@ function Resumen({ sesion }: { sesion: Sesion }) {
       <Button title="Volver a Entrenar" onPress={() => volver('/entrenar')} />
       <BotonBorrar sesion={sesion} />
     </Screen>
+  );
+}
+
+/**
+ * Al terminar: ¿los cartuchos salieron de casa? Si dices que sí, se apunta el gasto en la munición
+ * del arma (y baja lo que tienes en casa). Nada se resta sin que lo confirmes.
+ */
+function GastoMunicion({ sesion, n }: { sesion: Sesion; n: number }) {
+  const store = useStore();
+  const cartuchos = n === 1 ? '1 cartucho' : `${n} cartuchos`;
+  if (sesion.gasto) {
+    return (
+      <Card style={st.gasto}>
+        <Icon name="box" color={sesion.gasto === 'casa' ? colors.green : colors.textMuted} />
+        <Text style={[s.muted, { flex: 1 }]}>
+          {sesion.gasto === 'casa' ? `Restados ${cartuchos} de la munición de casa.` : 'No se ha restado munición de casa.'}
+        </Text>
+        <Pressable hitSlop={10} onPress={() => store.apuntarGasto(sesion.id, sesion.gasto !== 'casa')}>
+          <Text style={{ color: colors.accent, fontWeight: '700' }}>{sesion.gasto === 'casa' ? 'Deshacer' : 'Restar'}</Text>
+        </Pressable>
+      </Card>
+    );
+  }
+  return (
+    <Card style={{ gap: space.md, borderColor: colors.accent }}>
+      <View style={st.gasto}>
+        <Icon name="box" color={colors.accent} />
+        <Text style={[s.text, { flex: 1 }]}>Has disparado {cartuchos}. ¿Salieron de la munición que tienes en casa?</Text>
+      </View>
+      <View style={st.botones}>
+        <View style={{ flex: 1 }}>
+          <Button title="No, del club" variant="secondary" onPress={() => store.apuntarGasto(sesion.id, false)} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button title={`Restar ${n}`} onPress={() => store.apuntarGasto(sesion.id, true)} />
+        </View>
+      </View>
+    </Card>
   );
 }
 
@@ -463,6 +503,7 @@ const st = StyleSheet.create({
   barra: { height: '100%', borderRadius: 6, backgroundColor: colors.accent },
   barraN: { width: 28, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   centro: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  gasto: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   lectura: { gap: 4, borderLeftWidth: 4, borderLeftColor: colors.accent },
   lecturaTitulo: { color: colors.text, fontSize: 16, fontWeight: '800' },
 });

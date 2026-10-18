@@ -5,7 +5,7 @@ import { colors, space } from '@/theme';
 import { hoyISO } from '@/lib/fechas';
 import { cargarDatos, guardarDatos } from './db';
 import { datosDeEjemplo } from './ejemplo';
-import type { Ajustes, Arma, Competicion, Datos, MovimientoMunicion, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Registro, Sesion } from './types';
+import type { Ajustes, Arma, Competicion, Datos, Documento, MovimientoMunicion, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Registro, Sesion } from './types';
 
 // Los datos se cargan de la base de datos cifrada al arrancar y se guardan en cada cambio.
 // Mientras no existan las pantallas de alta, el primer arranque parte del ejemplo.
@@ -26,12 +26,15 @@ interface Store {
   deshacerDisparo: (sesionId: string) => void;
   nuevaSerie: (sesionId: string) => void;
   terminarSesion: (sesionId: string) => void;
+  apuntarGasto: (sesionId: string, desdeCasa: boolean) => void;
   borrarSesion: (sesionId: string) => void;
   cambiarRegistro: (sesionId: string, registro: Registro) => void;
   guardarArma: (arma: Arma) => void;
   borrarArma: (id: string) => void;
   guardarCompeticion: (c: Competicion) => void;
   borrarCompeticion: (id: string) => void;
+  guardarDocumento: (d: Documento) => void;
+  borrarDocumento: (id: string) => void;
   guardarLicencia: (licencia: Licencia) => void;
   borrarLicencia: (id: string) => void;
   actualizarPermiso: (cambios: Partial<PermisoArmas>) => void;
@@ -60,6 +63,7 @@ function datosVacios(nombre: string): Datos {
     },
     sesiones: [],
     competiciones: [],
+    documentos: [],
     esEjemplo: false,
   };
 }
@@ -73,7 +77,7 @@ function completar(d: Datos): Datos {
     fotoAnverso: d.permiso.fotoAnverso ?? conFotos?.fotoAnverso,
     fotoReverso: d.permiso.fotoReverso ?? conFotos?.fotoReverso,
   };
-  return { ...d, permiso, sesiones: d.sesiones ?? [], competiciones: d.competiciones ?? [], esEjemplo: d.esEjemplo ?? true };
+  return { ...d, permiso, sesiones: d.sesiones ?? [], competiciones: d.competiciones ?? [], documentos: d.documentos ?? [], esEjemplo: d.esEjemplo ?? true };
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -139,7 +143,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           municion: [{ ...m, id: nuevoId('mun') }, ...(a.municion ?? [])].sort((x, y) => y.fecha.localeCompare(x.fecha)),
         })),
       borrarMunicion: (armaId, movimientoId) =>
-        actualizarArma(armaId, (a) => ({ ...a, municion: (a.municion ?? []).filter((m) => m.id !== movimientoId) })),
+        setDatos((d) => {
+          if (!d) return d;
+          // Si era el gasto de un entrenamiento, el entrenamiento vuelve a preguntar.
+          const sesionId = d.armas.find((a) => a.id === armaId)?.municion?.find((m) => m.id === movimientoId)?.sesionId;
+          return {
+            ...d,
+            armas: d.armas.map((a) => (a.id === armaId ? { ...a, municion: (a.municion ?? []).filter((m) => m.id !== movimientoId) } : a)),
+            sesiones: sesionId ? d.sesiones.map((x) => (x.id === sesionId ? { ...x, gasto: undefined } : x)) : d.sesiones,
+          };
+        }),
       sesion: (id) => datos.sesiones.find((x) => x.id === id),
       nuevaSesion: (nueva) => {
         const id = `s${Date.now()}`;
@@ -179,6 +192,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             armas: d.armas.map((a) => (a.id === s.armaId ? { ...a, disparosTotales: a.disparosTotales + n } : a)),
           };
         }),
+      // Al terminar, el tirador dice si los cartuchos salieron de casa (se apunta un gasto en el
+      // arma, ligado a la sesión) o no (club, prestados…). Cambiar de opinión deshace el gasto.
+      apuntarGasto: (sesionId, desdeCasa) =>
+        setDatos((d) => {
+          if (!d) return d;
+          const s = d.sesiones.find((x) => x.id === sesionId);
+          if (!s) return d;
+          const n = s.series.reduce((t, x) => t + x.disparos.length, 0);
+          return {
+            ...d,
+            sesiones: d.sesiones.map((x) => (x.id === sesionId ? { ...x, gasto: desdeCasa ? 'casa' : 'no' } : x)),
+            armas: d.armas.map((a) => {
+              if (a.id !== s.armaId) return a;
+              const sin = (a.municion ?? []).filter((m) => m.sesionId !== sesionId);
+              if (!desdeCasa || !n) return { ...a, municion: sin };
+              const gasto = { id: nuevoId('mun'), fecha: s.fecha.slice(0, 10), tipo: 'gasto' as const, cartuchos: n, nota: 'Entrenamiento', sesionId };
+              return { ...a, municion: [gasto, ...sin].sort((x, y) => y.fecha.localeCompare(x.fecha)) };
+            }),
+          };
+        }),
       cambiarRegistro: (sesionId, registro) => actualizarSesion(sesionId, (s) => ({ ...s, registro })),
       borrarSesion: (sesionId) =>
         setDatos((d) => {
@@ -190,7 +223,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return {
             ...d,
             sesiones: d.sesiones.filter((x) => x.id !== sesionId),
-            armas: d.armas.map((a) => (a.id === s.armaId ? { ...a, disparosTotales: Math.max(0, a.disparosTotales - n) } : a)),
+            // y el gasto de munición que se apuntó con ella
+            armas: d.armas.map((a) => (a.id === s.armaId
+              ? { ...a, disparosTotales: Math.max(0, a.disparosTotales - n), municion: a.municion?.filter((m) => m.sesionId !== sesionId) }
+              : a)),
           };
         }),
       guardarArma: (arma) =>
@@ -211,6 +247,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           };
         }),
       borrarCompeticion: (id) => setDatos((d) => d && { ...d, competiciones: (d.competiciones ?? []).filter((x) => x.id !== id) }),
+      guardarDocumento: (doc) =>
+        setDatos((d) => {
+          if (!d) return d;
+          const todos = d.documentos ?? [];
+          return { ...d, documentos: todos.some((x) => x.id === doc.id) ? todos.map((x) => (x.id === doc.id ? doc : x)) : [...todos, doc] };
+        }),
+      borrarDocumento: (id) => setDatos((d) => d && { ...d, documentos: (d.documentos ?? []).filter((x) => x.id !== id) }),
       guardarLicencia: (l) =>
         setDatos((d) => d && {
           ...d,

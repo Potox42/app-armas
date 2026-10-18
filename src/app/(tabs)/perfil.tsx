@@ -3,7 +3,7 @@ import { Alert, Platform, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Avatar } from '@/components/Avatar';
 import { Campo } from '@/components/Formulario';
-import { Icon, type IconName } from '@/components/Icon';
+import { Icon } from '@/components/Icon';
 import { Button, Card, Screen, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { confirmar } from '@/lib/confirmar';
@@ -12,9 +12,6 @@ import { comprobarPin, crearPin, LARGO_MAX, LARGO_MIN, pinValido } from '@/lib/p
 import { autenticar, motivoSinBloqueo } from '@/lib/seguridad';
 import { colors, space } from '@/theme';
 
-const PENDIENTE: { icon: IconName; titulo: string; detalle: string }[] = [
-  { icon: 'shield', titulo: 'Datos cifrados en el móvil', detalle: 'Nada sale del teléfono' },
-];
 
 function avisar(titulo: string, texto: string) {
   if (Platform.OS === 'web') window.alert(`${titulo}\n\n${texto}`);
@@ -99,15 +96,14 @@ export default function Perfil() {
         </View>
         <Icon name="chevron" color={colors.textMuted} />
       </Card>
-      {PENDIENTE.map((p) => (
-        <Card key={p.titulo} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-          <Icon name={p.icon} color={colors.accent} />
-          <View style={{ flex: 1 }}>
-            <Text style={s.text}>{p.titulo}</Text>
-            <Text style={s.muted}>{p.detalle}</Text>
-          </View>
-        </Card>
-      ))}
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }} onPress={() => router.push('/datos')}>
+        <Icon name="shield" color={colors.accent} />
+        <View style={{ flex: 1 }}>
+          <Text style={s.text}>Tus datos</Text>
+          <Text style={s.muted}>Dónde se guardan y cómo se protegen</Text>
+        </View>
+        <Icon name="chevron" color={colors.textMuted} />
+      </Card>
       {store.esEjemplo && (
         <Card style={{ gap: space.md, borderColor: colors.orange }}>
           <Text style={s.text}>Estás viendo datos de ejemplo.</Text>

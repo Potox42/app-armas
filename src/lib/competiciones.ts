@@ -13,6 +13,22 @@ export const MODALIDADES = [
 
 export const competiciones = (datos: Datos) => datos.competiciones ?? [];
 
+/** Si tiraste: lo que digas en el resultado o, si no lo has dicho, si estabas apuntado. */
+export const participo = (c: Competicion) => c.participado ?? c.inscrito;
+
+/** «532 puntos · 5º de 40» (vacío si no hay resultado). */
+export function textoResultado(c: Competicion): string {
+  const partes: string[] = [];
+  if (c.puntos !== undefined) partes.push(`${c.puntos} puntos`);
+  if (c.puesto !== undefined) partes.push(`${c.puesto}º${c.participantes ? ` de ${c.participantes}` : ''}`);
+  return partes.join(' · ');
+}
+
+/** Tiradas en las que participaste (ya pasadas), la más reciente primero. */
+export function historial(datos: Datos, hoy = hoyISO()): Competicion[] {
+  return competiciones(datos).filter((c) => c.fecha <= hoy && participo(c)).sort((a, b) => b.fecha.localeCompare(a.fecha));
+}
+
 /** Las que aún no han pasado (de la más cercana a la más lejana) y las ya pasadas (la última primero). */
 export function repartir(lista: Competicion[], hoy = hoyISO()) {
   const orden = (a: Competicion, b: Competicion) => `${a.fecha}${a.hora ?? ''}`.localeCompare(`${b.fecha}${b.hora ?? ''}`);
