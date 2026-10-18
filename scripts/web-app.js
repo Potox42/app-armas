@@ -48,6 +48,30 @@ html = html.replace('</head>', `  <link rel="manifest" href="${base}/manifest.js
 // Pantalla completa sin márgenes bajo la barra de estado del iPhone.
 html = html.replace(/<meta name="viewport" content="([^"]*)"/, (m, c) =>
   c.includes('viewport-fit') ? m : `<meta name="viewport" content="${c}, viewport-fit=cover"`);
+// Al abrir la app (o volver a ella) mira si hay una versión publicada más nueva y, si la hay,
+// recarga. GitHub Pages deja la página en caché unos minutos y el iPhone no la renovaba.
+const version = String(Date.now());
+fs.writeFileSync(path.join(dist, 'version.json'), JSON.stringify({ version }));
+html = html.replace('</body>', `<script>
+(function () {
+  var actual = '${version}', base = '${base}';
+  function mirar() {
+    fetch(base + '/version.json', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (v) {
+        if (!v.version || v.version === actual) return;
+        try { if (sessionStorage.getItem('recargado') === v.version) return; sessionStorage.setItem('recargado', v.version); } catch (e) {}
+        return Promise.all([fetch(base + '/', { cache: 'reload' }), fetch(location.href, { cache: 'reload' })])
+          .catch(function () {})
+          .then(function () { location.reload(); });
+      })
+      .catch(function () {});
+  }
+  mirar();
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') mirar(); });
+})();
+</script>
+</body>`);
 fs.writeFileSync(path.join(dist, 'index.html'), html);
 // GitHub Pages: cualquier ruta (por ejemplo al recargar en /cartera) abre la app.
 fs.writeFileSync(path.join(dist, '404.html'), html);
