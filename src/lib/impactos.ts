@@ -447,26 +447,93 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
   const rellenos = cerrar(bordes, w, h, Math.max(1, Math.round(rAgujero)));
   for (let i = 0; i < m.length; i++) if (rellenos[i]) m[i] = 1;
 
-  // Los números de los anillos (del 1 al 9, en las dos rayas que cruzan la diana) se parecen a un
-  // agujero: lo que cae justo encima de un número se descarta (si era un disparo, se añade a mano).
+  // Los números de los anillos (del 1 al 9, en las cuatro rayas que cruzan la diana: arriba, abajo,
+  // izquierda y derecha, en el centro de cada anillo) se parecen a un agujero. Cada número está
+  // impreso igual (derecho) en las cuatro rayas: si lo que hay en el sitio de un número se parece a lo
+  // que hay en el mismo anillo de otra raya, es la cifra. Un agujero encima de la cifra la estropea y
+  // deja de parecerse, así que ese sí se cuenta.
   const paso = (diana.anillos[8] - diana.anillos[9]) / 2;
-  // Posición de número: en una de las cuatro rayas (arriba, abajo, izquierda, derecha), en el centro
-  // de un anillo del 1 al 8. Devuelve el anillo y la raya (0-3), o null.
-  const numeroEn = (x: number, y: number): { v: number; raya: number } | null => {
+  const rayas = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+  const numeroEn = (x: number, y: number): { rc: number; raya: number } | null => {
     const r = Math.hypot(x, y);
-    const grados = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
-    const raya = Math.round(grados / 90) % 4;
-    if (Math.abs(grados - Math.round(grados / 90) * 90) > 8) return null;
+    const raya = Math.abs(x) > Math.abs(y) ? (x > 0 ? 0 : 2) : y > 0 ? 1 : 3;
+    if (Math.min(Math.abs(x), Math.abs(y)) > 0.4 * paso) return null;
     for (const [v, dm] of Object.entries(diana.anillos)) {
-      if (Number(v) <= 9 && Math.abs(r - (dm / 2 - paso / 2)) < 0.45 * paso) return { v: Number(v), raya };
+      const rc = dm / 2 - paso / 2;
+      if (Number(v) <= 9 && Math.abs(r - rc) < 0.3 * paso) return { rc, raya };
     }
     return null;
   };
+  const N = 16, lado = 0.8 * paso;
+  const parche = (xm: number, ym: number): Float32Array | null => {
+    const o = new Float32Array(N * N);
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const px = cal.cx + ((xm + (i / (N - 1) - 0.5) * lado) / (diana.negro / 2)) * cal.rx;
+        const py = cal.cy + ((ym + (j / (N - 1) - 0.5) * lado) / (diana.negro / 2)) * cal.ry;
+        if (px < 1 || py < 1 || px > w - 2 || py > h - 2) return null;
+        o[j * N + i] = muestra(fino, px, py);
+      }
+    }
+    return o;
+  };
+  const parecido = (a: Float32Array, b: Float32Array): number => {
+    let ma = 0, mb = 0;
+    for (let i = 0; i < a.length; i++) { ma += a[i]; mb += b[i]; }
+    ma /= a.length; mb /= b.length;
+    let ab = 0, aa = 0, bb = 0;
+    for (let i = 0; i < a.length; i++) {
+      const da = a[i] - ma, db = b[i] - mb;
+      ab += da * db; aa += da * da; bb += db * db;
+    }
+    return aa && bb ? ab / Math.sqrt(aa * bb) : 0;
+  };
+  // Lo que sobra al restar la cifra de otra raya: si queda una mancha clara del tamaño de una bala,
+  // hay un agujero encima de la cifra.
+  const sobra = (a: Float32Array, b: Float32Array): number => {
+    let ma = 0, mb = 0;
+    for (let i = 0; i < a.length; i++) { ma += a[i]; mb += b[i]; }
+    ma /= a.length; mb /= b.length;
+    let ab = 0, bb = 0;
+    for (let i = 0; i < a.length; i++) { ab += (a[i] - ma) * (b[i] - mb); bb += (b[i] - mb) ** 2; }
+    const k = bb ? ab / bb : 0;
+    const res = new Float32Array(a.length);
+    for (let i = 0; i < a.length; i++) res[i] = a[i] - ma - k * (b[i] - mb);
+    let max = 0;
+    for (let j = 1; j < N - 1; j++) {
+      for (let i = 1; i < N - 1; i++) {
+        let t = 0;
+        for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) t += res[(j + dj) * N + i + di];
+        max = Math.max(max, Math.abs(t / 9));
+      }
+    }
+    return max;
+  };
+  const esCifra = (x: number, y: number): boolean => {
+    const n = numeroEn(x, y);
+    if (!n) return false;
+    const mio = parche(x, y);
+    if (!mio) return false;
+    let mejor = -1, igual: Float32Array | null = null;
+    for (let k = 0; k < 4; k++) {
+      if (k === n.raya) continue;
+      const [dx, dy] = rayas[k];
+      for (let oy = -0.4; oy <= 0.401; oy += 0.05) {
+        for (let ox = -0.4; ox <= 0.401; ox += 0.05) {
+          const otro = parche(dx * n.rc + ox * paso, dy * n.rc + oy * paso);
+          if (!otro) continue;
+          const p = parecido(mio, otro);
+          if (p > mejor) { mejor = p; igual = otro; }
+        }
+      }
+    }
+    const resto = igual ? sobra(mio, igual) : 0;
+    if (process.env.DBG3) console.log('cifra?', x.toFixed(0), y.toFixed(0), mejor.toFixed(2), (resto / contraste).toFixed(2));
+    return mejor > 0.5 && resto < 0.21 * contraste;
+  };
 
   const esperada = Math.PI * rAgujero * rAgujero;
-  const mmPx = { x: diana.negro / 2 / cal.rx, y: diana.negro / 2 / cal.ry };
   const res: Agujero[] = [];
-  const manchaDe = new Map<Agujero, Mancha>();
   for (const k of manchas(m, w, h)) {
     const bw = k.x1 - k.x0 + 1, bh = k.y1 - k.y0 + 1;
     if (k.area < 0.55 * esperada) continue;
@@ -486,24 +553,7 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
     if (bw / bh > 2.6 || bh / bw > 2.6 || relleno < 0.35) continue;
     // Un agujero suelto mide entre 0,9 y 1,5 balas (el borde roto y el suavizado lo agrandan).
     const veces = tam < 1.75 ? 1 : Math.min(4, Math.round(tam / 1.2));
-    const a: Agujero = { xPx, yPx, x: mm.x, y: mm.y, valor: puntuar(mm.x, mm.y, calibreMm, diana), veces, tam };
-    manchaDe.set(a, k);
-    res.push(a);
+    res.push({ xPx, yPx, x: mm.x, y: mm.y, valor: puntuar(mm.x, mm.y, calibreMm, diana), veces, tam });
   }
-  // Los números impresos: en el sitio de un número, una mancha más alta que ancha (medida en mm, para
-  // que no engañe una foto de lado) es la cifra; un agujero es redondo. Y si un anillo tiene manchas
-  // en 3 o 4 de las rayas, son sus números.
-  const alta = (a: Agujero) => {
-    const k = manchaDe.get(a);
-    return !!k && (k.y1 - k.y0 + 1) * mmPx.y > 1.5 * (k.x1 - k.x0 + 1) * mmPx.x;
-  };
-  const rayas = new Map<number, Set<number>>();
-  for (const a of res) {
-    const n = a.grupo ? null : numeroEn(a.x, a.y);
-    if (n) rayas.set(n.v, (rayas.get(n.v) ?? new Set()).add(n.raya));
-  }
-  return res.filter((a) => {
-    const n = a.grupo ? null : numeroEn(a.x, a.y);
-    return !n || ((rayas.get(n.v)?.size ?? 0) < 3 && !alta(a));
-  });
+  return res.filter((a) => a.grupo || !esCifra(a.x, a.y));
 }

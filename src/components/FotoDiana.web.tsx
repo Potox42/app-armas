@@ -100,7 +100,16 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
     const c = lienzo.getContext('2d')!;
     c.fillStyle = '#000';
     c.fillRect(0, 0, lienzo.width, lienzo.height);
-    c.drawImage(foto.lienzo, cal.cx - mitad, cal.cy - mitad, 2 * mitad, 2 * mitad, 0, 0, lienzo.width, lienzo.height);
+    // Solo la parte del recorte que cae dentro de la foto: Safari en el iPhone no respeta las
+    // proporciones si el recorte se sale de la imagen y la dibuja estirada.
+    const sx0 = Math.max(0, cal.cx - mitad), sy0 = Math.max(0, cal.cy - mitad);
+    const sx1 = Math.min(foto.lienzo.width, cal.cx + mitad), sy1 = Math.min(foto.lienzo.height, cal.cy + mitad);
+    if (sx1 > sx0 && sy1 > sy0) {
+      c.drawImage(
+        foto.lienzo, sx0, sy0, sx1 - sx0, sy1 - sy0,
+        (sx0 - (cal.cx - mitad)) * k, (sy0 - (cal.cy - mitad)) * k, (sx1 - sx0) * k, (sy1 - sy0) * k,
+      );
+    }
     const aPantalla = (x: number, y: number) => [(x - (cal.cx - mitad)) * k, (y - (cal.cy - mitad)) * k] as const;
     c.strokeStyle = '#2ECC71';
     c.lineWidth = 2 * devicePixelRatio;
