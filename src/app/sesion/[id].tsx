@@ -4,12 +4,14 @@ import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import { Anillo, Cifra } from '@/components/Cifra';
 import { CamaraDiana } from '@/components/CamaraDiana';
 import { Diana } from '@/components/Diana';
+import { FotoDiana } from '@/components/FotoDiana';
 import { GraficaDisparos } from '@/components/GraficaDisparos';
 import { Icon } from '@/components/Icon';
 import { Button, Card, Screen, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import type { Sesion } from '@/data/types';
 import { confirmar } from '@/lib/confirmar';
+import { geometria } from '@/lib/diana';
 import { formatear } from '@/lib/fechas';
 import { volver } from '@/lib/volver';
 import { agrupacion, conPosicion, extremos, formatoMedia, media, sumaSerie, todosLosDisparos, totalSesion } from '@/lib/sesiones';
@@ -42,6 +44,8 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   const anteriores = sesion.series.slice(0, -1).flatMap((x) => x.disparos);
   const teclado = sesion.registro === 'teclado';
   const camara = sesion.registro === 'camara';
+  const foto = sesion.registro === 'foto';
+  const { diana: modelo, calibre } = geometria(sesion);
   const valores = serie.disparos.map((d) => d.valor);
   const { width: ancho, height: alto } = useWindowDimensions();
   const horizontal = ancho > alto && alto < 600;
@@ -103,7 +107,22 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   );
 
   const camaraVista = camara && (
-    <CamaraDiana activo={!completa} horizontal={horizontal} onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)} />
+    <CamaraDiana
+      activo={!completa}
+      horizontal={horizontal}
+      modelo={modelo}
+      calibre={calibre}
+      onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)}
+    />
+  );
+
+  const fotoVista = foto && (
+    <FotoDiana
+      modelo={modelo}
+      calibre={calibre}
+      faltan={Math.max(0, sesion.disparosPorSerie - serie.disparos.length)}
+      onApuntar={(puntos) => store.anadirDisparos(sesion.id, puntos)}
+    />
   );
 
   const diana = (lado: number) => (
@@ -111,6 +130,8 @@ function Asistente({ sesion }: { sesion: Sesion }) {
       <View style={{ alignItems: 'center' }}>
         <Diana
           tamano={lado}
+          modelo={modelo}
+          calibre={calibre}
           disparos={serie.disparos}
           anteriores={anteriores}
           onToque={completa ? undefined : (x, y) => store.anadirDisparo(sesion.id, x, y)}
@@ -121,7 +142,9 @@ function Asistente({ sesion }: { sesion: Sesion }) {
           ? 'Serie completa'
           : camara
             ? 'Si la cámara se salta un disparo, tócalo en la diana; si apunta uno de más, pulsa Deshacer.'
-            : 'Toca la diana donde ha entrado el disparo'}
+            : foto
+              ? 'Los disparos de la foto salen aquí. Si falta alguno, tócalo en la diana; si sobra, pulsa Deshacer.'
+              : 'Toca la diana donde ha entrado el disparo'}
       </Text>
     </>
   );
@@ -151,7 +174,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
       <Screen title={titulo} kicker={kicker} back="/entrenar" compacto>
         <View style={st.cabina}>
           <View style={{ flex: 1.5, gap: space.sm }}>
-            {teclado ? tecladoNumeros : camara ? camaraVista : diana(ladoDiana)}
+            {teclado ? tecladoNumeros : camara ? camaraVista : foto ? fotoVista : diana(ladoDiana)}
           </View>
           <View style={{ flex: 1, gap: space.sm }}>
             {cifras}
@@ -175,6 +198,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
       ) : (
         <>
           {camaraVista}
+          {fotoVista}
           {diana(tamano)}
           {grafica}
         </>
@@ -185,6 +209,14 @@ function Asistente({ sesion }: { sesion: Sesion }) {
           <Icon name="target" color={colors.accent} />
           <Text style={[s.muted, { flex: 1 }]}>
             ¿Tienes el móvil en el catalejo? Toca aquí y la cámara apuntará cada impacto sola.
+          </Text>
+        </Card>
+      )}
+      {!teclado && !foto && (
+        <Card style={st.camara} onPress={() => store.cambiarRegistro(sesion.id, 'foto')}>
+          <Icon name="doc" color={colors.accent} />
+          <Text style={[s.muted, { flex: 1 }]}>
+            ¿Tienes la diana en la mano? Toca aquí, hazle una foto y la app cuenta los puntos.
           </Text>
         </Card>
       )}
@@ -307,7 +339,7 @@ function Resumen({ sesion }: { sesion: Sesion }) {
         <>
           <SectionTitle>Todos los impactos</SectionTitle>
           <View style={{ alignItems: 'center' }}>
-            <Diana tamano={tamano} disparos={[]} anteriores={disparos} grupo={g} />
+            <Diana tamano={tamano} modelo={geometria(sesion).diana} calibre={geometria(sesion).calibre} disparos={[]} anteriores={disparos} grupo={g} />
           </View>
           <Card style={st.centro}>
             <Icon name="target" color={colors.accent} />

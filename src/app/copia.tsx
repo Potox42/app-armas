@@ -8,7 +8,7 @@ import { useStore } from '@/data/store';
 import { compartirArchivo, elegirArchivo } from '@/lib/archivo';
 import { confirmar } from '@/lib/confirmar';
 import { abrirCopia, crearCopia, ErrorCopia, MIN_CONTRASENA } from '@/lib/copia';
-import { hoyISO } from '@/lib/fechas';
+import { formatear, hoyISO } from '@/lib/fechas';
 import { colors, space } from '@/theme';
 
 export default function Copia() {
@@ -35,6 +35,7 @@ export default function Copia() {
     try {
       const texto = await crearCopia(store.datos, clave);
       await compartirArchivo(`tirador-${hoyISO()}.tirador`, texto);
+      store.guardarAjustes({ ultimaCopia: hoyISO() });
       setHecho('Copia creada. Guárdala en Archivos o iCloud Drive y apunta la contraseña en un sitio seguro.');
       setClave('');
       setRepetida('');
@@ -85,6 +86,9 @@ export default function Copia() {
     <Screen title="Copia de seguridad" back="/perfil">
       <Text style={s.muted}>
         Tus datos solo están en este móvil. Con una copia cifrada puedes recuperarlos si cambias de iPhone o lo pierdes.
+      </Text>
+      <Text style={s.text}>
+        {store.ajustes.ultimaCopia ? `Última copia: ${formatear(store.ajustes.ultimaCopia)}` : 'Aún no has guardado ninguna copia desde este móvil.'}
       </Text>
 
       <Card style={{ gap: space.md }}>

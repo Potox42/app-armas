@@ -4,8 +4,8 @@
 // 2. Alinear: cada imagen se desplaza para que el negro quede donde estaba (vibración del soporte).
 // 3. Comparar: resta la imagen de referencia tras un filtro paso alto (quita cambios de luz).
 //    Una mancha nueva del tamaño de un calibre es el impacto.
-// 4. Puntuar con la geometría oficial de la diana (lib/diana.ts).
-import { CALIBRE_22_MM, DIAMETRO_NEGRO_MM, puntuar } from './diana';
+// 4. Puntuar con la geometría oficial de la diana de la sesión (lib/diana.ts).
+import { DIANAS, puntuar, type ModeloDiana } from './diana';
 
 export interface Gris {
   w: number;
@@ -27,6 +27,11 @@ export interface Impacto {
   x: number; // mm desde el centro, a la derecha
   y: number; // mm desde el centro, hacia abajo
   valor: number;
+}
+
+/** Diámetro del anillo más exterior de la diana (el 1, o el 5 en la de tiro rápido). */
+export function diametroExterior(diana: ModeloDiana): number {
+  return Math.max(...Object.values(diana.anillos));
 }
 
 /** Media de cada punto en un cuadrado de lado 2r+1 (con imagen integral: rápido para cualquier r). */
@@ -106,12 +111,12 @@ function manchas(m: Uint8Array, w: number, h: number): Mancha[] {
  * Localiza el círculo negro. Solo mira el centro de la imagen (el borde del ocular sale oscuro)
  * y suaviza antes para que las rayas blancas de los anillos no lo partan en trozos.
  */
-export function calibrar(g: Gris): Calibracion | null {
+export function calibrar(g: Gris, alcance = 0.48): Calibracion | null {
   const { w, h } = g;
   const lado = Math.min(w, h);
   const r = Math.max(1, Math.round(lado / 160));
   const s = desenfocar(g, r);
-  const cx0 = w / 2, cy0 = h / 2, rMax = 0.48 * lado;
+  const cx0 = w / 2, cy0 = h / 2, rMax = alcance * lado;
   const dentro = (x: number, y: number) => (x - cx0) ** 2 + (y - cy0) ** 2 < rMax * rMax;
   const valores: number[] = [];
   for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) if (dentro(x, y)) valores.push(s.d[y * w + x]);
@@ -136,8 +141,8 @@ export function calibrar(g: Gris): Calibracion | null {
 }
 
 /** Paso alto: los detalles pequeños (agujeros, rayas) sin la luz general ni el viñeteado. */
-export function detalle(g: Gris, cal: Calibracion): Gris {
-  const pxMm = (cal.rx + cal.ry) / DIAMETRO_NEGRO_MM;
+export function detalle(g: Gris, cal: Calibracion, diana: ModeloDiana = DIANAS.precision): Gris {
+  const pxMm = (cal.rx + cal.ry) / diana.negro;
   const fino = desenfocar(g, Math.max(1, Math.round(pxMm * 0.8)));
   const grueso = desenfocar(g, Math.max(4, Math.round(pxMm * 10)));
   const o = new Float32Array(g.w * g.h);
@@ -197,9 +202,9 @@ export function afinar(ref: Gris, actual: Gris, dx: number, dy: number, cal: Cal
   return mejor;
 }
 
-/** Píxeles → mm sobre la diana, con la escala del círculo negro (100 mm de radio). */
-export function aMm(cal: Calibracion, x: number, y: number): { x: number; y: number } {
-  const radio = DIAMETRO_NEGRO_MM / 2;
+/** Píxeles → mm sobre la diana, con la escala del círculo negro (en la de precisión, 100 mm de radio). */
+export function aMm(cal: Calibracion, x: number, y: number, diana: ModeloDiana = DIANAS.precision): { x: number; y: number } {
+  const radio = diana.negro / 2;
   return { x: ((x - cal.cx) / cal.rx) * radio, y: ((y - cal.cy) / cal.ry) * radio };
 }
 
@@ -212,10 +217,13 @@ export interface Comparacion {
  * Compara la imagen actual (ya en paso alto y alineada) con la de referencia y busca
  * una mancha nueva del tamaño de un agujero dentro de la zona de la diana que se ve.
  */
-export function comparar(ref: Gris, actual: Gris, cal: Calibracion, calibreMm = CALIBRE_22_MM): Comparacion {
+export function comparar(
+  ref: Gris, actual: Gris, cal: Calibracion, calibreMm = DIANAS.precision.calibre, diana: ModeloDiana = DIANAS.precision,
+): Comparacion {
   const { w, h } = ref;
-  const pxMm = (cal.rx + cal.ry) / DIAMETRO_NEGRO_MM;
-  const rZona = 2.4 * Math.max(cal.rx, cal.ry); // hasta el anillo 1 (500 mm), si se ve
+  const pxMm = (cal.rx + cal.ry) / diana.negro;
+  // Hasta el último anillo, si se ve (en la de precisión, 2,4 radios del negro, como siempre).
+  const rZona = Math.max(1.1, 0.96 * (diametroExterior(diana) / diana.negro)) * Math.max(cal.rx, cal.ry);
   const borde = 4;
   const m = new Uint8Array(w * h);
   let zona = 0, cambiados = 0;
@@ -244,8 +252,8 @@ export function comparar(ref: Gris, actual: Gris, cal: Calibracion, calibreMm = 
   if (!candidatas.length) return { impacto: null, cambio };
   const k = candidatas.reduce((a, b) => (b.area > a.area ? b : a));
   const xPx = k.sx / k.area, yPx = k.sy / k.area;
-  const mm = aMm(cal, xPx, yPx);
-  return { impacto: { xPx, yPx, x: mm.x, y: mm.y, valor: puntuar(mm.x, mm.y, calibreMm) }, cambio };
+  const mm = aMm(cal, xPx, yPx, diana);
+  return { impacto: { xPx, yPx, x: mm.x, y: mm.y, valor: puntuar(mm.x, mm.y, calibreMm, diana) }, cambio };
 }
 
 /**
@@ -255,6 +263,14 @@ export function comparar(ref: Gris, actual: Gris, cal: Calibracion, calibreMm = 
  * pasa a ser la referencia.
  */
 export class Vigia {
+  private diana: ModeloDiana;
+  private calibreMm: number;
+
+  constructor(diana: ModeloDiana = DIANAS.precision, calibreMm = diana.calibre) {
+    this.diana = diana;
+    this.calibreMm = calibreMm;
+  }
+
   cal: Calibracion | null = null;
   private ref: Gris | null = null;
   private pendiente: Impacto | null = null;
@@ -274,13 +290,13 @@ export class Vigia {
       this.estables = quieta ? this.estables + 1 : 0;
       if (this.estables < 2) return { estado: 'calibrando', cal };
       this.cal = cal;
-      this.ref = detalle(g, cal);
+      this.ref = detalle(g, cal, this.diana);
       return { estado: 'vigilando', cal };
     }
-    const det = detalle(g, this.cal);
+    const det = detalle(g, this.cal, this.diana);
     const { dx, dy } = afinar(this.ref!, det, this.cal.cx - cal.cx, this.cal.cy - cal.cy, this.cal);
     const alineada = desplazar(det, dx, dy);
-    const { impacto, cambio } = comparar(this.ref!, alineada, this.cal);
+    const { impacto, cambio } = comparar(this.ref!, alineada, this.cal, this.calibreMm, this.diana);
     if (cambio > 0.05) {
       // Ha cambiado demasiado (se ha movido el móvil o la luz): nueva referencia sin contar nada.
       this.ref = alineada;
@@ -291,7 +307,7 @@ export class Vigia {
       this.pendiente = null;
       return { estado: 'vigilando', cal: this.cal };
     }
-    const r = 2 * (CALIBRE_22_MM / 2) * ((this.cal.rx + this.cal.ry) / DIAMETRO_NEGRO_MM) + 2;
+    const r = 2 * (this.calibreMm / 2) * ((this.cal.rx + this.cal.ry) / this.diana.negro) + 2;
     if (this.pendiente && Math.hypot(impacto.xPx - this.pendiente.xPx, impacto.yPx - this.pendiente.yPx) < r) {
       this.pendiente = null;
       this.ref = alineada;
@@ -311,4 +327,119 @@ export class Vigia {
     this.previa = null;
     this.estables = 0;
   }
+}
+
+/** Agujero encontrado en una foto de la diana; `veces` > 1 si parece que varios disparos entraron juntos. */
+export interface Agujero extends Impacto {
+  veces: number;
+  tam: number; // área de la mancha / área de una bala
+}
+
+/**
+ * Busca los agujeros en UNA foto de la diana ya tirada (sin imagen de referencia).
+ * 1. Con la calibración se dibuja cómo sería la diana limpia: negro dentro de la elipse y papel
+ *    fuera, con el nivel de luz de cada zona medido en la propia foto (así da igual la sombra).
+ * 2. Se resta de la foto suavizada (el suavizado borra las rayas finas de los anillos).
+ * 3. Lo que sobra con tamaño de bala es un agujero: más claro en el negro, más oscuro en el blanco.
+ *    Una mancha de 2 o 3 balas cuenta como 2 o 3 disparos.
+ * Es una propuesta: el tirador la revisa (quita o añade agujeros) antes de apuntarla.
+ */
+export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, calibreMm: number): Agujero[] {
+  const { w, h, d } = g;
+  const pxMm = (cal.rx + cal.ry) / diana.negro;
+  const rAgujero = (calibreMm / 2) * pxMm;
+  const rZona = Math.max(1.05, (diametroExterior(diana) / diana.negro) * 1.02);
+  const zonaDe = (x: number, y: number) => Math.sqrt(((x - cal.cx) / cal.rx) ** 2 + ((y - cal.cy) / cal.ry) ** 2);
+
+  // Niveles de luz locales del negro y del papel: media ponderada en una ventana grande.
+  const enNegro = new Float32Array(w * h), enPapel = new Float32Array(w * h);
+  const vNegro = new Float32Array(w * h), vPapel = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x, z = zonaDe(x, y);
+      // Lejos del borde del negro, para no mezclar niveles.
+      if (z < 0.92) { enNegro[i] = 1; vNegro[i] = d[i]; } else if (z > 1.08 && z < rZona) { enPapel[i] = 1; vPapel[i] = d[i]; }
+    }
+  }
+  const rLuz = Math.max(4, Math.round(cal.rx * 0.35));
+  const sumN = desenfocar({ w, h, d: vNegro }, rLuz), pesN = desenfocar({ w, h, d: enNegro }, rLuz);
+  const sumP = desenfocar({ w, h, d: vPapel }, rLuz), pesP = desenfocar({ w, h, d: enPapel }, rLuz);
+  // Niveles globales por si alguna zona queda sin muestras.
+  let tn = 0, nn = 0, tp = 0, np = 0;
+  for (let i = 0; i < w * h; i++) {
+    if (enNegro[i]) { tn += d[i]; nn++; }
+    if (enPapel[i]) { tp += d[i]; np++; }
+  }
+  const negroG = nn ? tn / nn : 30, papelG = np ? tp / np : 220;
+  const contraste = Math.max(40, papelG - negroG);
+
+  const suave = desenfocar(g, Math.max(1, Math.round(rAgujero * 0.45)));
+  // La plantilla también se suaviza igual, para que el borde del negro no deje un anillo de restos.
+  const plantilla = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const n = pesN.d[i] > 0.05 ? sumN.d[i] / pesN.d[i] : negroG;
+      const p = pesP.d[i] > 0.05 ? sumP.d[i] / pesP.d[i] : papelG;
+      plantilla[i] = zonaDe(x, y) < 1 ? n : p;
+    }
+  }
+  const plant = desenfocar({ w, h, d: plantilla }, Math.max(1, Math.round(rAgujero * 0.45)));
+
+  const umbral = 0.3 * contraste;
+  const m = new Uint8Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const z = zonaDe(x, y);
+      if (z > rZona) continue;
+      const i = y * w + x;
+      const dif = suave.d[i] - plant.d[i];
+      // Junto al borde del negro cualquier pequeño error de la elipse deja restos: se pide el doble.
+      const u = Math.abs(z - 1) * cal.rx < rAgujero * 1.2 ? 2 * umbral : umbral;
+      if (z < 1 ? dif > u : dif < -u) m[i] = 1;
+    }
+  }
+
+  // Los números de los anillos (del 1 al 8, en las dos rayas que cruzan la diana) se parecen a un
+  // agujero: lo que cae justo encima de un número se descarta (si era un disparo, se añade a mano).
+  const paso = (diana.anillos[8] - diana.anillos[9]) / 2;
+  // Posición de número: en una de las cuatro rayas (arriba, abajo, izquierda, derecha), en el centro
+  // de un anillo del 1 al 8. Devuelve el anillo y la raya (0-3), o null.
+  const numeroEn = (x: number, y: number): { v: number; raya: number } | null => {
+    const r = Math.hypot(x, y);
+    const grados = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+    const raya = Math.round(grados / 90) % 4;
+    if (Math.abs(grados - Math.round(grados / 90) * 90) > 8) return null;
+    for (const [v, dm] of Object.entries(diana.anillos)) {
+      if (Number(v) <= 8 && Math.abs(r - (dm / 2 - paso / 2)) < 0.45 * paso) return { v: Number(v), raya };
+    }
+    return null;
+  };
+
+  const esperada = Math.PI * rAgujero * rAgujero;
+  const res: Agujero[] = [];
+  for (const k of manchas(m, w, h)) {
+    const bw = k.x1 - k.x0 + 1, bh = k.y1 - k.y0 + 1;
+    if (k.area < 0.55 * esperada) continue;
+    // Más alargado que dos balas juntas o más grande que 4: no es un agujero (números, rayas, bordes).
+    if (bw / bh > 2.6 || bh / bw > 2.6 || k.area > 4.5 * esperada) continue;
+    if (k.area / (bw * bh) < 0.35) continue;
+    // Un agujero suelto mide entre 0,9 y 1,5 balas (el borde roto y el suavizado lo agrandan).
+    const tam = k.area / esperada;
+    const veces = tam < 1.75 ? 1 : Math.min(4, Math.round(tam / 1.2));
+    const xPx = k.sx / k.area, yPx = k.sy / k.area;
+    const mm = aMm(cal, xPx, yPx, diana);
+    res.push({ xPx, yPx, x: mm.x, y: mm.y, valor: puntuar(mm.x, mm.y, calibreMm, diana), veces, tam });
+  }
+  // Un número sale en las cuatro rayas: si un anillo tiene manchas en 3 o 4 de ellas, son sus
+  // números y se quitan. Un disparo suelto encima de un número se queda.
+  const rayas = new Map<number, Set<number>>();
+  for (const a of res) {
+    const n = numeroEn(a.x, a.y);
+    if (n) rayas.set(n.v, (rayas.get(n.v) ?? new Set()).add(n.raya));
+  }
+  return res.filter((a) => {
+    const n = numeroEn(a.x, a.y);
+    return !n || (rayas.get(n.v)?.size ?? 0) < 3;
+  });
 }

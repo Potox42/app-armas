@@ -5,6 +5,7 @@ import { FotoArma } from '@/components/FotoArma';
 import { Button, Card, Screen, Segmented, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import type { Modalidad, Registro } from '@/data/types';
+import { calibreEnMm, DIANAS, dianaPara } from '@/lib/diana';
 import { colors, radius, space } from '@/theme';
 
 const DISTANCIAS = [25, 50, 10];
@@ -21,11 +22,16 @@ export default function NuevaSesion() {
   const [series, setSeries] = useState(String(ultima?.seriesPrevistas ?? 0) as '0' | '4' | '6');
   const [registro, setRegistro] = useState<Registro>(ultima?.registro ?? 'diana');
 
+  const arma = armas.find((a) => a.id === armaId);
+  const diana = DIANAS[dianaPara(modalidad, distancia, arma?.tipo)];
+  // En aire comprimido el balín es de 4,5 mm aunque el arma no lo diga.
+  const calibreMm = distancia === 10 ? diana.calibre : calibreEnMm(arma?.calibre, diana.calibre);
+
   const empezar = () => {
     if (!armaId) return;
     const id = store.nuevaSesion({
       armaId, modalidad, distancia, municion: municion.trim(), disparosPorSerie: Number(porSerie),
-      seriesPrevistas: Number(series) || undefined, registro,
+      seriesPrevistas: Number(series) || undefined, registro, diana: diana.id, calibreMm,
     });
     router.replace(`/sesion/${id}`);
   };
@@ -90,6 +96,7 @@ export default function NuevaSesion() {
         onChange={setRegistro}
         options={[
           { value: 'camara', label: 'Cámara' },
+          { value: 'foto', label: 'Foto' },
           { value: 'diana', label: 'Diana' },
           { value: 'teclado', label: 'Números' },
         ]}
@@ -97,12 +104,16 @@ export default function NuevaSesion() {
       <Text style={s.muted}>
         {registro === 'camara'
           ? 'Pon el móvil en el catalejo apuntando a la diana: la app ve cada impacto nuevo y lo apunta solo, con su puntuación y su sitio.'
-          : registro === 'diana'
+          : registro === 'foto'
+            ? 'Al acabar la serie haces una foto a la diana: la app propone los agujeros y su puntuación, y tú los revisas.'
+            : registro === 'diana'
             ? 'Marcas dónde entró cada disparo: la app calcula la puntuación y tu agrupación.'
             : 'Más rápido: tocas la puntuación de cada disparo (10, 9, 8…). No guarda dónde entró.'}
       </Text>
 
-      <Text style={[s.muted, { marginTop: space.sm }]}>Diana: pistola precisión ISSF (25 m / 50 m)</Text>
+      <Text style={[s.muted, { marginTop: space.sm }]}>
+        Diana: {diana.nombre} · bala de {String(calibreMm).replace('.', ',')} mm{arma?.calibre && distancia !== 10 ? ` (${arma.calibre})` : ''}
+      </Text>
       <Button title="Empezar" onPress={empezar} />
     </Screen>
   );

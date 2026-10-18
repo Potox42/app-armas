@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MiniDiana } from '@/components/Diana';
+import { geometria } from '@/lib/diana';
 import { Degradado } from '@/components/Degradado';
 import { Icon } from '@/components/Icon';
 import { Card, Screen, SectionTitle, s } from '@/components/ui';
@@ -36,7 +37,7 @@ export default function Entrenar() {
         const disparos = todosLosDisparos(x);
         return (
           <Card key={x.id} onPress={() => router.push(`/sesion/${x.id}`)} style={st.fila}>
-            <View style={st.mini}><MiniDiana disparos={disparos} tamano={52} /></View>
+            <View style={st.mini}><MiniDiana disparos={disparos} tamano={52} modelo={geometria(x).diana} /></View>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={st.nombre} numberOfLines={1}>{a ? `${a.marca} ${a.modelo}` : 'Arma'} · {x.distancia} m</Text>
               <Text style={s.muted} numberOfLines={1}>{formatear(x.fecha.slice(0, 10))} · {disparos.length} disparos</Text>

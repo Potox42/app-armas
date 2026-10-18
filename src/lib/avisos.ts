@@ -1,10 +1,10 @@
 import type { Arma, Datos, Licencia } from '@/data/types';
 import { competiciones, cuandoEs } from './competiciones';
-import { diasHasta, mesAnio, plazo } from './fechas';
+import { diasHasta, hoyISO, mesAnio, plazo } from './fechas';
 import { estadoMunicion } from './municion';
 
 export type Nivel = 'rojo' | 'naranja' | 'verde';
-export type TipoAviso = 'licencia' | 'revista' | 'carnet' | 'pase' | 'limpieza' | 'competicion' | 'municion';
+export type TipoAviso = 'licencia' | 'revista' | 'carnet' | 'pase' | 'limpieza' | 'competicion' | 'municion' | 'copia' | 'actividad';
 
 export interface Aviso {
   id: string;
@@ -129,6 +129,11 @@ export function calcularAvisos(datos: Datos): Aviso[] {
     });
   }
 
+  const copia = avisoCopia(datos);
+  if (copia) avisos.push(copia);
+  const actividad = avisoActividad(datos);
+  if (actividad) avisos.push(actividad);
+
   const f = datos.federacion;
   if (!f.caducidadCarnet) return avisos.sort((x, y) => x.orden - y.orden);
   const diasCarnet = diasHasta(f.caducidadCarnet);
@@ -155,4 +160,49 @@ export function calcularAvisos(datos: Datos): Aviso[] {
   }
 
   return avisos.sort((x, y) => x.orden - y.orden);
+}
+
+/**
+ * Copia de seguridad: los datos solo están en este móvil. Se recuerda si nunca se ha guardado una
+ * copia o si la última tiene más de 30 días (más de 90: rojo). No con los datos de ejemplo.
+ */
+export function avisoCopia(datos: Datos, hoy = hoyISO()): Aviso | null {
+  if (datos.esEjemplo !== false) return null;
+  if (datos.armas.length === 0 && datos.permiso.licencias.length === 0) return null;
+  const ultima = datos.ajustes?.ultimaCopia;
+  const dias = ultima ? -diasHasta(ultima, hoy) : null;
+  if (dias !== null && dias < 30) return null;
+  return {
+    id: 'copia',
+    tipo: 'copia',
+    titulo: 'Copia de seguridad',
+    detalle: dias === null ? 'Aún no has guardado ninguna copia' : `La última es de hace ${dias} días`,
+    nivel: dias !== null && dias >= 90 ? 'rojo' : 'naranja',
+    orden: dias !== null && dias >= 90 ? 2 : 50,
+  };
+}
+
+/**
+ * Licencia F: se pierde tras un año sin actividad deportiva de tiro (art. 138 del Reglamento de
+ * Armas, RD 137/1993). Se mira la última competición pasada a la que estabas apuntado: naranja a
+ * los 9 meses, rojo al año. Es un recordatorio: qué tiradas valen lo certifica la federación.
+ */
+export function avisoActividad(datos: Datos, hoy = hoyISO()): Aviso | null {
+  const f = datos.permiso.licencias.find((l) => l.tipo === 'F' && diasHasta(l.caducidad, hoy) >= 0);
+  if (!f) return null;
+  const pasadas = competiciones(datos).filter((c) => c.inscrito && c.fecha <= hoy);
+  const ultima = pasadas.reduce<string | null>((m, c) => (!m || c.fecha > m ? c.fecha : m), null);
+  const dias = ultima ? -diasHasta(ultima, hoy) : null;
+  if (dias !== null && dias < 270) return null;
+  const meses = dias === null ? 0 : Math.floor(dias / 30.4);
+  return {
+    id: 'actividad',
+    tipo: 'actividad',
+    titulo: 'Actividad para la licencia F',
+    detalle: dias === null
+      ? 'No tienes ninguna tirada apuntada en el último año'
+      : `Tu última tirada fue hace ${meses} meses`,
+    nivel: dias !== null && dias >= 365 ? 'rojo' : 'naranja',
+    orden: dias !== null && dias >= 365 ? 1 : 60,
+  };
 }

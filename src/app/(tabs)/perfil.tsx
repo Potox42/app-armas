@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { Alert, Platform, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Avatar } from '@/components/Avatar';
+import { Campo } from '@/components/Formulario';
 import { Icon, type IconName } from '@/components/Icon';
 import { Button, Card, Screen, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { confirmar } from '@/lib/confirmar';
 import { avisoDePrueba, avisosDisponibles, pedirPermisoAvisos } from '@/lib/notificaciones';
+import { comprobarPin, crearPin, LARGO_MAX, LARGO_MIN, pinValido } from '@/lib/pin';
 import { autenticar, motivoSinBloqueo } from '@/lib/seguridad';
 import { colors, space } from '@/theme';
 
@@ -67,12 +69,16 @@ export default function Perfil() {
         </View>
       </Card>
       <Card style={{ gap: space.lg }}>
-        <Ajuste
-          titulo="Bloqueo con Face ID"
-          detalle={sinBloqueo ?? 'Pide Face ID al abrir la app y al volver a ella.'}
-          valor={ajustes.bloqueo}
-          onChange={cambiarBloqueo}
-        />
+        {Platform.OS === 'web' ? (
+          <AjustePin />
+        ) : (
+          <Ajuste
+            titulo="Bloqueo con Face ID"
+            detalle={sinBloqueo ?? 'Pide Face ID al abrir la app y al volver a ella.'}
+            valor={ajustes.bloqueo}
+            onChange={cambiarBloqueo}
+          />
+        )}
         <Ajuste
           titulo="Avisos en el móvil"
           detalle={store.esEjemplo
@@ -120,5 +126,63 @@ export default function Perfil() {
         </Card>
       )}
     </Screen>
+  );
+}
+
+/** Versión web: en el navegador no hay Face ID, así que la app se bloquea con un PIN propio. */
+function AjustePin() {
+  const store = useStore();
+  const activo = !!store.ajustes.pin;
+  const [abierto, setAbierto] = useState(false);
+  const [uno, setUno] = useState('');
+  const [dos, setDos] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const cerrar = () => {
+    setAbierto(false);
+    setUno('');
+    setDos('');
+    setError(null);
+  };
+
+  const guardar = () => {
+    if (!activo) {
+      if (!pinValido(uno)) return setError(`El PIN tiene que tener de ${LARGO_MIN} a ${LARGO_MAX} números.`);
+      if (uno !== dos) return setError('Los dos PIN no coinciden.');
+      store.guardarAjustes({ pin: crearPin(uno) });
+    } else {
+      if (!comprobarPin(store.ajustes.pin!, uno)) return setError('PIN incorrecto.');
+      store.guardarAjustes({ pin: undefined });
+    }
+    cerrar();
+  };
+
+  return (
+    <View style={{ gap: space.md }}>
+      <Ajuste
+        titulo="Bloqueo con PIN"
+        detalle={activo
+          ? 'Pide el PIN al abrir la app y al volver a ella.'
+          : 'En la app web no hay Face ID: protege tus datos con un PIN de 4 a 6 números.'}
+        valor={activo || abierto}
+        onChange={(v) => (v === activo ? cerrar() : setAbierto(true))}
+      />
+      {abierto && (
+        <View style={{ gap: space.sm }}>
+          <Campo etiqueta={activo ? 'Escribe tu PIN para quitarlo' : 'Nuevo PIN'} valor={uno} onChange={setUno} teclado="number-pad" secreto />
+          {!activo && <Campo etiqueta="Repite el PIN" valor={dos} onChange={setDos} teclado="number-pad" secreto />}
+          {!activo && (
+            <Text style={[s.muted, { fontSize: 12 }]}>
+              Si lo olvidas, para entrar habrá que borrar los datos de este móvil y recuperar tu copia de seguridad. Haz una copia antes.
+            </Text>
+          )}
+          {error && <Text style={{ color: colors.red }}>{error}</Text>}
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <View style={{ flex: 1 }}><Button title="Cancelar" variant="secondary" onPress={cerrar} /></View>
+            <View style={{ flex: 1 }}><Button title={activo ? 'Quitar PIN' : 'Guardar PIN'} onPress={guardar} /></View>
+          </View>
+        </View>
+      )}
+    </View>
   );
 }

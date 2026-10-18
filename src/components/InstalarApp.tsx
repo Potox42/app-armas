@@ -5,7 +5,7 @@ import { Icon } from './Icon';
 import { Card } from './ui';
 
 /** ¿Se está usando la web desde el navegador (no instalada en la pantalla de inicio)? */
-function enNavegador(): boolean {
+export function enNavegador(): boolean {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
   const standalone = window.matchMedia?.('(display-mode: standalone)').matches
     || (navigator as Navigator & { standalone?: boolean }).standalone;
@@ -92,3 +92,20 @@ const st = StyleSheet.create({
   },
   botonTexto: { color: colors.text, fontWeight: '700', fontSize: 15 },
 });
+
+/**
+ * En el iPhone, Safari y la app del icono de la pantalla de inicio guardan los datos por separado:
+ * lo que se apunta en uno no aparece en el otro. Si ya está instalada, se avisa al abrirla en Safari.
+ */
+export function AvisoSafari() {
+  if (!enNavegador() || !/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) return null;
+  return (
+    <Card style={{ gap: space.sm, borderColor: colors.orange }}>
+      <Text style={st.titulo}>Estás en el navegador, no en la app del icono</Text>
+      <Text style={st.texto}>
+        En el iPhone, Safari y la app de la pantalla de inicio guardan los datos por separado: lo que apuntes aquí no
+        aparecerá en el icono. Si ya la tienes instalada, ábrela desde su icono y usa siempre esa.
+      </Text>
+    </Card>
+  );
+}

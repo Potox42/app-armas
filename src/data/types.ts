@@ -1,3 +1,5 @@
+import type { IdDiana } from '@/lib/diana';
+
 export type TipoLicencia = 'F' | 'D' | 'E';
 
 /** Una fila de la tarjeta de licencia de armas: tipo, válida desde y válida hasta. */
@@ -86,8 +88,8 @@ export interface Serie {
   disparos: Disparo[];
 }
 
-/** Cómo se apuntan los disparos: tocando la diana, con números o con la cámara en el catalejo. */
-export type Registro = 'diana' | 'teclado' | 'camara';
+/** Cómo se apuntan los disparos: tocando la diana, con números, con la cámara en el catalejo o con una foto. */
+export type Registro = 'diana' | 'teclado' | 'camara' | 'foto';
 
 export interface Sesion {
   id: string;
@@ -99,6 +101,8 @@ export interface Sesion {
   disparosPorSerie: number;
   seriesPrevistas?: number; // sin valor: series libres
   registro?: Registro; // cómo se apuntan los disparos (por defecto, tocando la diana)
+  diana?: IdDiana; // diana con la que se puntúa (sin valor: pistola precisión 25 m)
+  calibreMm?: number; // diámetro de la bala para la regla de «toca la línea» (sin valor: el de la diana)
   series: Serie[];
   terminada: boolean;
 }
@@ -121,6 +125,8 @@ export interface Ajustes {
   bloqueo: boolean; // pedir Face ID al abrir la app
   avisos: boolean; // notificaciones locales de caducidades
   bienvenida?: boolean; // ya se mostró la pantalla de bienvenida
+  ultimaCopia?: string; // ISO: última copia de seguridad guardada desde este móvil
+  pin?: { sal: string; hash: string; largo: number }; // bloqueo con PIN en la versión web (SHA-256 con sal)
 }
 
 export interface Datos {

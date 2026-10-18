@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Redirect, router, type Href } from 'expo-router';
 import { Avatar } from '@/components/Avatar';
 import { Anillo, Cifra } from '@/components/Cifra';
-import { InstalarApp } from '@/components/InstalarApp';
+import { AvisoSafari, InstalarApp } from '@/components/InstalarApp';
 import { Icon, type IconName } from '@/components/Icon';
 import { Degradado } from '@/components/Degradado';
 import { Button, Card, Kicker, Screen, SectionTitle, nivelColor, s } from '@/components/ui';
@@ -21,6 +21,8 @@ const ICONO_AVISO: Record<TipoAviso, IconName> = {
   carnet: 'id',
   pase: 'qr',
   limpieza: 'broom',
+  copia: 'lock',
+  actividad: 'target',
 };
 
 const ACCESOS: { titulo: string; texto: string; icono: IconName; ruta: Href }[] = [
@@ -33,7 +35,7 @@ const ACCESOS: { titulo: string; texto: string; icono: IconName; ruta: Href }[] 
 ];
 
 const rutaAviso = (a: Aviso): Href =>
-  a.armaId ? `/arma/${a.armaId}` : a.tipo === 'revista' ? '/armas' : a.tipo === 'competicion' ? '/competiciones' : a.tipo === 'municion' ? '/municion' : '/cartera';
+  a.armaId ? `/arma/${a.armaId}` : a.tipo === 'revista' ? '/armas' : a.tipo === 'competicion' || a.tipo === 'actividad' ? '/competiciones' : a.tipo === 'copia' ? '/copia' : a.tipo === 'municion' ? '/municion' : '/cartera';
 
 export default function Inicio() {
   const store = useStore();
@@ -51,6 +53,7 @@ export default function Inicio() {
 
   return (
     <Screen>
+      <AvisoSafari />
       <View style={st.hello}>
         <View style={{ flex: 1 }}>
           <Kicker>Tirador deportivo</Kicker>

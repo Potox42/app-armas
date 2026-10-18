@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AppState, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, StyleSheet, Text, View } from 'react-native';
 import { useStore } from '@/data/store';
 import { autenticar } from '@/lib/seguridad';
 import { colors, space } from '@/theme';
+import { BloqueoPin } from './BloqueoPin';
 import { Icon } from './Icon';
 import { Button } from './ui';
 
@@ -47,6 +48,7 @@ export function Bloqueo({ children }: { children: ReactNode }) {
   return (
     <>
       {children}
+      {Platform.OS === 'web' && <BloqueoPin />}
       {activado && bloqueada && (
         <View style={st.tapa}>
           <Icon name="lock" size={48} color={colors.accent} />

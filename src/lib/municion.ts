@@ -29,6 +29,7 @@ export interface EstadoMunicion {
   comprados: number; // este año, sin contar los del club
   quedan: number | null;
   enCasa: number;
+  neto: number; // compras para casa menos gastos; negativo si se ha apuntado más gasto que compra en esta arma
   maxDeposito: number;
 }
 
@@ -50,6 +51,7 @@ export function estadoMunicion(arma: Arma, hoy = hoyISO()): EstadoMunicion {
     comprados,
     quedan: cupo === null ? null : Math.max(0, cupo - comprados),
     enCasa: Math.max(0, entradas - gastos),
+    neto: entradas - gastos,
     maxDeposito: arma.maxDeposito ?? limite.deposito,
   };
 }
@@ -71,9 +73,11 @@ export function depositoPorCalibre(armas: Arma[]): DepositoCalibre[] {
     const k = claveCalibre(a.calibre);
     const g = grupos.get(k) ?? { calibre: a.calibre.trim() || 'Sin calibre', armas: [], enCasa: 0, maxDeposito: 0 };
     g.armas.push(a);
-    g.enCasa += m.enCasa;
+    // Se suma el neto (no el «en casa» de cada arma, que no baja de 0): si un gasto se apuntó en
+    // otra arma del mismo calibre, también se descuenta del total.
+    g.enCasa += m.neto;
     g.maxDeposito += m.maxDeposito;
     grupos.set(k, g);
   }
-  return [...grupos.values()];
+  return [...grupos.values()].map((g) => ({ ...g, enCasa: Math.max(0, g.enCasa) }));
 }

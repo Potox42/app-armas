@@ -28,6 +28,12 @@ export function ResumenMunicion({ m }: { m: EstadoMunicion }) {
         <Text style={s.muted}>Los cartuchos de caza no tienen límite de compra al año.</Text>
       )}
       <BarraDeposito d={{ enCasa: m.enCasa, maxDeposito: m.maxDeposito }} titulo="En casa" />
+      {m.neto < 0 && (
+        <Text style={{ color: colors.orange, fontSize: 12 }}>
+          Has apuntado {-m.neto} cartuchos más de gasto que de compra en esta arma. Si los compraste con otra arma del mismo
+          calibre, se descuentan en el total por calibre de Munición; para que cada arma cuadre, apunta el gasto en la que los compró.
+        </Text>
+      )}
     </View>
   );
 }

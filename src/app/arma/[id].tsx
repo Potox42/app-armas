@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Cifra } from '@/components/Cifra';
 import { MiniDiana } from '@/components/Diana';
+import { geometria } from '@/lib/diana';
 import { Icon } from '@/components/Icon';
 import { FotoArma } from '@/components/FotoArma';
 import { FotoCampo } from '@/components/FotoCampo';
@@ -12,6 +13,7 @@ import {
 } from '@/components/ui';
 import { useStore } from '@/data/store';
 import type { Limpieza } from '@/data/types';
+import { confirmar } from '@/lib/confirmar';
 import { disparosDesdeLimpieza, licenciaDe, nivelPorDias, proximaRevista } from '@/lib/avisos';
 import { diasHasta, formatear, mesAnio, plazo } from '@/lib/fechas';
 import { formatoMedia, media, todosLosDisparos, totalSesion } from '@/lib/sesiones';
@@ -92,7 +94,7 @@ export default function FichaArma() {
             const d = todosLosDisparos(x);
             return (
               <Card key={x.id} onPress={() => router.push(`/sesion/${x.id}`)} style={st.tirada}>
-                <View style={st.mini}><MiniDiana disparos={d} tamano={44} /></View>
+                <View style={st.mini}><MiniDiana disparos={d} tamano={44} modelo={geometria(x).diana} /></View>
                 <View style={{ flex: 1 }}>
                   <Text style={s.text}>{formatear(x.fecha.slice(0, 10))}</Text>
                   <Text style={s.muted}>{x.modalidad} · {x.distancia} m · {d.length} disparos</Text>
@@ -192,6 +194,17 @@ export default function FichaArma() {
                 <Text style={[s.text, { width: 92 }]}>{formatear(l.fecha)}</Text>
                 <Text style={[s.text, { flex: 1 }]}>Limpieza {l.tipo.toLowerCase()}</Text>
                 <Text style={s.muted}>{l.disparos.toLocaleString('es-ES')} disp.</Text>
+                <Pressable
+                  hitSlop={10}
+                  accessibilityLabel="Borrar limpieza"
+                  onPress={() =>
+                    confirmar('Borrar limpieza', `Se borrará la limpieza ${l.tipo.toLowerCase()} del ${formatear(l.fecha)}.`, () =>
+                      store.borrarLimpieza(arma.id, l.id),
+                    )
+                  }
+                >
+                  <Icon name="trash" size={18} color={colors.textMuted} />
+                </Pressable>
               </View>
             ))}
           </Card>

@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { FotoCampo, useFoto } from '@/components/FotoCampo';
 import { Icon } from '@/components/Icon';
+import { AvisosCalendario } from '@/components/AvisosCalendario';
 import { DocumentoLicencia } from '@/components/DocumentoLicencia';
 import { DatoTarjeta, EstadoTarjeta, Tarjeta } from '@/components/Tarjeta';
 import { Button, Card, FakeQr, Screen, Segmented, nivelColor, s } from '@/components/ui';
@@ -123,6 +124,8 @@ export default function Cartera() {
           </Card>
         </>
       )}
+
+      <AvisosCalendario />
     </Screen>
   );
 }

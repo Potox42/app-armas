@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { puntuar } from '@/lib/diana';
+import { geometria, puntuar } from '@/lib/diana';
 import { colors, space } from '@/theme';
 import { hoyISO } from '@/lib/fechas';
 import { cargarDatos, guardarDatos } from './db';
@@ -14,12 +14,14 @@ interface Store {
   datos: Datos;
   arma: (id: string) => Arma | undefined;
   registrarLimpieza: (armaId: string, tipo: Limpieza['tipo'], nota?: string) => void;
+  borrarLimpieza: (armaId: string, limpiezaId: string) => void;
   sumarDisparos: (armaId: string, disparos: number) => void;
   anadirMunicion: (armaId: string, m: Omit<MovimientoMunicion, 'id'>) => void;
   borrarMunicion: (armaId: string, movimientoId: string) => void;
   sesion: (id: string) => Sesion | undefined;
   nuevaSesion: (datos: Omit<Sesion, 'id' | 'fecha' | 'series' | 'terminada'>) => string;
   anadirDisparo: (sesionId: string, x: number, y: number) => void;
+  anadirDisparos: (sesionId: string, puntos: { x: number; y: number }[]) => void;
   anadirValor: (sesionId: string, valor: number) => void;
   deshacerDisparo: (sesionId: string) => void;
   nuevaSerie: (sesionId: string) => void;
@@ -127,6 +129,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ...a.limpiezas,
           ],
         })),
+      borrarLimpieza: (armaId, limpiezaId) =>
+        actualizarArma(armaId, (a) => ({ ...a, limpiezas: a.limpiezas.filter((l) => l.id !== limpiezaId) })),
       sumarDisparos: (armaId, disparos) =>
         actualizarArma(armaId, (a) => ({ ...a, disparosTotales: a.disparosTotales + disparos })),
       anadirMunicion: (armaId, m) =>
@@ -146,7 +150,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return id;
       },
       anadirDisparo: (sesionId, x, y) =>
-        actualizarSesion(sesionId, (s) => conUltimaSerie(s, (ds) => [...ds, { x, y, valor: puntuar(x, y) }])),
+        actualizarSesion(sesionId, (s) => {
+          const { diana, calibre } = geometria(s);
+          return conUltimaSerie(s, (ds) => [...ds, { x, y, valor: puntuar(x, y, calibre, diana) }]);
+        }),
+      anadirDisparos: (sesionId, puntos) =>
+        actualizarSesion(sesionId, (s) => {
+          const { diana, calibre } = geometria(s);
+          return conUltimaSerie(s, (ds) => [...ds, ...puntos.map(({ x, y }) => ({ x, y, valor: puntuar(x, y, calibre, diana) }))]);
+        }),
       anadirValor: (sesionId, valor) =>
         actualizarSesion(sesionId, (s) => conUltimaSerie(s, (ds) => [...ds, { x: 0, y: 0, valor, sinPosicion: true }])),
       deshacerDisparo: (sesionId) =>
