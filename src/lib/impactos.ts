@@ -464,7 +464,7 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
     }
     return null;
   };
-  const N = 16, lado = 0.8 * paso;
+  const N = 16, lado = 0.7 * paso;
   const parche = (xm: number, ym: number): Float32Array | null => {
     const o = new Float32Array(N * N);
     for (let j = 0; j < N; j++) {
@@ -514,22 +514,31 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
     if (!n) return false;
     const mio = parche(x, y);
     if (!mio) return false;
-    let mejor = -1, igual: Float32Array | null = null;
+    // Para cada raya, la posición donde mejor se parece; luego se afina la propia (un poco)
+    // y se queda lo que menos sobra: así un pequeño descuadre no hace ver un agujero que no hay.
+    let mejor = -1, resto = Infinity;
     for (let k = 0; k < 4; k++) {
       if (k === n.raya) continue;
       const [dx, dy] = rayas[k];
+      let pk = -1, igual: Float32Array | null = null;
       for (let oy = -0.4; oy <= 0.401; oy += 0.05) {
         for (let ox = -0.4; ox <= 0.401; ox += 0.05) {
           const otro = parche(dx * n.rc + ox * paso, dy * n.rc + oy * paso);
           if (!otro) continue;
           const p = parecido(mio, otro);
-          if (p > mejor) { mejor = p; igual = otro; }
+          if (p > pk) { pk = p; igual = otro; }
+        }
+      }
+      if (!igual || pk < 0.5) continue;
+      mejor = Math.max(mejor, pk);
+      for (let oy = -0.02; oy <= 0.021; oy += 0.02) {
+        for (let ox = -0.02; ox <= 0.021; ox += 0.02) {
+          const yo = parche(x + ox * paso, y + oy * paso);
+          if (yo) resto = Math.min(resto, sobra(yo, igual));
         }
       }
     }
-    const resto = igual ? sobra(mio, igual) : 0;
-    if (process.env.DBG3) console.log('cifra?', x.toFixed(0), y.toFixed(0), mejor.toFixed(2), (resto / contraste).toFixed(2));
-    return mejor > 0.5 && resto < 0.21 * contraste;
+    return mejor > 0.5 && resto < 0.18 * contraste;
   };
 
   const esperada = Math.PI * rAgujero * rAgujero;

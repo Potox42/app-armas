@@ -24,6 +24,7 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
   const [foto, setFoto] = useState<Foto | null>(null);
   const [marcas, setMarcas] = useState<Marca[]>([]);
   const [elegida, setElegida] = useState<number | null>(null);
+  const [cerca, setCerca] = useState(false); // vista ampliada de la zona de los disparos
   const caja = useRef<unknown>(null);
   const vista = useRef<{ x0: number; y0: number; lado: number } | null>(null);
 
@@ -88,11 +89,19 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
       raiz.appendChild(lienzo);
     }
     const { cal } = foto;
-    // Se ve el negro con margen y cualquier agujero que quede fuera.
-    let mitad = Math.max(cal.rx, cal.ry) * 1.3;
-    for (const m of marcas) mitad = Math.max(mitad, Math.hypot(m.xPx - cal.cx, m.yPx - cal.cy) + 4 * rBala);
-    for (const g of foto.grupos) mitad = Math.max(mitad, Math.hypot(g.xPx - cal.cx, g.yPx - cal.cy) + g.radioPx + 4 * rBala);
-    vista.current = { x0: cal.cx - mitad, y0: cal.cy - mitad, lado: 2 * mitad };
+    // Entera: se ve el negro con margen y cualquier agujero que quede fuera.
+    // Ampliada: la zona del grupo de agujeros (o el centro del negro), para marcar disparos muy juntos.
+    let vx = cal.cx, vy = cal.cy, mitad: number;
+    const grupo = foto.grupos[0];
+    if (cerca) {
+      if (grupo) { vx = grupo.xPx; vy = grupo.yPx; }
+      mitad = Math.max(grupo ? grupo.radioPx * 1.2 + rBala : 0.5 * Math.max(cal.rx, cal.ry), 8 * rBala);
+    } else {
+      mitad = Math.max(cal.rx, cal.ry) * 1.3;
+      for (const m of marcas) mitad = Math.max(mitad, Math.hypot(m.xPx - cal.cx, m.yPx - cal.cy) + 4 * rBala);
+      for (const g of foto.grupos) mitad = Math.max(mitad, Math.hypot(g.xPx - cal.cx, g.yPx - cal.cy) + g.radioPx + 4 * rBala);
+    }
+    vista.current = { x0: vx - mitad, y0: vy - mitad, lado: 2 * mitad };
     const css = raiz.getBoundingClientRect().width;
     lienzo.width = css * devicePixelRatio;
     lienzo.height = css * devicePixelRatio;
@@ -102,15 +111,15 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
     c.fillRect(0, 0, lienzo.width, lienzo.height);
     // Solo la parte del recorte que cae dentro de la foto: Safari en el iPhone no respeta las
     // proporciones si el recorte se sale de la imagen y la dibuja estirada.
-    const sx0 = Math.max(0, cal.cx - mitad), sy0 = Math.max(0, cal.cy - mitad);
-    const sx1 = Math.min(foto.lienzo.width, cal.cx + mitad), sy1 = Math.min(foto.lienzo.height, cal.cy + mitad);
+    const sx0 = Math.max(0, vx - mitad), sy0 = Math.max(0, vy - mitad);
+    const sx1 = Math.min(foto.lienzo.width, vx + mitad), sy1 = Math.min(foto.lienzo.height, vy + mitad);
     if (sx1 > sx0 && sy1 > sy0) {
       c.drawImage(
         foto.lienzo, sx0, sy0, sx1 - sx0, sy1 - sy0,
-        (sx0 - (cal.cx - mitad)) * k, (sy0 - (cal.cy - mitad)) * k, (sx1 - sx0) * k, (sy1 - sy0) * k,
+        (sx0 - (vx - mitad)) * k, (sy0 - (vy - mitad)) * k, (sx1 - sx0) * k, (sy1 - sy0) * k,
       );
     }
-    const aPantalla = (x: number, y: number) => [(x - (cal.cx - mitad)) * k, (y - (cal.cy - mitad)) * k] as const;
+    const aPantalla = (x: number, y: number) => [(x - (vx - mitad)) * k, (y - (vy - mitad)) * k] as const;
     c.strokeStyle = '#2ECC71';
     c.lineWidth = 2 * devicePixelRatio;
     c.beginPath();
@@ -127,17 +136,22 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
       c.stroke();
     }
     c.setLineDash([]);
-    const r = Math.max(rBala * k * 1.4, 7 * devicePixelRatio);
+    // Cada marca mide lo que una bala, para poder marcar disparos pegados.
+    const r = Math.max(rBala * k, 4 * devicePixelRatio);
     c.font = `bold ${12 * devicePixelRatio}px -apple-system, sans-serif`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     marcas.forEach((m, j) => {
       const [x, y] = aPantalla(m.xPx, m.yPx);
       c.strokeStyle = j === elegida ? '#FFD60A' : '#FF3B30';
-      c.lineWidth = 2.5 * devicePixelRatio;
+      c.lineWidth = (cerca ? 2 : 1.5) * devicePixelRatio;
       c.beginPath();
       c.arc(x, y, r, 0, Math.PI * 2);
       c.stroke();
+      c.fillStyle = c.strokeStyle;
+      c.beginPath();
+      c.arc(x, y, 1.5 * devicePixelRatio, 0, Math.PI * 2);
+      c.fill();
       if (m.veces > 1) {
         c.fillStyle = '#FF3B30';
         c.beginPath();
@@ -153,7 +167,8 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
       const x = v.x0 + ((e.clientX - caja.left) / caja.width) * v.lado;
       const y = v.y0 + ((e.clientY - caja.top) / caja.height) * v.lado;
       // Cerca de una marca: se elige (para quitarla o decir cuántos disparos son). Si no, se añade.
-      const radioToque = Math.max(rBala * 2, (14 / caja.width) * v.lado);
+      // Solo dentro de la propia marca, para poder añadir otra pegada a ella.
+      const radioToque = Math.max(rBala * 0.8, (6 / caja.width) * v.lado);
       const i = marcas.findIndex((m) => Math.hypot(m.xPx - x, m.yPx - y) < radioToque);
       if (i >= 0) {
         setElegida(i === elegida ? null : i);
@@ -162,7 +177,7 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
         setElegida(marcas.length);
       }
     };
-  }, [estado, foto, marcas, elegida, rBala]);
+  }, [estado, foto, marcas, elegida, rBala, cerca]);
 
   // El <input type="file"> abre en el iPhone «Hacer foto» o «Fototeca».
   const elegir = () => {
@@ -193,6 +208,7 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
     setFoto(null);
     setMarcas([]);
     setElegida(null);
+    setCerca(false);
     setEstado('inicio');
   };
 
@@ -242,6 +258,11 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
         </Text>
       )}
       <View ref={caja as never} style={st.foto} />
+      <Button
+        title={cerca ? 'Ver la diana entera' : 'Ampliar para marcar disparos juntos'}
+        variant="secondary"
+        onPress={() => setCerca(!cerca)}
+      />
       {elegida !== null && marcas[elegida] && (
         <View style={st.fila}>
           <Text style={[s.text, { flex: 1 }]}>
