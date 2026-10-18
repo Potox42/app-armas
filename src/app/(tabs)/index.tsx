@@ -25,11 +25,11 @@ const ICONO_AVISO: Record<TipoAviso, IconName> = {
 
 const ACCESOS: { titulo: string; texto: string; icono: IconName; ruta: Href }[] = [
   { titulo: 'Licencias', texto: 'E, F, D con sus fechas', icono: 'id', ruta: '/cartera' },
+  { titulo: 'Competiciones', texto: 'Tu calendario y avisos', icono: 'calendar', ruta: '/competiciones' },
   { titulo: 'Mis armas', texto: '', icono: 'gun', ruta: '/armas' },
+  { titulo: 'Munición', texto: 'Compras, cupo y depósito', icono: 'box', ruta: '/municion' },
   { titulo: 'Entrenar', texto: 'Diana, números o cámara', icono: 'target', ruta: '/entrenar' },
   { titulo: 'Evolución', texto: 'Medias y tendencia', icono: 'chart', ruta: '/evolucion' },
-  { titulo: 'Competiciones', texto: 'Tu calendario y avisos', icono: 'calendar', ruta: '/competiciones' },
-  { titulo: 'Munición', texto: 'Compras, cupo y depósito', icono: 'box', ruta: '/municion' },
 ];
 
 const rutaAviso = (a: Aviso): Href =>
