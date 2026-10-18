@@ -75,6 +75,12 @@ export function datosDeEjemplo(): Datos {
         licenciaId: 'lic-f',
         disparosTotales: 1842,
         intervaloLimpieza: 500,
+        municion: [
+          { id: 'm4', fecha: sumarDias(hoy, -3), tipo: 'compra', cartuchos: 300, enRecinto: true, nota: 'Galería del club' },
+          { id: 'm3', fecha: sumarDias(hoy, -10), tipo: 'gasto', cartuchos: 50 },
+          { id: 'm2', fecha: sumarDias(hoy, -40), tipo: 'compra', cartuchos: 50, nota: 'Armería' },
+          { id: 'm1', fecha: sumarDias(hoy, -90), tipo: 'compra', cartuchos: 30, nota: 'Armería' },
+        ],
         limpiezas: [
           { id: 'l4', fecha: sumarDias(hoy, -7), tipo: 'Completa', disparos: 1500 },
           { id: 'l3', fecha: sumarDias(hoy, -73), tipo: 'Básica', disparos: 1320 },

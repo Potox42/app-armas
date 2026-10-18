@@ -1,9 +1,10 @@
 import type { Arma, Datos, Licencia } from '@/data/types';
 import { competiciones, cuandoEs } from './competiciones';
 import { diasHasta, mesAnio, plazo } from './fechas';
+import { estadoMunicion } from './municion';
 
 export type Nivel = 'rojo' | 'naranja' | 'verde';
-export type TipoAviso = 'licencia' | 'revista' | 'carnet' | 'pase' | 'limpieza' | 'competicion';
+export type TipoAviso = 'licencia' | 'revista' | 'carnet' | 'pase' | 'limpieza' | 'competicion' | 'municion';
 
 export interface Aviso {
   id: string;
@@ -89,6 +90,26 @@ export function calcularAvisos(datos: Datos): Aviso[] {
         nivel: pasada ? 'rojo' : 'naranja',
         orden: pasada ? 0 : 30,
         armaId: a.id,
+      });
+    }
+  }
+
+  // Munición: cupo del año casi gastado o más cartuchos en casa de los permitidos.
+  for (const a of datos.armas) {
+    const m = estadoMunicion(a);
+    const nombre = `${a.marca} ${a.modelo}`.trim();
+    if (m.enCasa > m.maxDeposito) {
+      avisos.push({
+        id: `deposito-${a.id}`, tipo: 'municion', titulo: `Munición ${nombre}`,
+        detalle: `Tienes ${m.enCasa} cartuchos en casa; el máximo es ${m.maxDeposito}`, nivel: 'rojo', orden: 0, armaId: a.id,
+      });
+    }
+    if (m.cupo !== null && m.comprados >= m.cupo * 0.8) {
+      const agotado = m.comprados >= m.cupo;
+      avisos.push({
+        id: `cupo-${a.id}`, tipo: 'municion', titulo: `Cupo de munición ${nombre}`,
+        detalle: agotado ? `Cupo del año gastado (${m.comprados} de ${m.cupo})` : `Te quedan ${m.quedan} de ${m.cupo} este año`,
+        nivel: agotado ? 'rojo' : 'naranja', orden: agotado ? 1 : 40, armaId: a.id,
       });
     }
   }

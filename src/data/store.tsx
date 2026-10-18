@@ -5,7 +5,7 @@ import { colors, space } from '@/theme';
 import { hoyISO } from '@/lib/fechas';
 import { cargarDatos, guardarDatos } from './db';
 import { datosDeEjemplo } from './ejemplo';
-import type { Ajustes, Arma, Competicion, Datos, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Registro, Sesion } from './types';
+import type { Ajustes, Arma, Competicion, Datos, MovimientoMunicion, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Registro, Sesion } from './types';
 
 // Los datos se cargan de la base de datos cifrada al arrancar y se guardan en cada cambio.
 // Mientras no existan las pantallas de alta, el primer arranque parte del ejemplo.
@@ -15,6 +15,8 @@ interface Store {
   arma: (id: string) => Arma | undefined;
   registrarLimpieza: (armaId: string, tipo: Limpieza['tipo'], nota?: string) => void;
   sumarDisparos: (armaId: string, disparos: number) => void;
+  anadirMunicion: (armaId: string, m: Omit<MovimientoMunicion, 'id'>) => void;
+  borrarMunicion: (armaId: string, movimientoId: string) => void;
   sesion: (id: string) => Sesion | undefined;
   nuevaSesion: (datos: Omit<Sesion, 'id' | 'fecha' | 'series' | 'terminada'>) => string;
   anadirDisparo: (sesionId: string, x: number, y: number) => void;
@@ -127,6 +129,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })),
       sumarDisparos: (armaId, disparos) =>
         actualizarArma(armaId, (a) => ({ ...a, disparosTotales: a.disparosTotales + disparos })),
+      anadirMunicion: (armaId, m) =>
+        actualizarArma(armaId, (a) => ({
+          ...a,
+          municion: [{ ...m, id: nuevoId('mun') }, ...(a.municion ?? [])].sort((x, y) => y.fecha.localeCompare(x.fecha)),
+        })),
+      borrarMunicion: (armaId, movimientoId) =>
+        actualizarArma(armaId, (a) => ({ ...a, municion: (a.municion ?? []).filter((m) => m.id !== movimientoId) })),
       sesion: (id) => datos.sesiones.find((x) => x.id === id),
       nuevaSesion: (nueva) => {
         const id = `s${Date.now()}`;

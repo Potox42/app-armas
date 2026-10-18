@@ -15,6 +15,7 @@ import { colors, radius, space } from '@/theme';
 
 const ICONO_AVISO: Record<TipoAviso, IconName> = {
   competicion: 'calendar',
+  municion: 'box',
   licencia: 'id',
   revista: 'shield',
   carnet: 'id',
@@ -28,6 +29,7 @@ const ACCESOS: { titulo: string; texto: string; icono: IconName; ruta: Href }[] 
   { titulo: 'Entrenar', texto: 'Diana, números o cámara', icono: 'target', ruta: '/entrenar' },
   { titulo: 'Evolución', texto: 'Medias y tendencia', icono: 'chart', ruta: '/evolucion' },
   { titulo: 'Competiciones', texto: 'Tu calendario y avisos', icono: 'calendar', ruta: '/competiciones' },
+  { titulo: 'Munición', texto: 'Compras, cupo y depósito', icono: 'box', ruta: '/municion' },
 ];
 
 const rutaAviso = (a: Aviso): Href =>

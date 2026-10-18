@@ -31,6 +31,16 @@ export interface Limpieza {
   nota?: string;
 }
 
+/** Una compra de cartuchos o un gasto (cartuchos disparados de los que tienes en casa). */
+export interface MovimientoMunicion {
+  id: string;
+  fecha: string; // ISO yyyy-mm-dd
+  tipo: 'compra' | 'gasto';
+  cartuchos: number;
+  enRecinto?: boolean; // compra hecha y gastada en el club: no cuenta para el cupo ni entra en casa
+  nota?: string;
+}
+
 export interface Arma {
   id: string;
   marca: string;
@@ -47,6 +57,9 @@ export interface Arma {
   fotoGuiaAnverso?: string;
   fotoGuiaReverso?: string;
   limpiezas: Limpieza[];
+  municion?: MovimientoMunicion[]; // el más reciente primero
+  cupoAnual?: number; // si tienes autorización para más cartuchos al año
+  maxDeposito?: number; // si tienes autorización para guardar más
 }
 
 export interface Federacion {

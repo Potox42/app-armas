@@ -6,6 +6,7 @@ import { MiniDiana } from '@/components/Diana';
 import { Icon } from '@/components/Icon';
 import { FotoArma } from '@/components/FotoArma';
 import { FotoCampo } from '@/components/FotoCampo';
+import { MunicionArma } from '@/components/MunicionArma';
 import {
   Badge, Button, Card, ProgressBar, Row, Screen, Segmented, SectionTitle, s,
 } from '@/components/ui';
@@ -16,13 +17,13 @@ import { diasHasta, formatear, mesAnio, plazo } from '@/lib/fechas';
 import { formatoMedia, media, todosLosDisparos, totalSesion } from '@/lib/sesiones';
 import { colors, radius, space } from '@/theme';
 
-type Vista = 'mantenimiento' | 'documentacion' | 'entrenamientos';
+type Vista = 'mantenimiento' | 'documentacion' | 'entrenamientos' | 'municion';
 
 export default function FichaArma() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, vista: inicial } = useLocalSearchParams<{ id: string; vista?: Vista }>();
   const store = useStore();
   const arma = store.arma(id);
-  const [vista, setVista] = useState<Vista>('mantenimiento');
+  const [vista, setVista] = useState<Vista>(inicial ?? 'mantenimiento');
   const [registrando, setRegistrando] = useState(false);
 
   if (!arma) {
@@ -76,8 +77,11 @@ export default function FichaArma() {
           { value: 'mantenimiento', label: 'Cuidado' },
           { value: 'documentacion', label: 'Papeles' },
           { value: 'entrenamientos', label: 'Tiradas' },
+          { value: 'municion', label: 'Munición' },
         ]}
       />
+
+      {vista === 'municion' && <MunicionArma arma={arma} />}
 
       {vista === 'entrenamientos' && (
         <>
