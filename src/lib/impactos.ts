@@ -566,3 +566,162 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
   }
   return res.filter((a) => a.grupo || !esCifra(a.x, a.y));
 }
+
+/**
+ * Agujeros nuevos comparando la foto de la diana ANTES de la serie con la de DESPUÉS.
+ * Las dos fotos se pasan a una rejilla común en milímetros (con la calibración de cada una), se
+ * busca el pequeño giro y desplazamiento que mejor las encaja y se restan: lo que cambia con tamaño
+ * de bala es un agujero nuevo, aunque la diana ya esté llena de agujeros de series anteriores.
+ * Devuelve las posiciones en píxeles de la foto de después.
+ */
+export function agujerosNuevos(
+  antes: Gris, calA: Calibracion, despues: Gris, calD: Calibracion, diana: ModeloDiana, calibreMm: number,
+): Agujero[] {
+  const radioMm = diana.negro / 2;
+  const pxMm = (calD.rx + calD.ry) / diana.negro;
+  const paso = Math.max(0.25, 0.8 / pxMm); // mm por punto de la rejilla (sin perder detalle de la foto de después)
+  const alcance = Math.min(diametroExterior(diana) / 2, 1.6 * radioMm);
+  const n = Math.ceil((2 * alcance) / paso);
+  const aPx = (cal: Calibracion, u: number, v: number) => [cal.cx + (u / radioMm) * cal.rx, cal.cy + (v / radioMm) * cal.ry] as const;
+  const dentro = (g: Gris, x: number, y: number) => x >= 1 && y >= 1 && x < g.w - 2 && y < g.h - 2;
+
+  // Rejilla de la foto de después.
+  const D = new Float32Array(n * n), valido = new Uint8Array(n * n);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const u = -alcance + i * paso, v = -alcance + j * paso;
+      if (u * u + v * v > alcance * alcance) continue;
+      const [x, y] = aPx(calD, u, v);
+      if (!dentro(despues, x, y)) continue;
+      D[j * n + i] = muestra(despues, x, y);
+      valido[j * n + i] = 1;
+    }
+  }
+  const rejillaAntes = (giro: number, du: number, dv: number, cada: number) => {
+    const c = Math.cos(giro), s = Math.sin(giro);
+    const A = new Float32Array(n * n), ok = new Uint8Array(n * n);
+    for (let j = 0; j < n; j += cada) {
+      for (let i = 0; i < n; i += cada) {
+        const k = j * n + i;
+        if (!valido[k]) continue;
+        const u = -alcance + i * paso, v = -alcance + j * paso;
+        const [x, y] = aPx(calA, c * u - s * v + du, s * u + c * v + dv);
+        if (!dentro(antes, x, y)) continue;
+        A[k] = muestra(antes, x, y);
+        ok[k] = 1;
+      }
+    }
+    return { A, ok };
+  };
+  const parecido = (A: Float32Array, ok: Uint8Array, cada: number) => {
+    let sa = 0, sd = 0, m = 0;
+    for (let j = 0; j < n; j += cada) for (let i = 0; i < n; i += cada) { const k = j * n + i; if (ok[k]) { sa += A[k]; sd += D[k]; m++; } }
+    if (m < 100) return -1;
+    sa /= m; sd /= m;
+    let ad = 0, aa = 0, dd = 0;
+    for (let j = 0; j < n; j += cada) {
+      for (let i = 0; i < n; i += cada) {
+        const k = j * n + i;
+        if (!ok[k]) continue;
+        const a = A[k] - sa, d = D[k] - sd;
+        ad += a * d; aa += a * a; dd += d * d;
+      }
+    }
+    return aa && dd ? ad / Math.sqrt(aa * dd) : -1;
+  };
+  // Encaje: primero el giro (las cifras y las rayas lo marcan), luego el desplazamiento fino.
+  const grueso = Math.max(1, Math.round(1.5 / paso));
+  let mejor = { giro: 0, du: 0, dv: 0, p: -2 };
+  for (let g = -6; g <= 6; g += 0.5) {
+    const { A, ok } = rejillaAntes((g * Math.PI) / 180, 0, 0, grueso);
+    const p = parecido(A, ok, grueso);
+    if (p > mejor.p) mejor = { giro: g, du: 0, dv: 0, p };
+  }
+  const fino = Math.max(1, Math.round(0.6 / paso));
+  const g0 = mejor.giro;
+  for (let g = g0 - 0.5; g <= g0 + 0.501; g += 0.125) {
+    const { A, ok } = rejillaAntes((g * Math.PI) / 180, 0, 0, fino);
+    const p = parecido(A, ok, fino);
+    if (p > mejor.p) mejor = { giro: g, du: 0, dv: 0, p };
+  }
+  for (let dv = -2; dv <= 2.001; dv += 0.25) {
+    for (let du = -2; du <= 2.001; du += 0.25) {
+      const { A, ok } = rejillaAntes((mejor.giro * Math.PI) / 180, du, dv, fino);
+      const p = parecido(A, ok, fino);
+      if (p > mejor.p) mejor = { ...mejor, du, dv, p };
+    }
+  }
+  const { A, ok } = rejillaAntes((mejor.giro * Math.PI) / 180, mejor.du, mejor.dv, 1);
+
+  // Cada foto con su propia luz: se resta su media local y se ajusta el contraste del antes al después.
+  const rLuz = Math.max(4, Math.round(12 / paso));
+  const local = (X: Float32Array) => desenfocar({ w: n, h: n, d: X }, rLuz).d;
+  const mA = local(A), mD = local(D);
+  const rAg = calibreMm / 2 / paso;
+  const suavizar = (X: Float32Array) => desenfocar({ w: n, h: n, d: X }, 1).d;
+  const a0 = new Float32Array(n * n), d0 = new Float32Array(n * n);
+  let sa = 0, sd = 0;
+  for (let k = 0; k < n * n; k++) {
+    if (!ok[k]) continue;
+    a0[k] = A[k] - mA[k]; d0[k] = D[k] - mD[k];
+    sa += Math.abs(a0[k]); sd += Math.abs(d0[k]);
+  }
+  const escala = sa ? sd / sa : 1;
+  for (let k = 0; k < n * n; k++) a0[k] *= escala;
+  const sA = suavizar(a0), sD = suavizar(d0);
+
+  // Contraste de referencia: papel menos negro en la foto de después.
+  let tn = 0, nn = 0, tp = 0, np = 0;
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const k = j * n + i;
+      if (!ok[k]) continue;
+      const r = Math.hypot(-alcance + i * paso, -alcance + j * paso) / radioMm;
+      if (r < 0.9) { tn += D[k]; nn++; } else if (r > 1.1) { tp += D[k]; np++; }
+    }
+  }
+  const contraste = Math.max(40, (np ? tp / np : 220) - (nn ? tn / nn : 30));
+
+  // Diferencia que no se explica moviendo un punto de la rejilla (un encaje casi perfecto deja
+  // restos en los bordes de rayas y cifras): así solo queda lo que de verdad es nuevo.
+  const m = new Uint8Array(n * n);
+  const umbral = 0.22 * contraste;
+  for (let j = 2; j < n - 2; j++) {
+    for (let i = 2; i < n - 2; i++) {
+      const k = j * n + i;
+      if (!ok[k]) continue;
+      let menor = Infinity;
+      for (let dj = -1; dj <= 1; dj++) {
+        for (let di = -1; di <= 1; di++) {
+          const q = k + dj * n + di;
+          if (ok[q]) menor = Math.min(menor, Math.abs(sD[k] - sA[q]));
+        }
+      }
+      if (menor > umbral) m[k] = 1;
+    }
+  }
+  // Un agujero en el negro con fondo oscuro detrás cambia solo en el borde roto (un anillo de trozos):
+  // se engordan los trozos para que el anillo quede como una mancha y se mide esa mancha.
+  const rd = Math.max(1, Math.round(rAg * 0.5));
+  const f = new Float32Array(n * n);
+  for (let k = 0; k < n * n; k++) f[k] = m[k];
+  const eng = desenfocar({ w: n, h: n, d: f }, rd).d;
+  const gordo = new Uint8Array(n * n);
+  for (let k = 0; k < n * n; k++) gordo[k] = eng[k] > 1e-4 ? 1 : 0;
+
+  const esperada = Math.PI * rAg * rAg;
+  const unoGordo = Math.PI * (rAg + rd) ** 2; // lo que mide un agujero suelto tras engordarlo
+  const res: Agujero[] = [];
+  for (const k of manchas(gordo, n, n)) {
+    if (k.area < 0.8 * esperada) continue;
+    let cambio = 0;
+    for (let j = k.y0; j <= k.y1; j++) for (let i = k.x0; i <= k.x1; i++) cambio += m[j * n + i];
+    if (cambio < 0.12 * esperada) continue;
+    const tam = k.area / unoGordo;
+    const veces = tam < 1.6 ? 1 : Math.min(5, Math.round(tam / 1.2));
+    const u = -alcance + (k.sx / k.area) * paso, v = -alcance + (k.sy / k.area) * paso;
+    const [xPx, yPx] = aPx(calD, u, v);
+    res.push({ xPx, yPx, x: u, y: v, valor: puntuar(u, v, calibreMm, diana), veces, tam });
+  }
+  return res;
+}

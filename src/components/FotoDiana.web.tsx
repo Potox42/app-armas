@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, s } from '@/components/ui';
 import { puntuar } from '@/lib/diana';
-import { aMm, buscarAgujeros, calibrar, type Calibracion, type Gris } from '@/lib/impactos';
+import { agujerosNuevos, aMm, buscarAgujeros, calibrar, type Calibracion, type Gris } from '@/lib/impactos';
 import { colors, radius, space } from '@/theme';
 import type { PropsFotoDiana } from './FotoDiana.types';
 
@@ -10,14 +10,16 @@ const LADO = 1000; // lado mayor de la imagen que se analiza
 
 interface Marca { xPx: number; yPx: number; veces: number }
 interface Grupo { xPx: number; yPx: number; radioPx: number }
-interface Foto { lienzo: HTMLCanvasElement; cal: Calibracion; grupos: Grupo[] }
+interface Foto { lienzo: HTMLCanvasElement; g: Gris; cal: Calibracion; grupos: Grupo[]; comparada: boolean }
 
 type Estado = 'inicio' | 'leyendo' | 'sin-diana' | 'revisar';
 
 /**
  * Puntuar con una foto de la diana ya tirada: la app propone los agujeros y el tirador los revisa
  * (toca uno para quitarlo, toca en otro sitio para añadirlo) antes de apuntarlos en la serie.
- * Todo se procesa en el móvil; la foto no se guarda.
+ * Si hay foto de ANTES de la serie, se comparan las dos y solo salen los agujeros nuevos (sirve con
+ * una diana ya usada). La foto de después de una serie es la de antes de la siguiente.
+ * Todo se procesa en el móvil; las fotos no se guardan.
  */
 export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana) {
   const [estado, setEstado] = useState<Estado>('inicio');
@@ -25,10 +27,11 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
   const [marcas, setMarcas] = useState<Marca[]>([]);
   const [elegida, setElegida] = useState<number | null>(null);
   const [cerca, setCerca] = useState(false); // vista ampliada de la zona de los disparos
+  const [antes, setAntes] = useState<Foto | null>(null);
   const caja = useRef<unknown>(null);
   const vista = useRef<{ x0: number; y0: number; lado: number } | null>(null);
 
-  const leer = (archivo: File) => {
+  const leer = (archivo: File, esAntes: boolean) => {
     setEstado('leyendo');
     const url = URL.createObjectURL(archivo);
     const img = new Image();
@@ -52,10 +55,16 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
           setEstado('sin-diana');
           return;
         }
-        const agujeros = buscarAgujeros(g, cal, modelo, calibre);
+        if (esAntes) {
+          setAntes({ lienzo, g, cal, grupos: [], comparada: false });
+          setEstado('inicio');
+          return;
+        }
+        const comparada = !!antes;
+        const agujeros = antes ? agujerosNuevos(antes.g, antes.cal, g, cal, modelo, calibre) : buscarAgujeros(g, cal, modelo, calibre);
         // Los grupos (muchos agujeros juntos) no se cuentan: se señalan para que el tirador marque los suyos.
         const grupos = agujeros.filter((a) => a.grupo).map((a) => ({ xPx: a.xPx, yPx: a.yPx, radioPx: a.grupo!.radioPx }));
-        setFoto({ lienzo, cal, grupos });
+        setFoto({ lienzo, g, cal, grupos, comparada });
         setMarcas(agujeros.filter((a) => !a.grupo).map((a) => ({ xPx: a.xPx, yPx: a.yPx, veces: a.veces })));
         setElegida(null);
         setEstado('revisar');
@@ -180,7 +189,7 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
   }, [estado, foto, marcas, elegida, rBala, cerca]);
 
   // El <input type="file"> abre en el iPhone «Hacer foto» o «Fototeca».
-  const elegir = () => {
+  const elegir = (esAntes = false) => {
     document.querySelectorAll('input[data-foto-diana]').forEach((x) => x.remove());
     const input = document.createElement('input');
     input.type = 'file';
@@ -190,7 +199,7 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
     input.onchange = () => {
       const f = input.files?.[0];
       input.remove();
-      if (f) leer(f);
+      if (f) leer(f, esAntes);
     };
     document.body.appendChild(input);
     input.click();
@@ -217,13 +226,18 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
       <Card style={{ gap: space.md }}>
         <Text style={s.text}>Puntuar con una foto de la diana</Text>
         <Text style={s.muted}>
-          Haz la foto de frente, con buena luz y la diana entera (que se vea todo el círculo negro con algo de margen).
-          La app propone los agujeros y tú los revisas antes de apuntarlos.
+          Haz las fotos de frente, con buena luz y la diana entera (que se vea todo el círculo negro con algo de margen).
+          Si la diana ya tiene agujeros, haz una foto antes de tirar y otra después: la app solo marcará los nuevos.
         </Text>
+        {antes ? (
+          <Text style={{ color: colors.green }}>✓ Tienes la foto de antes. Ahora tira la serie y haz la de después.</Text>
+        ) : (
+          <Button title="Foto de antes de tirar" variant="secondary" onPress={() => elegir(true)} />
+        )}
         {estado === 'leyendo' && (
           <View style={st.fila}>
             <ActivityIndicator color={colors.accent} />
-            <Text style={s.muted}>Buscando agujeros…</Text>
+            <Text style={s.muted}>{antes ? 'Comparando con la foto de antes…' : 'Buscando agujeros…'}</Text>
           </View>
         )}
         {estado === 'sin-diana' && (
@@ -231,7 +245,11 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
             No encuentro el círculo negro de la diana. Repite la foto más de frente, con la diana entera y sin sombras fuertes.
           </Text>
         )}
-        <Button title={estado === 'sin-diana' ? 'Repetir la foto' : 'Hacer o elegir foto'} onPress={elegir} />
+        <Button
+          title={estado === 'sin-diana' ? 'Repetir la foto' : antes ? 'Foto de después de tirar' : 'Hacer o elegir foto'}
+          onPress={() => elegir(false)}
+        />
+        {antes && <Button title="Repetir la foto de antes" variant="secondary" onPress={() => elegir(true)} />}
       </Card>
     );
   }
@@ -246,6 +264,11 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
         Revisa la foto: toca un agujero sin marcar para añadirlo y toca un círculo rojo para quitarlo o decir que
         entraron varios disparos juntos. El círculo verde es el negro de la diana: si no encaja, repite la foto.
       </Text>
+      {foto?.comparada && (
+        <Text style={{ color: colors.green, fontSize: 13 }}>
+          Comparada con la foto de antes: solo están marcados los agujeros nuevos.
+        </Text>
+      )}
       {foto && foto.grupos.length > 0 && (
         <Text style={{ color: colors.orange, fontSize: 13 }}>
           Dentro del círculo naranja hay muchos agujeros juntos y no los puedo contar uno a uno. Toca cada agujero
@@ -273,7 +296,12 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
           <Button title="Quitar" variant="secondary" onPress={() => cambiarElegida(0)} />
         </View>
       )}
-      <Button title={`Apuntar ${n} ${n === 1 ? 'disparo' : 'disparos'}`} onPress={() => { onApuntar(puntos); otra(); }} />
+      <Button title={`Apuntar ${n} ${n === 1 ? 'disparo' : 'disparos'}`} onPress={() => {
+        onApuntar(puntos);
+        // La foto de después de esta serie es la de antes de la siguiente.
+        if (foto) setAntes({ ...foto, grupos: [], comparada: false });
+        otra();
+      }} />
       <Button title="Otra foto" variant="secondary" onPress={otra} />
     </Card>
   );
