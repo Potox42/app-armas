@@ -7,14 +7,13 @@ import { useStore } from '@/data/store';
 import type { Arma, MovimientoMunicion } from '@/data/types';
 import { confirmar } from '@/lib/confirmar';
 import { formatear, hoyISO } from '@/lib/fechas';
-import { depositoDe, estadoMunicion, LIMITES, type DepositoCalibre, type EstadoMunicion } from '@/lib/municion';
+import { estadoMunicion, LIMITES, type DepositoCalibre, type EstadoMunicion } from '@/lib/municion';
 import { colors, radius, space } from '@/theme';
 
 const color = (usado: number, max: number) => (usado > max ? colors.red : usado >= max * 0.8 ? colors.orange : colors.green);
 
-/** Barras de cupo del año (de esta arma) y de cartuchos en casa (de su calibre). */
-export function ResumenMunicion({ m, deposito }: { m: EstadoMunicion; deposito?: DepositoCalibre }) {
-  const compartido = (deposito?.armas.length ?? 0) > 1;
+/** Barras de cupo del año y de cartuchos en casa de un arma (lo que va asociado a su guía). */
+export function ResumenMunicion({ m }: { m: EstadoMunicion }) {
   return (
     <View style={{ gap: space.md }}>
       {m.cupo !== null ? (
@@ -28,13 +27,13 @@ export function ResumenMunicion({ m, deposito }: { m: EstadoMunicion; deposito?:
       ) : (
         <Text style={s.muted}>Los cartuchos de caza no tienen límite de compra al año.</Text>
       )}
-      {deposito && <BarraDeposito d={deposito} titulo={compartido ? `En casa · ${deposito.calibre} (${deposito.armas.length} armas)` : 'En casa'} />}
+      <BarraDeposito d={{ enCasa: m.enCasa, maxDeposito: m.maxDeposito }} titulo="En casa" />
     </View>
   );
 }
 
 /** Cartuchos en casa frente a lo que se puede guardar. */
-export function BarraDeposito({ d, titulo }: { d: DepositoCalibre; titulo: string }) {
+export function BarraDeposito({ d, titulo }: { d: Pick<DepositoCalibre, 'enCasa' | 'maxDeposito'>; titulo: string }) {
   const sobran = d.enCasa - d.maxDeposito;
   return (
     <Barra
@@ -91,7 +90,7 @@ export function MunicionArma({ arma }: { arma: Arma }) {
   return (
     <>
       <Card style={{ gap: space.md }}>
-        <ResumenMunicion m={m} deposito={depositoDe(store.datos.armas, arma)} />
+        <ResumenMunicion m={m} />
       </Card>
 
       <Card style={{ gap: space.md }}>

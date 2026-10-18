@@ -54,7 +54,7 @@ export function estadoMunicion(arma: Arma, hoy = hoyISO()): EstadoMunicion {
   };
 }
 
-/** Cartuchos en casa de un mismo calibre: las armas que lo usan suman lo que pueden guardar. */
+/** Cartuchos en casa de un mismo calibre, sumando todas las armas que lo usan (solo informativo). */
 export interface DepositoCalibre {
   calibre: string;
   armas: Arma[];
@@ -77,6 +77,3 @@ export function depositoPorCalibre(armas: Arma[]): DepositoCalibre[] {
   }
   return [...grupos.values()];
 }
-
-export const depositoDe = (armas: Arma[], arma: Arma) =>
-  depositoPorCalibre(armas).find((g) => g.armas.some((a) => a.id === arma.id))!;

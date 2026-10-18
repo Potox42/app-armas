@@ -1,7 +1,7 @@
 import type { Arma, Datos, Licencia } from '@/data/types';
 import { competiciones, cuandoEs } from './competiciones';
 import { diasHasta, mesAnio, plazo } from './fechas';
-import { depositoPorCalibre, estadoMunicion } from './municion';
+import { estadoMunicion } from './municion';
 
 export type Nivel = 'rojo' | 'naranja' | 'verde';
 export type TipoAviso = 'licencia' | 'revista' | 'carnet' | 'pase' | 'limpieza' | 'competicion' | 'municion';
@@ -94,20 +94,16 @@ export function calcularAvisos(datos: Datos): Aviso[] {
     }
   }
 
-  // Munición en casa: se suma por calibre, porque las armas del mismo calibre comparten cartuchos.
-  for (const g of depositoPorCalibre(datos.armas)) {
-    if (g.enCasa <= g.maxDeposito) continue;
-    avisos.push({
-      id: `deposito-${g.calibre}`, tipo: 'municion', titulo: `Munición ${g.calibre} en casa`,
-      detalle: `Tienes ${g.enCasa}; el máximo es ${g.maxDeposito} (te sobran ${g.enCasa - g.maxDeposito})`,
-      nivel: 'rojo', orden: 0, armaId: g.armas.length === 1 ? g.armas[0].id : undefined,
-    });
-  }
-
-  // Cupo del año casi gastado (es de cada arma).
+  // Munición: el cupo y el máximo en casa son de cada arma (la compra va con su guía).
   for (const a of datos.armas) {
     const m = estadoMunicion(a);
     const nombre = `${a.marca} ${a.modelo}`.trim();
+    if (m.enCasa > m.maxDeposito) {
+      avisos.push({
+        id: `deposito-${a.id}`, tipo: 'municion', titulo: `Munición ${nombre}`,
+        detalle: `Tienes ${m.enCasa} cartuchos en casa; el máximo es ${m.maxDeposito}`, nivel: 'rojo', orden: 0, armaId: a.id,
+      });
+    }
     if (m.cupo !== null && m.comprados >= m.cupo * 0.8) {
       const agotado = m.comprados >= m.cupo;
       avisos.push({
