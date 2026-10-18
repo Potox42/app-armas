@@ -30,6 +30,15 @@ export default function Entrenar() {
         <Icon name="chevron" />
       </Pressable>
 
+      <Card onPress={() => router.push('/simulador')} style={st.fila}>
+        <Icon name="flash" color={colors.accent} />
+        <View style={{ flex: 1 }}>
+          <Text style={st.nombre}>Simulador de tirada</Text>
+          <Text style={s.muted}>Órdenes por voz y luces roja y verde</Text>
+        </View>
+        <Icon name="chevron" color={colors.textMuted} />
+      </Card>
+
       <SectionTitle>Entrenamientos</SectionTitle>
       {terminadas.length === 0 && <Text style={s.muted}>Aún no hay entrenamientos.</Text>}
       {terminadas.map((x) => {

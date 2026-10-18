@@ -5,7 +5,7 @@ import { colors, space } from '@/theme';
 import { hoyISO } from '@/lib/fechas';
 import { cargarDatos, guardarDatos } from './db';
 import { datosDeEjemplo } from './ejemplo';
-import type { Ajustes, Arma, Competicion, Datos, Documento, MovimientoMunicion, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Registro, Sesion } from './types';
+import type { Ajustes, Arma, Competicion, Datos, Documento, Plantilla, MovimientoMunicion, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Registro, Sesion } from './types';
 
 // Los datos se cargan de la base de datos cifrada al arrancar y se guardan en cada cambio.
 // Mientras no existan las pantallas de alta, el primer arranque parte del ejemplo.
@@ -33,6 +33,8 @@ interface Store {
   borrarArma: (id: string) => void;
   guardarCompeticion: (c: Competicion) => void;
   borrarCompeticion: (id: string) => void;
+  guardarPlantilla: (p: Plantilla) => void;
+  borrarPlantilla: (id: string) => void;
   guardarDocumento: (d: Documento) => void;
   borrarDocumento: (id: string) => void;
   guardarLicencia: (licencia: Licencia) => void;
@@ -247,6 +249,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           };
         }),
       borrarCompeticion: (id) => setDatos((d) => d && { ...d, competiciones: (d.competiciones ?? []).filter((x) => x.id !== id) }),
+      guardarPlantilla: (pl) =>
+        setDatos((d) => d && { ...d, plantillas: [...(d.plantillas ?? []).filter((x) => x.id !== pl.id), pl] }),
+      borrarPlantilla: (id) => setDatos((d) => d && { ...d, plantillas: (d.plantillas ?? []).filter((x) => x.id !== id) }),
       guardarDocumento: (doc) =>
         setDatos((d) => {
           if (!d) return d;

@@ -67,7 +67,7 @@ export default function Inicio() {
       </View>
 
       <View style={st.hero}>
-        <Degradado desde="#183149" hasta="#07101A" brillo="#5BB3FF" brilloEn={[0.85, 0.08]} />
+        <Degradado desde={colors.heroDesde} hasta={colors.heroHasta} brillo={colors.heroBrillo} brilloEn={[0.85, 0.08]} />
         <View style={st.estado}>
           <View style={[st.punto, { backgroundColor: prioridad ? nivelColor(prioridad.nivel) : colors.green }]} />
           <Text style={st.estadoTexto}>{prioridad ? 'Tienes algo pendiente' : 'Documentación al día'}</Text>
@@ -150,7 +150,7 @@ export default function Inicio() {
       <View style={st.rejilla}>
         {ACCESOS.map((x) => (
           <Card key={x.titulo} onPress={() => router.push(x.ruta)} style={st.acceso}>
-            <View style={st.accesoIcono}><Icon name={x.icono} size={22} color="#A7D9FF" /></View>
+            <View style={st.accesoIcono}><Icon name={x.icono} size={22} color={colors.iconoColor} /></View>
             <Text style={st.accesoTitulo}>{x.titulo}</Text>
             <Text style={st.accesoTexto}>
               {x.titulo === 'Mis armas'
@@ -212,8 +212,8 @@ const st = StyleSheet.create({
   saludo: { color: colors.text, fontSize: 31, lineHeight: 34, fontWeight: '900', letterSpacing: -1.2, marginTop: 4 },
   hero: {
     borderRadius: radius.xl, padding: space.xl - 2, gap: space.sm, overflow: 'hidden', zIndex: 0,
-    borderWidth: 1, borderColor: 'rgba(117,173,225,0.34)',
-    shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 30, shadowOffset: { width: 0, height: 18 },
+    borderWidth: 1, borderColor: colors.heroBorde,
+    shadowColor: '#000', shadowOpacity: colors.sombra, shadowRadius: 30, shadowOffset: { width: 0, height: 18 },
   },
   estado: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   punto: { width: 8, height: 8, borderRadius: 4 },
@@ -223,14 +223,14 @@ const st = StyleSheet.create({
   acceso: { width: '47.5%', flexGrow: 1, minHeight: 128, gap: 4, padding: space.lg },
   accesoIcono: {
     width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#163A60', borderWidth: 1, borderColor: 'rgba(101,175,240,0.2)', marginBottom: space.sm,
+    backgroundColor: colors.iconoFondo, borderWidth: 1, borderColor: 'rgba(101,175,240,0.2)', marginBottom: space.sm,
   },
   accesoTitulo: { color: colors.text, fontSize: 16, fontWeight: '800' },
   accesoTexto: { color: colors.textMuted, fontSize: 12, lineHeight: 16 },
   tile: { borderRadius: radius.lg, padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md },
   entrenar: { backgroundColor: colors.accent, paddingVertical: space.xl },
   square: { flex: 1, flexDirection: 'column', alignItems: 'flex-start', gap: 6 },
-  tileTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  tileTitle: { color: colors.text, fontSize: 18, fontWeight: '700' },
   tileSub: { color: 'rgba(255,255,255,0.8)', fontSize: 13 },
   prioridad: {
     flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, borderRadius: radius.lg,

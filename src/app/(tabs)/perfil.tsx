@@ -4,12 +4,13 @@ import { router } from 'expo-router';
 import { Avatar } from '@/components/Avatar';
 import { Campo } from '@/components/Formulario';
 import { Icon } from '@/components/Icon';
-import { Button, Card, Screen, s } from '@/components/ui';
+import { Button, Card, Screen, Segmented, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { confirmar } from '@/lib/confirmar';
 import { avisoDePrueba, avisosDisponibles, pedirPermisoAvisos } from '@/lib/notificaciones';
 import { comprobarPin, crearPin, LARGO_MAX, LARGO_MIN, pinValido } from '@/lib/pin';
 import { autenticar, motivoSinBloqueo } from '@/lib/seguridad';
+import { guardarPreferenciaTema, leerPreferenciaTema, type PreferenciaTema } from '@/lib/tema';
 import { colors, space } from '@/theme';
 
 
@@ -88,11 +89,20 @@ export default function Perfil() {
           <Button title="Enviar un aviso de prueba" variant="secondary" onPress={() => { avisoDePrueba().catch(() => {}); }} />
         )}
       </Card>
+      <Apariencia />
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }} onPress={() => router.push('/copia')}>
         <Icon name="doc" color={colors.accent} />
         <View style={{ flex: 1 }}>
           <Text style={s.text}>Copia de seguridad cifrada</Text>
           <Text style={s.muted}>Guarda o recupera tus datos con contraseña</Text>
+        </View>
+        <Icon name="chevron" color={colors.textMuted} />
+      </Card>
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }} onPress={() => router.push('/informe')}>
+        <Icon name="share" color={colors.accent} />
+        <View style={{ flex: 1 }}>
+          <Text style={s.text}>Exportar a PDF</Text>
+          <Text style={s.muted}>Papeles, inventario de armas e historial</Text>
         </View>
         <Icon name="chevron" color={colors.textMuted} />
       </Card>
@@ -122,6 +132,28 @@ export default function Perfil() {
         </Card>
       )}
     </Screen>
+  );
+}
+
+/** Modo oscuro, claro o el del iPhone. Los colores se aplican al volver a abrir la app. */
+function Apariencia() {
+  const [tema, setTema] = useState<PreferenciaTema>(leerPreferenciaTema);
+  const [aviso, setAviso] = useState(false);
+  return (
+    <Card style={{ gap: space.md }}>
+      <Text style={s.text}>Apariencia</Text>
+      <Segmented
+        value={tema}
+        onChange={(v) => {
+          setTema(v);
+          if (!guardarPreferenciaTema(v).recargado) setAviso(true);
+        }}
+        options={[{ value: 'oscuro', label: 'Oscuro' }, { value: 'claro', label: 'Claro' }, { value: 'auto', label: 'Como el iPhone' }]}
+      />
+      <Text style={[s.muted, { fontSize: 13 }]}>
+        {aviso ? 'Cierra la app y vuelve a abrirla para ver el cambio.' : 'El modo claro se lee mejor a pleno sol en el campo.'}
+      </Text>
+    </Card>
   );
 }
 

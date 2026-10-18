@@ -2,13 +2,23 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { FotoArma } from '@/components/FotoArma';
+import { Icon } from '@/components/Icon';
 import { Button, Card, Screen, Segmented, s } from '@/components/ui';
-import { useStore } from '@/data/store';
-import type { Modalidad, Registro } from '@/data/types';
+import { nuevoId, useStore } from '@/data/store';
+import type { Modalidad, Plantilla, Registro } from '@/data/types';
+import { confirmar } from '@/lib/confirmar';
 import { calibreEnMm, DIANAS, dianaPara } from '@/lib/diana';
 import { colors, radius, space } from '@/theme';
 
 const DISTANCIAS = [25, 50, 10];
+
+// Programas de las pruebas ISSF (nº de series y disparos; los tiempos no se controlan aquí).
+// Standard: 60 disparos en 12 series de 5 (en.wikipedia.org, «ISSF 25 meter standard pistol»).
+const PROGRAMAS: Omit<Plantilla, 'id'>[] = [
+  { nombre: 'Pistola 25 m · precisión 6×5', modalidad: 'Precisión', distancia: 25, disparosPorSerie: 5, seriesPrevistas: 6 },
+  { nombre: 'Pistola standard 12×5', modalidad: 'Standard', distancia: 25, disparosPorSerie: 5, seriesPrevistas: 12 },
+  { nombre: 'Pistola aire 10 m · 6×10', modalidad: 'Precisión', distancia: 10, disparosPorSerie: 10, seriesPrevistas: 6 },
+];
 
 export default function NuevaSesion() {
   const store = useStore();
@@ -19,8 +29,29 @@ export default function NuevaSesion() {
   const [distancia, setDistancia] = useState(ultima?.distancia ?? 25);
   const [municion, setMunicion] = useState(ultima?.municion ?? '');
   const [porSerie, setPorSerie] = useState(String(ultima?.disparosPorSerie ?? 10) as '5' | '10');
-  const [series, setSeries] = useState(String(ultima?.seriesPrevistas ?? 0) as '0' | '4' | '6');
+  const [series, setSeries] = useState(String(ultima?.seriesPrevistas ?? 0));
   const [registro, setRegistro] = useState<Registro>(ultima?.registro ?? 'diana');
+  const [nombrePlantilla, setNombrePlantilla] = useState<string | null>(null); // abierto: guardar como plantilla
+  const plantillas = store.datos.plantillas ?? [];
+
+  const aplicar = (p: Omit<Plantilla, 'id'>) => {
+    if (p.armaId && armas.some((a) => a.id === p.armaId)) setArmaId(p.armaId);
+    setModalidad(p.modalidad);
+    setDistancia(p.distancia);
+    if (p.municion !== undefined) setMunicion(p.municion);
+    setPorSerie(String(p.disparosPorSerie) as '5' | '10');
+    setSeries(String(p.seriesPrevistas ?? 0));
+    if (p.registro) setRegistro(p.registro);
+  };
+  const guardarPlantilla = () => {
+    const nombre = nombrePlantilla?.trim();
+    if (!nombre) return;
+    store.guardarPlantilla({
+      id: nuevoId('plantilla'), nombre, armaId, modalidad, distancia, municion: municion.trim() || undefined,
+      disparosPorSerie: Number(porSerie), seriesPrevistas: Number(series) || undefined, registro,
+    });
+    setNombrePlantilla(null);
+  };
 
   const arma = armas.find((a) => a.id === armaId);
   const diana = DIANAS[dianaPara(modalidad, distancia, arma?.tipo)];
@@ -38,6 +69,21 @@ export default function NuevaSesion() {
 
   return (
     <Screen title="Nueva sesión" back="/entrenar">
+      <Text style={st.paso}>Empezar desde una plantilla</Text>
+      <View style={st.plantillas}>
+        {plantillas.map((p) => (
+          <Pressable key={p.id} onPress={() => aplicar(p)} onLongPress={() => confirmar('Borrar plantilla', `Se borrará «${p.nombre}».`, () => store.borrarPlantilla(p.id))} style={[st.plantilla, st.propia]}>
+            <Text style={st.plantillaTexto}>{p.nombre}</Text>
+          </Pressable>
+        ))}
+        {PROGRAMAS.map((p) => (
+          <Pressable key={p.nombre} onPress={() => aplicar(p)} style={st.plantilla}>
+            <Text style={st.plantillaTexto}>{p.nombre}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {plantillas.length > 0 && <Text style={[s.muted, { fontSize: 12 }]}>Mantén pulsada una plantilla tuya para borrarla.</Text>}
+
       <Text style={st.paso}>1. Arma</Text>
       {armas.length === 0 && (
         <Card style={{ gap: space.md }}>
@@ -87,7 +133,7 @@ export default function NuevaSesion() {
       <Segmented
         value={series}
         onChange={setSeries}
-        options={[{ value: '0', label: 'Libre' }, { value: '4', label: '4' }, { value: '6', label: '6' }]}
+        options={[{ value: '0', label: 'Libre' }, { value: '4', label: '4' }, { value: '6', label: '6' }, { value: '12', label: '12' }]}
       />
 
       <Text style={st.paso}>7. Cómo apuntas los disparos</Text>
@@ -115,6 +161,21 @@ export default function NuevaSesion() {
         Diana: {diana.nombre} · bala de {String(calibreMm).replace('.', ',')} mm{arma?.calibre && distancia !== 10 ? ` (${arma.calibre})` : ''}
       </Text>
       <Button title="Empezar" onPress={empezar} />
+      {nombrePlantilla === null ? (
+        <Pressable onPress={() => setNombrePlantilla(`${arma ? `${arma.modelo} · ` : ''}${modalidad} ${distancia} m`)} style={st.guardar}>
+          <Icon name="plus" size={16} color={colors.accent} />
+          <Text style={{ color: colors.accent, fontWeight: '700' }}>Guardar esta configuración como plantilla</Text>
+        </Pressable>
+      ) : (
+        <Card style={{ gap: space.sm }}>
+          <Text style={s.text}>Nombre de la plantilla</Text>
+          <TextInput value={nombrePlantilla} onChangeText={setNombrePlantilla} style={st.input} placeholderTextColor={colors.textMuted} />
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <View style={{ flex: 1 }}><Button title="Cancelar" variant="secondary" onPress={() => setNombrePlantilla(null)} /></View>
+            <View style={{ flex: 1 }}><Button title="Guardar" onPress={guardarPlantilla} /></View>
+          </View>
+        </Card>
+      )}
     </Screen>
   );
 }
@@ -124,6 +185,13 @@ const st = StyleSheet.create({
   arma: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm },
   elegida: { borderColor: colors.accent, borderWidth: 2 },
   nombre: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  plantillas: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  plantilla: {
+    paddingHorizontal: 12, paddingVertical: 9, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardAlt,
+  },
+  propia: { borderColor: colors.accent },
+  plantillaTexto: { color: colors.text, fontWeight: '700', fontSize: 13 },
+  guardar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: space.md },
   input: {
     backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: radius.md,
     color: colors.text, paddingHorizontal: space.md, paddingVertical: 12, fontSize: 15,

@@ -27,7 +27,7 @@ export function Screen({ title, kicker = 'Tirador deportivo', back, right, compa
     >
       {/* Brillo azul en la parte alta de la pantalla */}
       <View style={s.fondo} pointerEvents="none">
-        <Degradado desde={colors.bgTop} hasta={colors.bg} brillo="#2668B8" brilloEn={[0.5, 0]} diagonal={false} />
+        <Degradado desde={colors.bgTop} hasta={colors.bg} brillo={colors.brilloFondo} brilloEn={[0.5, 0]} diagonal={false} />
       </View>
       {title !== undefined && (
         <View style={[s.header, compacto && s.headerCompacto]}>
@@ -56,7 +56,7 @@ export function Kicker({ children, color = colors.kicker }: { children: string; 
 }
 
 export function Card({ children, style, onPress }: { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void }) {
-  const fondo = <Degradado desde={colors.cardTop} hasta={colors.cardBottom} brillo="#4E9DFF" />;
+  const fondo = <Degradado desde={colors.cardTop} hasta={colors.cardBottom} brillo={colors.brilloCard} />;
   if (onPress) {
     return (
       <Pressable onPress={onPress} style={({ pressed }) => [s.card, style, pressed && { opacity: 0.8, transform: [{ scale: 0.99 }] }]}>
@@ -144,7 +144,7 @@ export function Button({ title, onPress, variant = 'primary' }: {
       {principal
         ? <Degradado desde={colors.accentLight} hasta={colors.accentDark} />
         : <Degradado desde={colors.cardTop} hasta={colors.cardBottom} />}
-      <Text style={s.buttonText}>{title}</Text>
+      <Text style={[s.buttonText, !principal && { color: colors.text }]}>{title}</Text>
     </Pressable>
   );
 }
@@ -241,7 +241,7 @@ export const s = StyleSheet.create({
   content: { padding: space.lg, paddingTop: space.sm, gap: space.md, paddingBottom: 48 },
   card: {
     backgroundColor: colors.card, borderRadius: radius.lg, padding: space.lg, borderWidth: 1, borderColor: colors.border,
-    overflow: 'hidden', zIndex: 0, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 18, shadowOffset: { width: 0, height: 10 },
+    overflow: 'hidden', zIndex: 0, shadowColor: '#000', shadowOpacity: colors.sombra, shadowRadius: 18, shadowOffset: { width: 0, height: 10 },
   },
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.sm },
   sectionTitle: { color: colors.text, fontSize: 19, fontWeight: '800', letterSpacing: -0.4 },

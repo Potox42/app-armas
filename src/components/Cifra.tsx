@@ -54,7 +54,7 @@ export function Anillo({ valor, maximo, tamano = 150, grosor = 12, color = color
 
 const st = StyleSheet.create({
   cifra: {
-    flex: 1, backgroundColor: 'rgba(5,13,22,0.55)', borderRadius: 17, borderWidth: 1, borderColor: colors.borderSoft,
+    flex: 1, backgroundColor: colors.cifraFondo, borderRadius: 17, borderWidth: 1, borderColor: colors.borderSoft,
     paddingVertical: space.md, paddingHorizontal: space.md, gap: 2,
   },
   titulo: { color: colors.textMuted, fontSize: 9, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },

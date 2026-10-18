@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
+import { Analisis } from '@/components/Analisis';
 import { Card, Screen, Segmented, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import type { Sesion } from '@/data/types';
@@ -96,6 +97,8 @@ export default function Evolucion() {
           </Card>
         </>
       )}
+
+      <Analisis sesiones={puntos.map((p) => p.sesion)} armas={datos.armas} />
 
       <SectionTitle>Entrenamientos</SectionTitle>
       {[...puntos].reverse().map((p) => {

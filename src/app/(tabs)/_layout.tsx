@@ -45,7 +45,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: [{ backgroundColor: 'rgba(4,10,16,0.96)', borderTopColor: colors.border }, barraPestanasWeb],
+        tabBarStyle: [{ backgroundColor: colors.barraPestanas, borderTopColor: colors.border }, barraPestanasWeb],
         tabBarLabelStyle: { fontWeight: '700', fontSize: 10 },
         sceneStyle: { backgroundColor: colors.bg },
       }}

@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import type { PermisoArmas } from '@/data/types';
 import { nivelPorDias } from '@/lib/avisos';
 import { diasHasta, formatear } from '@/lib/fechas';
+import { ocultar } from '@/lib/informe';
 import { radius, space } from '@/theme';
 import { nivelColor } from './ui';
 
@@ -23,6 +25,8 @@ function queda(dias: number): string {
  */
 export function DocumentoLicencia({ permiso, onPress }: { permiso: PermisoArmas; onPress?: () => void }) {
   // Mismo orden que en la tarjeta: E, F, D.
+  // El NIF sale tapado (por si alguien mira la pantalla) hasta que se toca.
+  const [verNif, setVerNif] = useState(false);
   const filas = [...permiso.licencias].sort((a, b) => 'EFD'.indexOf(a.tipo) - 'EFD'.indexOf(b.tipo));
   return (
     <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [st.tarjeta, pressed && { opacity: 0.9 }]}>
@@ -48,7 +52,16 @@ export function DocumentoLicencia({ permiso, onPress }: { permiso: PermisoArmas;
         <View style={{ flex: 1 }}>
           <Text style={st.pais}>España · Ministerio del Interior</Text>
           <Text style={st.titulo}>Licencia de armas</Text>
-          <Text style={st.nif}>{permiso.numero ? `NIF ${permiso.numero}` : 'Toca para añadir tus datos'}</Text>
+          {permiso.numero ? (
+            <Pressable onPress={() => setVerNif((v) => !v)} hitSlop={8} accessibilityLabel={verNif ? 'Ocultar NIF' : 'Ver NIF'} style={{ alignSelf: 'flex-start' }}>
+              <Text style={st.nif}>
+                NIF {verNif ? permiso.numero : ocultar(permiso.numero)}
+                <Text style={st.ver}>  {verNif ? 'ocultar' : 'ver'}</Text>
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={st.nif}>Toca para añadir tus datos</Text>
+          )}
         </View>
       </View>
 
@@ -83,6 +96,7 @@ export function DocumentoLicencia({ permiso, onPress }: { permiso: PermisoArmas;
 }
 
 const st = StyleSheet.create({
+  ver: { fontSize: 11, fontWeight: '700', textDecorationLine: 'underline' },
   tarjeta: { borderRadius: radius.lg, overflow: 'hidden', padding: space.lg, gap: space.md, minHeight: 210 },
   cabecera: { flexDirection: 'row' },
   estrellas: { position: 'absolute', top: 14, right: 16 },

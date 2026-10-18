@@ -3,12 +3,12 @@ import { StatusBar } from 'expo-status-bar';
 import { AvisosProgramados } from '@/components/AvisosProgramados';
 import { Bloqueo } from '@/components/Bloqueo';
 import { StoreProvider } from '@/data/store';
-import { colors } from '@/theme';
+import { colors, temaClaro } from '@/theme';
 
 export default function RootLayout() {
   return (
     <StoreProvider>
-      <StatusBar style="light" />
+      <StatusBar style={temaClaro ? 'dark' : 'light'} />
       <AvisosProgramados />
       <Bloqueo>
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>

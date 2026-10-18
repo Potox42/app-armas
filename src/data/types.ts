@@ -109,6 +109,19 @@ export interface Sesion {
   gasto?: 'casa' | 'no'; // al terminar: se restaron los cartuchos de casa o se dijo que no
 }
 
+/** Configuración de entrenamiento guardada para empezar con un toque. */
+export interface Plantilla {
+  id: string;
+  nombre: string;
+  armaId?: string;
+  modalidad: Modalidad;
+  distancia: number;
+  municion?: string;
+  disparosPorSerie: number;
+  seriesPrevistas?: number;
+  registro?: Registro;
+}
+
 /** Tipos de competición, como los del calendario de la federación (p. ej. fmto.es). */
 export type CategoriaCompeticion = 'Preparatoria' | 'Complementaria' | 'Regional' | 'Nacional' | 'Trofeo' | 'Otra';
 
@@ -166,6 +179,7 @@ export interface Datos {
   federacion: Federacion;
   sesiones: Sesion[];
   competiciones?: Competicion[]; // sin valor en datos de versiones anteriores
+  plantillas?: Plantilla[];
   documentos?: Documento[]; // seguro, certificado médico… (sin valor en versiones anteriores)
   esEjemplo?: boolean; // true mientras se usan los datos de ejemplo
 }
