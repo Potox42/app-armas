@@ -162,11 +162,22 @@ export interface ListaCampo {
   armas?: string[]; // las armas que vas a llevar
 }
 
+/** Copia automática: el móvil cifra los datos con la contraseña y los sube a tu propio hosting. */
+export interface CopiaServidor {
+  url: string; // dirección del archivo copia.php en tu web
+  clave: string; // la misma CLAVE que está escrita en copia.php
+  contrasena: string; // para cifrar la copia (se queda en este móvil)
+  ultima?: string; // ISO con hora: última copia subida
+  huella?: string; // de los datos de esa copia, para no repetirla si nada ha cambiado
+  error?: string; // último fallo al subir, si lo hubo
+}
+
 export interface Ajustes {
   bloqueo: boolean; // pedir Face ID al abrir la app
   avisos: boolean; // notificaciones locales de caducidades
   bienvenida?: boolean; // ya se mostró la pantalla de bienvenida
   ultimaCopia?: string; // ISO: última copia de seguridad guardada desde este móvil
+  nube?: CopiaServidor; // copia automática en el hosting del tirador
   pin?: { sal: string; hash: string; largo: number }; // bloqueo con PIN en la versión web (SHA-256 con sal)
   campo?: ListaCampo;
 }

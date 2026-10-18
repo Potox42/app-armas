@@ -22,8 +22,8 @@ export function Campo({ etiqueta, valor, onChange, placeholder, teclado, error, 
         placeholderTextColor={colors.textMuted}
         keyboardType={teclado}
         secureTextEntry={secreto}
-        autoCapitalize={secreto ? 'none' : undefined}
-        autoCorrect={secreto ? false : undefined}
+        autoCapitalize={secreto || teclado === 'url' ? 'none' : undefined}
+        autoCorrect={secreto || teclado === 'url' ? false : undefined}
         style={[st.input, error && { borderColor: colors.red }]}
       />
       {error && <Text style={st.error}>{error}</Text>}
