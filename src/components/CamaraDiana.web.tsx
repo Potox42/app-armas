@@ -6,6 +6,28 @@ import type { PropsCamaraDiana } from './CamaraDiana.types';
 
 const ANCHO = 480; // ancho de la imagen que se analiza
 const CADA_MS = 450; // cada cuánto se mira la diana
+const ESPERA_MS = 400; // al girar el móvil, el iPhone tarda un poco en girar también la cámara
+
+/** Giro manual guardado (grados), uno para vertical y otro para horizontal. */
+const claveGiro = (horizontal?: boolean) => `camaraGiro-${horizontal ? 'h' : 'v'}`;
+function leerGiro(horizontal?: boolean): number {
+  try {
+    return Number(localStorage.getItem(claveGiro(horizontal))) || 0;
+  } catch {
+    return 0;
+  }
+}
+function guardarGiro(horizontal: boolean | undefined, grados: number) {
+  try {
+    localStorage.setItem(claveGiro(horizontal), String(grados));
+  } catch {}
+}
+
+/** Cuánto está girada la pantalla respecto al móvil en vertical (90 o 270 en horizontal). */
+function anguloPantalla(): number {
+  const a = screen.orientation?.angle ?? Number((window as { orientation?: number }).orientation ?? 0);
+  return ((a % 360) + 360) % 360;
+}
 
 type Estado = 'arrancando' | 'sin-permiso' | 'buscando' | 'calibrando' | 'vigilando';
 
@@ -26,12 +48,14 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, onImpacto }: 
   const caja = useRef<unknown>(null); // en la web, el elemento del DOM de la vista
   const [estado, setEstado] = useState<Estado>('arrancando');
   const [ultimo, setUltimo] = useState<number | null>(null);
+  // Giro que añade la persona con el botón «Girar», por si el automático no acierta.
+  const giroManual = useRef(leerGiro(horizontal));
   const vigia = useRef(new Vigia(modelo, calibre));
   const marcas = useRef<{ x: number; y: number }[]>([]); // impactos vistos, en píxeles de la imagen analizada
   // Siempre la última versión de las props, sin reiniciar la cámara.
-  const props = useRef({ activo, onImpacto });
+  const props = useRef({ activo, onImpacto, horizontal });
   useEffect(() => {
-    props.current = { activo, onImpacto };
+    props.current = { activo, onImpacto, horizontal };
   });
 
   useEffect(() => {
@@ -42,7 +66,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, onImpacto }: 
     video.muted = true;
     video.autoplay = true;
     video.setAttribute('playsinline', '');
-    Object.assign(video.style, { width: '100%', height: '100%', objectFit: 'contain', display: 'block' });
+    Object.assign(video.style, { position: 'absolute', left: '50%', top: '50%', objectFit: 'contain', display: 'block' });
     const capa = document.createElement('canvas');
     Object.assign(capa.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none' });
     raiz.appendChild(video);
@@ -53,9 +77,27 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, onImpacto }: 
     let flujo: MediaStream | null = null;
     let reloj: ReturnType<typeof setInterval> | undefined;
     let vivo = true;
+    let forma = ''; // tamaño y giro de la imagen con los que se calibró
 
-    const dibujar = (cal?: Calibracion) => {
+    // Con el móvil en horizontal, el iPhone a veces sigue dando la imagen de la cámara en vertical
+    // (sobre todo en la app de la pantalla de inicio): se gira aquí para que la diana se vea derecha.
+    const giro = () => {
       const W = video.videoWidth, H = video.videoHeight;
+      const auto = props.current.horizontal && H > W ? 360 - anguloPantalla() : 0;
+      return (auto + giroManual.current) % 360;
+    };
+    // Tamaño de la imagen ya girada.
+    const medidas = (g: number) => (g % 180 ? { W: video.videoHeight, H: video.videoWidth } : { W: video.videoWidth, H: video.videoHeight });
+
+    // El vídeo se gira con CSS dentro de la caja; si va de lado, su ancho es el alto de la caja.
+    const encajar = (g: number) => {
+      const { width, height } = raiz.getBoundingClientRect();
+      const [w, h] = g % 180 ? [height, width] : [width, height];
+      Object.assign(video.style, { width: `${w}px`, height: `${h}px`, transform: `translate(-50%, -50%) rotate(${g}deg)` });
+    };
+
+    const dibujar = (g: number, cal?: Calibracion) => {
+      const { W, H } = medidas(g);
       if (!W) return;
       // La capa usa las mismas coordenadas que el vídeo; se encaja igual (contain).
       const caja = capa.getBoundingClientRect();
@@ -82,12 +124,26 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, onImpacto }: 
     };
 
     const mirar = () => {
-      const W = video.videoWidth, H = video.videoHeight;
-      if (!W || video.readyState < 2) return;
+      if (!video.videoWidth || video.readyState < 2) return;
+      const gr = giro();
+      const { W, H } = medidas(gr);
+      encajar(gr);
+      // Si la imagen cambia de forma o de giro, la calibración anterior ya no vale.
+      const ahora = `${W}x${H}@${gr}`;
+      if (forma && ahora !== forma) {
+        vigia.current.reiniciar();
+        impactos.length = 0;
+      }
+      forma = ahora;
       const h = Math.round((H / W) * ANCHO);
       lienzo.width = ANCHO;
       lienzo.height = h;
-      ctx.drawImage(video, 0, 0, ANCHO, h);
+      const e = ANCHO / W; // de la imagen girada a la analizada
+      ctx.save();
+      ctx.translate(ANCHO / 2, h / 2);
+      ctx.rotate((gr * Math.PI) / 180);
+      ctx.drawImage(video, (-video.videoWidth * e) / 2, (-video.videoHeight * e) / 2, video.videoWidth * e, video.videoHeight * e);
+      ctx.restore();
       const px = ctx.getImageData(0, 0, ANCHO, h).data;
       const d = new Float32Array(ANCHO * h);
       for (let i = 0; i < d.length; i++) d[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
@@ -99,17 +155,18 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, onImpacto }: 
         setUltimo(r.impacto.valor);
         props.current.onImpacto(r.impacto.x, r.impacto.y);
       }
-      dibujar(r.cal ?? vigia.current.cal ?? undefined);
+      dibujar(gr, r.cal ?? vigia.current.cal ?? undefined);
     };
 
     // Sin cámara en el navegador (o sin HTTPS), getUserMedia no existe: se trata como un permiso denegado.
-    Promise.resolve()
+    new Promise((ok) => setTimeout(ok, ESPERA_MS))
       .then(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }))
       .then((s) => {
         if (!vivo) return s.getTracks().forEach((t) => t.stop());
         flujo = s;
         video.srcObject = s;
         return video.play().then(() => {
+          encajar(giro());
           setEstado('buscando');
           reloj = setInterval(mirar, CADA_MS);
         });
@@ -129,6 +186,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, onImpacto }: 
   }, []);
 
   const ok = estado === 'vigilando';
+  const enMarcha = estado !== 'arrancando' && estado !== 'sin-permiso';
   return (
     <View style={st.marco}>
       <View ref={caja as never} style={horizontal ? [st.videoHorizontal, { height: Math.max(160, altoPantalla - 170) }] : st.video} />
@@ -151,6 +209,19 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, onImpacto }: 
             <Text style={st.boton}>Recolocar</Text>
           </Pressable>
         )}
+        {enMarcha && (
+          <Pressable
+            hitSlop={8}
+            onPress={() => {
+              giroManual.current = (giroManual.current + 90) % 360;
+              guardarGiro(horizontal, giroManual.current);
+              setEstado('buscando');
+            }}
+            accessibilityLabel="Girar la imagen de la cámara"
+          >
+            <Text style={st.boton}>Girar</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -158,8 +229,8 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, onImpacto }: 
 
 const st = StyleSheet.create({
   marco: { borderRadius: radius.lg, overflow: 'hidden', backgroundColor: '#000', borderWidth: 1, borderColor: colors.border },
-  video: { width: '100%', aspectRatio: 3 / 4, position: 'relative' },
-  videoHorizontal: { width: '100%', position: 'relative' },
+  video: { width: '100%', aspectRatio: 3 / 4, position: 'relative', overflow: 'hidden' },
+  videoHorizontal: { width: '100%', position: 'relative', overflow: 'hidden' },
   pie: { flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md, backgroundColor: colors.card },
   texto: { flex: 1, color: colors.text, fontSize: 14 },
   boton: { color: colors.accent, fontWeight: '700' },
