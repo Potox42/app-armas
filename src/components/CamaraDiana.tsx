@@ -4,10 +4,14 @@ import type { PropsCamaraDiana } from './CamaraDiana.types';
 
 // En la app instalada (iOS/Android) la detección irá con la cámara nativa; de momento solo
 // está en la versión web.
-export function CamaraDiana(_props: PropsCamaraDiana) {
+export function CamaraDiana({ soloVer }: PropsCamaraDiana) {
   return (
     <Card>
-      <Text style={s.muted}>La detección con la cámara de momento solo funciona en la versión web. Marca los impactos tocando la diana.</Text>
+      <Text style={s.muted}>
+        {soloVer
+          ? 'El visor del catalejo de momento solo funciona en la versión web.'
+          : 'La detección con la cámara de momento solo funciona en la versión web. Marca los impactos tocando la diana.'}
+      </Text>
     </Card>
   );
 }
