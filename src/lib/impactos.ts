@@ -111,12 +111,14 @@ function manchas(m: Uint8Array, w: number, h: number): Mancha[] {
  * Localiza el círculo negro. Solo mira el centro de la imagen (el borde del ocular sale oscuro)
  * y suaviza antes para que las rayas blancas de los anillos no lo partan en trozos.
  */
-export function calibrar(g: Gris, alcance = 0.48): Calibracion | null {
+export function calibrar(g: Gris, alcance = 0.48, centro?: { x: number; y: number }): Calibracion | null {
   const { w, h } = g;
   const lado = Math.min(w, h);
   const r = Math.max(1, Math.round(lado / 160));
   const s = desenfocar(g, r);
-  const cx0 = w / 2, cy0 = h / 2, rMax = alcance * lado;
+  // Por defecto se mira alrededor del centro de la imagen; si el tirador ha tocado dónde está la
+  // diana (el móvil en un soporte no siempre la deja en medio), alrededor de ese punto.
+  const cx0 = centro?.x ?? w / 2, cy0 = centro?.y ?? h / 2, rMax = alcance * lado;
   const dentro = (x: number, y: number) => (x - cx0) ** 2 + (y - cy0) ** 2 < rMax * rMax;
   const valores: number[] = [];
   for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) if (dentro(x, y)) valores.push(s.d[y * w + x]);
@@ -283,13 +285,19 @@ export class Vigia {
   }
 
   cal: Calibracion | null = null;
+  /** Dónde ha dicho el tirador que está la diana (en píxeles de la imagen), si no está en medio. */
+  centro: { x: number; y: number } | null = null;
   private ref: Gris | null = null;
+  private ultima: Gris | null = null; // última imagen alineada, para tomarla de referencia
   private pendiente: Impacto | null = null;
   private estables = 0;
 
   /** Procesa una imagen. Devuelve el impacto confirmado, si lo hay. */
   procesar(g: Gris): { estado: 'buscando' | 'calibrando' | 'vigilando'; impacto?: Impacto; cal?: Calibracion } {
-    const cal = calibrar(g);
+    // Ya fijada, la diana se sigue buscando donde estaba; si no, donde la tocó el tirador o en medio.
+    const cerca = this.cal ? { x: this.cal.cx, y: this.cal.cy } : this.centro ?? undefined;
+    // Sin pista, si no aparece en medio se mira en casi toda la imagen.
+    const cal = calibrar(g, 0.48, cerca) ?? (!cerca ? calibrar(g, 0.7) : null);
     if (!cal) {
       this.estables = 0;
       return { estado: this.cal ? 'vigilando' : 'buscando' };
@@ -307,6 +315,7 @@ export class Vigia {
     const det = detalle(g, this.cal, this.diana);
     const { dx, dy } = afinar(this.ref!, det, this.cal.cx - cal.cx, this.cal.cy - cal.cy, this.cal);
     const alineada = desplazar(det, dx, dy);
+    this.ultima = alineada;
     const { impacto, cambio } = comparar(this.ref!, alineada, this.cal, this.calibreMm, this.diana);
     if (cambio > 0.05) {
       // Ha cambiado demasiado (se ha movido el móvil o la luz): nueva referencia sin contar nada.
@@ -330,8 +339,18 @@ export class Vigia {
 
   private previa: Calibracion | null = null;
 
+  /**
+   * El tirador ha marcado un disparo a mano: lo que se ve ahora pasa a ser la referencia, para no
+   * contar luego ese mismo agujero otra vez.
+   */
+  marcadoAMano() {
+    this.pendiente = null;
+    if (this.ultima) this.ref = this.ultima;
+  }
+
   /** Vuelve a empezar (otra diana o se ha movido el soporte). */
   reiniciar() {
+    this.ultima = null;
     this.cal = null;
     this.ref = null;
     this.pendiente = null;
