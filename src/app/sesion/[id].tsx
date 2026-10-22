@@ -57,6 +57,9 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   const valores = serie.disparos.map((d) => d.valor);
   const { width: ancho, height: alto } = useWindowDimensions();
   const horizontal = ancho > alto && alto < 600;
+  // Al marcar a mano (diana o números), arriba se ve la diana del campo por la cámara del catalejo.
+  const [conVisor, setConVisor] = useState(true);
+  const visor = conVisor && (teclado || sesion.registro === undefined || sesion.registro === 'diana');
 
   const terminar = () => {
     store.terminarSesion(sesion.id);
@@ -133,6 +136,29 @@ function Asistente({ sesion }: { sesion: Sesion }) {
     />
   );
 
+  const visorVista = (altoVisor: number) => (
+    <>
+      <CamaraDiana
+        soloVer
+        activo={false}
+        horizontal={horizontal}
+        alto={altoVisor}
+        modelo={modelo}
+        calibre={calibre}
+        onImpacto={() => {}}
+      />
+      <Pressable onPress={() => setConVisor(false)} hitSlop={8}>
+        <Text style={st.enlace}>Ocultar el visor</Text>
+      </Pressable>
+    </>
+  );
+  const verVisor = !visor && !camara && !foto && (
+    <Card style={st.camara} onPress={() => setConVisor(true)}>
+      <Icon name="target" color={colors.accent} />
+      <Text style={[s.muted, { flex: 1 }]}>Ver el visor del catalejo arriba mientras marcas.</Text>
+    </Card>
+  );
+
   const fotoVista = foto && (
     <FotoDiana
       key={`foto-${nDiana}`}
@@ -189,6 +215,23 @@ function Asistente({ sesion }: { sesion: Sesion }) {
 
   // Con el móvil en horizontal (por ejemplo, puesto en el catalejo): la diana o la cámara a la
   // izquierda y los datos a la derecha, todo a la vista sin desplazarse.
+  if (horizontal && visor) {
+    const ladoDiana = Math.max(160, Math.min(alto - 110, ancho * 0.4 - space.lg));
+    return (
+      <Screen title={titulo} kicker={kicker} back="/entrenar" compacto>
+        <View style={st.cabina}>
+          <View style={{ flex: 1.3, gap: space.sm }}>{visorVista(Math.max(140, alto - 150))}</View>
+          <View style={{ flex: 1, gap: space.sm }}>
+            {teclado ? tecladoNumeros : diana(ladoDiana)}
+            {cifras}
+            {botones}
+            <BotonBorrar sesion={sesion} />
+          </View>
+        </View>
+      </Screen>
+    );
+  }
+
   if (horizontal) {
     const ladoDiana = Math.max(160, alto - 110);
     return (
@@ -202,6 +245,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
             {resumenDiana}
             {grafica}
             {botones}
+            {verVisor}
             <BotonBorrar sesion={sesion} />
           </View>
         </View>
@@ -211,9 +255,19 @@ function Asistente({ sesion }: { sesion: Sesion }) {
 
   return (
     <Screen title={titulo} kicker={kicker} back="/entrenar">
-      {cifras}
-      {resumenDiana}
-      {teclado ? (
+      {visor ? (
+        // Pantalla dividida: el visor arriba y, justo debajo, dónde se marca.
+        <>
+          {visorVista(Math.round(alto * 0.3))}
+          {teclado ? tecladoNumeros : diana(Math.min(tamano, Math.round(alto * 0.38)))}
+          {cifras}
+          {resumenDiana}
+          {grafica}
+        </>
+      ) : null}
+      {!visor && cifras}
+      {!visor && resumenDiana}
+      {visor ? null : teclado ? (
         <>
           {grafica}
           {tecladoNumeros}
@@ -227,6 +281,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         </>
       )}
       {botones}
+      {verVisor}
       {!teclado && !camara && (
         <Card style={st.camara} onPress={() => store.cambiarRegistro(sesion.id, 'camara')}>
           <Icon name="target" color={colors.accent} />
@@ -589,6 +644,7 @@ const st = StyleSheet.create({
   borrar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm, paddingVertical: space.md },
   borrarTexto: { color: colors.red, fontWeight: '600' },
   camara: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  enlace: { color: colors.accent, fontWeight: '700', textAlign: 'center', fontSize: 13 },
   cabina: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
   teclado: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   tecla: {

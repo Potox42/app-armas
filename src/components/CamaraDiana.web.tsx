@@ -43,19 +43,25 @@ const TEXTOS: Record<Estado, string> = {
  * Vídeo de la cámara trasera (con el móvil en el catalejo) que vigila la diana y avisa de cada
  * impacto nuevo con su posición en mm. Todo se procesa en el móvil; no se guarda el vídeo.
  */
-export function CamaraDiana({ activo, horizontal, modelo, calibre, onImpacto }: PropsCamaraDiana) {
+export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto, onImpacto }: PropsCamaraDiana) {
   const { height: altoPantalla } = useWindowDimensions();
   const caja = useRef<unknown>(null); // en la web, el elemento del DOM de la vista
   const [estado, setEstado] = useState<Estado>('arrancando');
   const [ultimo, setUltimo] = useState<number | null>(null);
   // Giro que añade la persona con el botón «Girar», por si el automático no acierta.
   const giroManual = useRef(leerGiro(horizontal));
+  // Visor: aumento digital para ver mejor los agujeros pequeños.
+  const [zoom, setZoom] = useState(1);
+  const aumento = useRef(1);
+  useEffect(() => {
+    aumento.current = zoom;
+  }, [zoom]);
   const vigia = useRef(new Vigia(modelo, calibre));
   const marcas = useRef<{ x: number; y: number }[]>([]); // impactos vistos, en píxeles de la imagen analizada
   // Siempre la última versión de las props, sin reiniciar la cámara.
-  const props = useRef({ activo, onImpacto, horizontal });
+  const props = useRef({ activo, onImpacto, horizontal, soloVer });
   useEffect(() => {
-    props.current = { activo, onImpacto, horizontal };
+    props.current = { activo, onImpacto, horizontal, soloVer };
   });
 
   useEffect(() => {
@@ -93,7 +99,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, onImpacto }: 
     const encajar = (g: number) => {
       const { width, height } = raiz.getBoundingClientRect();
       const [w, h] = g % 180 ? [height, width] : [width, height];
-      Object.assign(video.style, { width: `${w}px`, height: `${h}px`, transform: `translate(-50%, -50%) rotate(${g}deg)` });
+      Object.assign(video.style, { width: `${w}px`, height: `${h}px`, transform: `translate(-50%, -50%) rotate(${g}deg) scale(${aumento.current})` });
     };
 
     const dibujar = (g: number, cal?: Calibracion) => {
@@ -128,6 +134,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, onImpacto }: 
       const gr = giro();
       const { W, H } = medidas(gr);
       encajar(gr);
+      if (props.current.soloVer) return;
       // Si la imagen cambia de forma o de giro, la calibración anterior ya no vale.
       const ahora = `${W}x${H}@${gr}`;
       if (forma && ahora !== forma) {
@@ -168,7 +175,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, onImpacto }: 
         return video.play().then(() => {
           encajar(giro());
           setEstado('buscando');
-          reloj = setInterval(mirar, CADA_MS);
+          reloj = setInterval(mirar, props.current.soloVer ? 250 : CADA_MS);
         });
       })
       .catch((e) => {
@@ -189,14 +196,21 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, onImpacto }: 
   const enMarcha = estado !== 'arrancando' && estado !== 'sin-permiso';
   return (
     <View style={st.marco}>
-      <View ref={caja as never} style={horizontal ? [st.videoHorizontal, { height: Math.max(160, altoPantalla - 170) }] : st.video} />
+      <View ref={caja as never} style={alto ? [st.videoHorizontal, { height: alto }] : horizontal ? [st.videoHorizontal, { height: Math.max(160, altoPantalla - 170) }] : st.video} />
       <View style={st.pie}>
         {(estado === 'arrancando' || estado === 'calibrando') && <ActivityIndicator color={colors.accent} />}
         <Text style={[st.texto, ok && { color: colors.green }]}>
-          {!activo && ok ? 'Serie completa: pasa a la siguiente para seguir contando.' : TEXTOS[estado]}
+          {soloVer
+            ? enMarcha ? 'Visor del catalejo' : TEXTOS[estado]
+            : !activo && ok ? 'Serie completa: pasa a la siguiente para seguir contando.' : TEXTOS[estado]}
           {ultimo !== null && ok ? `  Último: ${ultimo}` : ''}
         </Text>
-        {(ok || estado === 'calibrando') && (
+        {soloVer && enMarcha && (
+          <Pressable hitSlop={8} onPress={() => setZoom((z) => (z >= 3 ? 1 : z + 1))} accessibilityLabel="Ampliar la imagen">
+            <Text style={st.boton}>Ampliar {zoom}×</Text>
+          </Pressable>
+        )}
+        {!soloVer && (ok || estado === 'calibrando') && (
           <Pressable
             hitSlop={8}
             onPress={() => {
