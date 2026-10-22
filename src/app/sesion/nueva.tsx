@@ -158,6 +158,9 @@ export default function NuevaSesion() {
       </Text>
 
       <Text style={[s.muted, { marginTop: space.sm }]}>
+        En la sesión apuntas todas las dianas del día: cuando cambies la hoja, pulsa «Cambiar de diana».
+      </Text>
+      <Text style={s.muted}>
         Diana: {diana.nombre} · bala de {String(calibreMm).replace('.', ',')} mm{arma?.calibre && distancia !== 10 ? ` (${arma.calibre})` : ''}
       </Text>
       <Button title="Empezar" onPress={empezar} />

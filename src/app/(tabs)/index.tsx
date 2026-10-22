@@ -10,7 +10,7 @@ import { useStore } from '@/data/store';
 import { calcularAvisos, type Aviso, type TipoAviso } from '@/lib/avisos';
 import { competiciones, fechaCorta, repartir } from '@/lib/competiciones';
 import { diasHasta, formatear } from '@/lib/fechas';
-import { formatoMedia, media, sumaSerie, todosLosDisparos, totalSesion } from '@/lib/sesiones';
+import { dianasDe, formatoMedia, media, sumaSerie, todosLosDisparos, totalSesion } from '@/lib/sesiones';
 import { colors, radius, space } from '@/theme';
 
 const ICONO_AVISO: Record<TipoAviso, IconName> = {
@@ -128,7 +128,7 @@ export default function Inicio() {
                 <Text style={st.ultimaEtiqueta}>{ultima.modalidad} · {ultima.distancia} m</Text>
                 <Text style={st.tileTitle}>{armaUltima ? `${armaUltima.marca} ${armaUltima.modelo}` : 'Arma'}</Text>
                 <Text style={s.muted}>
-                  {formatear(ultima.fecha.slice(0, 10))} · {todosLosDisparos(ultima).length} disparos{ultima.municion ? ` · ${ultima.municion}` : ''}
+                  {formatear(ultima.fecha.slice(0, 10))} · {dianasDe(ultima).length > 1 ? `${dianasDe(ultima).length} dianas · ` : ''}{todosLosDisparos(ultima).length} disparos{ultima.municion ? ` · ${ultima.municion}` : ''}
                 </Text>
                 <View style={st.barras}>
                   {sumas.map((v, i) => {

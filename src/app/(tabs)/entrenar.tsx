@@ -7,7 +7,7 @@ import { Icon } from '@/components/Icon';
 import { Card, Screen, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { formatear } from '@/lib/fechas';
-import { formatoMedia, media, todosLosDisparos, totalSesion } from '@/lib/sesiones';
+import { dianasDe, formatoMedia, media, todosLosDisparos, totalSesion } from '@/lib/sesiones';
 import { colors, radius, space } from '@/theme';
 
 export default function Entrenar() {
@@ -25,7 +25,7 @@ export default function Entrenar() {
         <Icon name="target" size={40} />
         <View style={{ flex: 1 }}>
           <Text style={st.nuevaTitulo}>{enCurso ? 'Continuar sesión' : 'Nueva sesión'}</Text>
-          <Text style={st.nuevaSub}>{enCurso ? 'Tienes un entrenamiento a medias' : 'Arma, modalidad, distancia y munición'}</Text>
+          <Text style={st.nuevaSub}>{enCurso ? 'Tienes una sesión a medias' : 'Todas las dianas que tires hoy, en una sesión'}</Text>
         </View>
         <Icon name="chevron" />
       </Pressable>
@@ -39,17 +39,18 @@ export default function Entrenar() {
         <Icon name="chevron" color={colors.textMuted} />
       </Card>
 
-      <SectionTitle>Entrenamientos</SectionTitle>
-      {terminadas.length === 0 && <Text style={s.muted}>Aún no hay entrenamientos.</Text>}
+      <SectionTitle>Sesiones de entrenamiento</SectionTitle>
+      {terminadas.length === 0 && <Text style={s.muted}>Aún no hay sesiones.</Text>}
       {terminadas.map((x) => {
         const a = arma(x.armaId);
         const disparos = todosLosDisparos(x);
+        const nDianas = dianasDe(x).length;
         return (
           <Card key={x.id} onPress={() => router.push(`/sesion/${x.id}`)} style={st.fila}>
             <View style={st.mini}><MiniDiana disparos={disparos} tamano={52} modelo={geometria(x).diana} /></View>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={st.nombre} numberOfLines={1}>{a ? `${a.marca} ${a.modelo}` : 'Arma'} · {x.distancia} m</Text>
-              <Text style={s.muted} numberOfLines={1}>{formatear(x.fecha.slice(0, 10))} · {disparos.length} disparos</Text>
+              <Text style={s.muted} numberOfLines={1}>{formatear(x.fecha.slice(0, 10))} · {nDianas > 1 ? `${nDianas} dianas · ` : ''}{disparos.length} disparos</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={st.total}>{totalSesion(x)}</Text>

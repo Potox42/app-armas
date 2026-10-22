@@ -3,7 +3,7 @@ import { disparosDesdeLimpieza, licenciaDe } from './avisos';
 import { historial, textoResultado } from './competiciones';
 import { formatear, hoyISO, sumarDias } from './fechas';
 import { estadoMunicion } from './municion';
-import { formatoMedia, media, todosLosDisparos, totalSesion } from './sesiones';
+import { dianasDe, formatoMedia, media, todosLosDisparos, totalSesion } from './sesiones';
 
 export interface OpcionesInforme {
   papeles: boolean; // licencias, armas, munición y otros papeles
@@ -97,11 +97,11 @@ export function informeHtml(datos: Datos, o: OpcionesInforme, hoy = hoyISO()): s
       partes.push(`<p>${ses.length} entrenamientos · ${disparos.length.toLocaleString('es-ES')} disparos · media ${formatoMedia(media(disparos))} por disparo</p>`);
     }
     partes.push(tabla(
-      ['Fecha', 'Arma', 'Modalidad', 'Distancia', 'Disparos', 'Puntos', 'Media'],
+      ['Fecha', 'Arma', 'Modalidad', 'Distancia', 'Dianas', 'Disparos', 'Puntos', 'Media'],
       ses.map((s) => {
         const a = datos.armas.find((x) => x.id === s.armaId);
         const d = todosLosDisparos(s);
-        return [f(s.fecha.slice(0, 10)), a ? `${a.marca} ${a.modelo}` : '—', s.modalidad, `${s.distancia} m`, d.length, `${totalSesion(s)} / ${d.length * 10}`, formatoMedia(media(d))];
+        return [f(s.fecha.slice(0, 10)), a ? `${a.marca} ${a.modelo}` : '—', s.modalidad, `${s.distancia} m`, dianasDe(s).length, d.length, `${totalSesion(s)} / ${d.length * 10}`, formatoMedia(media(d))];
       }),
       'Sin entrenamientos en este periodo.',
     ));
