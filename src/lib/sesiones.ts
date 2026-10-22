@@ -29,4 +29,24 @@ export function extremos(s: Sesion) {
   return { sumas, mejor, peor, diferencia: sumas[mejor] - sumas[peor] };
 }
 
+/** Número de diana (desde 0) de una serie. Las sesiones de versiones anteriores son de una sola diana. */
+export const numDiana = (s: Serie) => s.diana ?? 0;
+
+/** Las dianas de la sesión, en orden, con sus series (solo las que tienen disparos). */
+export function dianasDe(s: Sesion): { n: number; series: Serie[]; disparos: Disparo[] }[] {
+  const grupos: { n: number; series: Serie[]; disparos: Disparo[] }[] = [];
+  for (const serie of s.series) {
+    if (serie.disparos.length === 0) continue;
+    const n = numDiana(serie);
+    let g = grupos.find((x) => x.n === n);
+    if (!g) grupos.push((g = { n, series: [], disparos: [] }));
+    g.series.push(serie);
+    g.disparos.push(...serie.disparos);
+  }
+  return grupos;
+}
+
+/** La sesión vista solo con las series de una diana (para reutilizar los mismos cálculos). */
+export const soloDiana = (s: Sesion, n: number): Sesion => ({ ...s, series: s.series.filter((x) => numDiana(x) === n) });
+
 export const formatoMedia = (n: number) => n.toFixed(1).replace('.', ',');

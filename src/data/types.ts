@@ -87,6 +87,7 @@ export interface Disparo {
 
 export interface Serie {
   disparos: Disparo[];
+  diana?: number; // diana (hoja de papel) de la sesión a la que pertenece, desde 0; sin valor: la primera
 }
 
 /** Cómo se apuntan los disparos: tocando la diana, con números, con la cámara en el catalejo o con una foto. */

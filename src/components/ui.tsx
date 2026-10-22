@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import type { ReactNode, Ref } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { bordesNativos, margenArriba, margenLados } from '@/lib/margenes';
 import type { Href } from 'expo-router';
@@ -12,12 +12,13 @@ import { Degradado } from './Degradado';
 import { Icon } from './Icon';
 import { SILUETAS } from './siluetas';
 
-export function Screen({ title, kicker = 'Tirador deportivo', back, right, compacto, children }: {
+export function Screen({ title, kicker = 'Tirador deportivo', back, right, compacto, scrollRef, children }: {
   title?: string;
   compacto?: boolean; // cabecera baja, para el móvil en horizontal
   kicker?: string; // rótulo pequeño encima del título
   back?: boolean | Href; // true o la pantalla a la que volver si no hay anterior
   right?: ReactNode;
+  scrollRef?: Ref<ScrollViewInstance>; // para volver arriba desde la pantalla
   children: ReactNode;
 }) {
   return (
@@ -45,7 +46,7 @@ export function Screen({ title, kicker = 'Tirador deportivo', back, right, compa
           {right && <View style={s.botonRedondo}>{right}</View>}
         </View>
       )}
-      <ScrollView contentContainerStyle={[s.content, compacto && s.contentCompacto]}>{children}</ScrollView>
+      <ScrollView ref={scrollRef} contentContainerStyle={[s.content, compacto && s.contentCompacto]}>{children}</ScrollView>
     </SafeAreaView>
   );
 }

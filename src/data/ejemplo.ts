@@ -13,7 +13,9 @@ function aleatorio(semilla: number) {
 function seriesDeEjemplo(semilla: number, dispersion: number): Serie[] {
   const r = aleatorio(semilla);
   const normal = () => Math.sqrt(-2 * Math.log(r() || 1e-6)) * Math.cos(2 * Math.PI * r());
-  return Array.from({ length: 6 }, () => ({
+  // 3 dianas de 20 disparos (2 series de 10 en cada una)
+  return Array.from({ length: 6 }, (_, i) => ({
+    diana: Math.floor(i / 2),
     disparos: Array.from({ length: 10 }, () => {
       const x = normal() * dispersion + 4;
       const y = normal() * dispersion - 6;

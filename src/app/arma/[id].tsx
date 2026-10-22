@@ -64,7 +64,7 @@ export default function FichaArma() {
 
       <View style={st.cifras}>
         <Cifra titulo="Disparos" valor={arma.disparosTotales.toLocaleString('es-ES')} />
-        <Cifra titulo="Tiradas" valor={String(sesiones.length)} />
+        <Cifra titulo="Sesiones" valor={String(sesiones.length)} />
         <Cifra
           titulo="Media"
           valor={ultimos.length ? formatoMedia(media(ultimos)) : '–'}
@@ -79,7 +79,7 @@ export default function FichaArma() {
         options={[
           { value: 'mantenimiento', label: 'Cuidado' },
           { value: 'documentacion', label: 'Papeles' },
-          { value: 'entrenamientos', label: 'Tiradas' },
+          { value: 'entrenamientos', label: 'Sesiones' },
           { value: 'municion', label: 'Munición' },
         ]}
       />

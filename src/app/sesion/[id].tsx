@@ -1,12 +1,14 @@
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View, type ScrollViewInstance } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import { Anillo, Cifra } from '@/components/Cifra';
 import { CamaraDiana } from '@/components/CamaraDiana';
-import { Diana } from '@/components/Diana';
+import { Diana, MiniDiana } from '@/components/Diana';
 import { FotoDiana } from '@/components/FotoDiana';
 import { GraficaDisparos } from '@/components/GraficaDisparos';
 import { Icon } from '@/components/Icon';
+import { Chips } from '@/components/Chips';
 import { Button, Card, Screen, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import type { Sesion } from '@/data/types';
@@ -14,7 +16,7 @@ import { confirmar } from '@/lib/confirmar';
 import { geometria } from '@/lib/diana';
 import { formatear } from '@/lib/fechas';
 import { volver } from '@/lib/volver';
-import { agrupacion, conPosicion, extremos, formatoMedia, media, sumaSerie, todosLosDisparos, totalSesion } from '@/lib/sesiones';
+import { agrupacion, conPosicion, dianasDe, extremos, formatoMedia, media, numDiana, soloDiana, sumaSerie, todosLosDisparos, totalSesion } from '@/lib/sesiones';
 import { colors, radius, space } from '@/theme';
 
 export default function SesionPantalla() {
@@ -41,7 +43,13 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   const completa = serie.disparos.length >= sesion.disparosPorSerie;
   const ultimaSerie = !!sesion.seriesPrevistas && nSerie >= sesion.seriesPrevistas;
   const ultimo = serie.disparos[serie.disparos.length - 1];
-  const anteriores = sesion.series.slice(0, -1).flatMap((x) => x.disparos);
+  // Cada diana es una hoja nueva: solo se ven los disparos de las series anteriores de esta diana.
+  const nDiana = numDiana(serie);
+  const deEstaDiana = sesion.series.filter((x) => numDiana(x) === nDiana);
+  const anteriores = deEstaDiana.slice(0, -1).flatMap((x) => x.disparos);
+  const disparosDiana = deEstaDiana.flatMap((x) => x.disparos);
+  const dianaVacia = disparosDiana.length === 0;
+  const variasDianas = nDiana > 0;
   const teclado = sesion.registro === 'teclado';
   const camara = sesion.registro === 'camara';
   const foto = sesion.registro === 'foto';
@@ -60,7 +68,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   };
 
   const titulo = `Serie ${nSerie}${sesion.seriesPrevistas ? `/${sesion.seriesPrevistas}` : ''} · Disparo ${Math.min(serie.disparos.length + 1, sesion.disparosPorSerie)}/${sesion.disparosPorSerie}`;
-  const kicker = `${sesion.modalidad} · ${sesion.distancia} m${arma ? ` · ${arma.marca} ${arma.modelo}` : ''}`;
+  const kicker = `Diana ${nDiana + 1} · ${sesion.modalidad} · ${sesion.distancia} m${arma ? ` · ${arma.marca} ${arma.modelo}` : ''}`;
 
   const cifras = (
     <View style={st.datos}>
@@ -68,6 +76,14 @@ function Asistente({ sesion }: { sesion: Sesion }) {
       <Dato titulo="Serie" valor={`${sumaSerie(serie)}`} />
       <Dato titulo="Media" valor={serie.disparos.length ? formatoMedia(media(serie.disparos)) : '–'} />
     </View>
+  );
+
+  const resumenDiana = (variasDianas || sesion.series.length > 1) && (
+    <Text style={[s.muted, { textAlign: 'center' }]}>
+      {dianaVacia
+        ? `Diana ${nDiana + 1}: pon la hoja nueva y empieza a tirar.`
+        : `Diana ${nDiana + 1}: ${disparosDiana.length} ${disparosDiana.length === 1 ? 'disparo' : 'disparos'} · ${disparosDiana.reduce((t, d) => t + d.valor, 0)} puntos · media ${formatoMedia(media(disparosDiana))}`}
+    </Text>
   );
 
   const grafica = (valores.length > 0 || teclado) && (
@@ -108,6 +124,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
 
   const camaraVista = camara && (
     <CamaraDiana
+      key={`camara-${nDiana}`}
       activo={!completa}
       horizontal={horizontal}
       modelo={modelo}
@@ -118,6 +135,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
 
   const fotoVista = foto && (
     <FotoDiana
+      key={`foto-${nDiana}`}
       modelo={modelo}
       calibre={calibre}
       faltan={Math.max(0, sesion.disparosPorSerie - serie.disparos.length)}
@@ -162,7 +180,10 @@ function Asistente({ sesion }: { sesion: Sesion }) {
           />
         </View>
       </View>
-      {!ultimaSerie && <Button title="Terminar entrenamiento" variant="secondary" onPress={terminar} />}
+      {!ultimaSerie && !dianaVacia && (
+        <Button title={`Cambiar de diana (empezar la ${nDiana + 2}ª)`} variant="secondary" onPress={() => store.nuevaDiana(sesion.id)} />
+      )}
+      {!ultimaSerie && <Button title="Terminar sesión" variant="secondary" onPress={terminar} />}
     </>
   );
 
@@ -178,6 +199,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
           </View>
           <View style={{ flex: 1, gap: space.sm }}>
             {cifras}
+            {resumenDiana}
             {grafica}
             {botones}
             <BotonBorrar sesion={sesion} />
@@ -190,6 +212,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   return (
     <Screen title={titulo} kicker={kicker} back="/entrenar">
       {cifras}
+      {resumenDiana}
       {teclado ? (
         <>
           {grafica}
@@ -233,7 +256,7 @@ function BotonBorrar({ sesion }: { sesion: Sesion }) {
     <Pressable
       onPress={() =>
         confirmar(
-          'Borrar entrenamiento',
+          'Borrar sesión',
           disparos
             ? `Se borrarán sus ${disparos} disparos${sesion.terminada ? ' y se restarán del contador del arma' : ''}. No se puede deshacer.`
             : 'No se puede deshacer.',
@@ -245,18 +268,28 @@ function BotonBorrar({ sesion }: { sesion: Sesion }) {
         )
       }
       style={st.borrar}
-      accessibilityLabel="Borrar entrenamiento"
+      accessibilityLabel="Borrar sesión"
     >
       <Icon name="trash" color={colors.red} size={18} />
-      <Text style={st.borrarTexto}>Borrar entrenamiento</Text>
+      <Text style={st.borrarTexto}>Borrar sesión</Text>
     </Pressable>
   );
 }
 
-function Resumen({ sesion }: { sesion: Sesion }) {
+function Resumen({ sesion: completa }: { sesion: Sesion }) {
   const store = useStore();
   const tamano = useTamanoDiana();
-  const arma = store.arma(sesion.armaId);
+  const arma = store.arma(completa.armaId);
+  const dianas = dianasDe(completa);
+  // Con varias dianas se puede ver la sesión entera o una sola diana: los cálculos son los mismos.
+  const [elegida, setElegida] = useState<number | null>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
+  const verDiana = (n: number) => {
+    setElegida(n);
+    scroll.current?.scrollTo({ y: 0, animated: true });
+  };
+  const indice = elegida === null ? -1 : dianas.findIndex((x) => x.n === elegida);
+  const sesion = indice < 0 ? completa : soloDiana(completa, elegida!);
   const disparos = todosLosDisparos(sesion);
   const sumas = sesion.series.map(sumaSerie);
   const total = totalSesion(sesion);
@@ -268,20 +301,30 @@ function Resumen({ sesion }: { sesion: Sesion }) {
   const masAlto = Math.max(1, ...reparto.map((r) => r.n), resto);
   const conSitio = conPosicion(disparos).length > 0;
   const ex = extremos(sesion);
-  // Comparación con la sesión anterior con la misma arma.
-  const previa = store.datos.sesiones.find((x) => x.terminada && x.id !== sesion.id && x.armaId === sesion.armaId && x.fecha < sesion.fecha);
-  const lectura = resumenSesion(media(disparos), previa ? media(todosLosDisparos(previa)) : undefined, ex.diferencia, sesion.disparosPorSerie);
+  // Sesión entera: se compara con la sesión anterior con la misma arma. Una diana: con la diana anterior.
+  const previa = store.datos.sesiones.find((x) => x.terminada && x.id !== completa.id && x.armaId === completa.armaId && x.fecha < completa.fecha);
+  const lectura = indice < 0
+    ? resumenSesion(media(disparos), previa ? media(todosLosDisparos(previa)) : undefined, ex.diferencia, sesion.disparosPorSerie)
+    : resumenDiana(indice, media(disparos), indice > 0 ? media(dianas[indice - 1].disparos) : undefined, ex.diferencia, sesion.disparosPorSerie);
 
   return (
-    <Screen title="Resultado" back="/entrenar">
+    <Screen title="Resultado" back="/entrenar" scrollRef={scroll}>
+      {dianas.length > 1 && (
+        <Chips
+          opciones={[{ value: 'todas', label: 'Toda la sesión' }, ...dianas.map((d, i) => ({ value: String(d.n), label: `Diana ${i + 1}` }))]}
+          valor={elegida === null ? 'todas' : String(elegida)}
+          onChange={(v) => setElegida(v === 'todas' ? null : Number(v))}
+        />
+      )}
       <View style={st.hero}>
         <Anillo valor={total} maximo={maximo} tamano={170} grosor={14} color={colors.green}>
           <Text style={st.total}>{total}</Text>
           <Text style={s.muted}>de {maximo}</Text>
         </Anillo>
-        <Text style={st.heroArma}>{arma ? `${arma.marca} ${arma.modelo}` : 'Arma'}</Text>
+        <Text style={st.heroArma}>{indice >= 0 ? `Diana ${indice + 1} de ${dianas.length}` : arma ? `${arma.marca} ${arma.modelo}` : 'Arma'}</Text>
         <Text style={[s.muted, { textAlign: 'center' }]}>
           {formatear(sesion.fecha.slice(0, 10))} · {sesion.fecha.slice(11, 16)} · {sesion.modalidad} · {sesion.distancia} m
+          {dianas.length > 1 && indice < 0 ? ` · ${dianas.length} dianas` : ''}
           {sesion.municion ? `\n${sesion.municion}` : ''}
         </Text>
       </View>
@@ -299,7 +342,9 @@ function Resumen({ sesion }: { sesion: Sesion }) {
         <Text style={s.muted}>{lectura.texto}</Text>
       </Card>
 
-      {arma && disparos.length > 0 && <GastoMunicion sesion={sesion} n={disparos.length} />}
+      {indice < 0 && arma && disparos.length > 0 && <GastoMunicion sesion={completa} n={disparos.length} />}
+
+      {indice < 0 && dianas.length > 1 && <EvolucionDianas sesion={completa} onElegir={verDiana} />}
 
       {sumas.length > 1 && (
         <View style={st.datos}>
@@ -322,7 +367,7 @@ function Resumen({ sesion }: { sesion: Sesion }) {
           );
         })}
       </View>
-      {sumas.length > 1 && <Card><GraficaSeries sumas={sumas} maximo={sesion.disparosPorSerie * 10} /></Card>}
+      {sumas.length > 1 && <Card><GraficaSeries valores={sumas} maximo={sesion.disparosPorSerie * 10} /></Card>}
 
       <SectionTitle>Reparto de impactos</SectionTitle>
       <Card style={{ gap: space.sm }}>
@@ -339,7 +384,7 @@ function Resumen({ sesion }: { sesion: Sesion }) {
 
       {conSitio && (
         <>
-          <SectionTitle>Todos los impactos</SectionTitle>
+          <SectionTitle>{indice < 0 ? 'Todos los impactos' : `Impactos de la diana ${indice + 1}`}</SectionTitle>
           <View style={{ alignItems: 'center' }}>
             <Diana tamano={tamano} modelo={geometria(sesion).diana} calibre={geometria(sesion).calibre} disparos={[]} anteriores={disparos} grupo={g} />
           </View>
@@ -354,8 +399,66 @@ function Resumen({ sesion }: { sesion: Sesion }) {
       )}
 
       <Button title="Volver a Entrenar" onPress={() => volver('/entrenar')} />
-      <BotonBorrar sesion={sesion} />
+      <BotonBorrar sesion={completa} />
     </Screen>
+  );
+}
+
+/** Cómo han ido las dianas del día una tras otra: media, agrupación y una frase con la tendencia. */
+function EvolucionDianas({ sesion, onElegir }: { sesion: Sesion; onElegir: (n: number) => void }) {
+  const dianas = dianasDe(sesion).map((d) => {
+    const conSitio = conPosicion(d.disparos).length > 0;
+    return { ...d, media: media(d.disparos), puntos: d.disparos.reduce((t, x) => t + x.valor, 0), radio: conSitio ? agrupacion(d.disparos).radio : undefined };
+  });
+  const medias = dianas.map((d) => d.media);
+  const mejor = medias.indexOf(Math.max(...medias));
+  const cambio = medias[medias.length - 1] - medias[0];
+  const radios = dianas.map((d) => d.radio);
+  const primerR = radios[0], ultimoR = radios[radios.length - 1];
+  const tendencia = Math.abs(cambio) < 0.1
+    ? 'Has mantenido la misma media de la primera a la última diana.'
+    : cambio > 0
+      ? `De la primera a la última diana subes ${formatoMedia(cambio)} puntos de media por disparo.`
+      : `De la primera a la última diana bajas ${formatoMedia(-cambio)} puntos de media por disparo: puede ser cansancio, prueba a descansar entre dianas.`;
+  const grupo = primerR !== undefined && ultimoR !== undefined && Math.abs(ultimoR - primerR) >= 2
+    ? ` El grupo ${ultimoR < primerR ? 'se cierra' : 'se abre'} de ${Math.round(primerR)} a ${Math.round(ultimoR)} mm.`
+    : '';
+  const modelo = geometria(sesion).diana;
+  return (
+    <>
+      <SectionTitle>Evolución de las dianas</SectionTitle>
+      <Card style={st.lectura}>
+        <Text style={st.lecturaTitulo}>La mejor, la diana {mejor + 1} (media {formatoMedia(medias[mejor])})</Text>
+        <Text style={s.muted}>{tendencia}{grupo}</Text>
+      </Card>
+      <Card>
+        <GraficaSeries
+          valores={medias}
+          maximo={10}
+          minimo={Math.max(0, Math.floor(Math.min(...medias) - 1))}
+          texto={formatoMedia}
+          etiqueta={(i) => `D${i + 1}`}
+        />
+        <Text style={[s.muted, { fontSize: 12, textAlign: 'center' }]}>Media por disparo en cada diana</Text>
+      </Card>
+      {dianas.map((d, i) => (
+        <Card key={d.n} onPress={() => onElegir(d.n)} style={st.filaDiana}>
+          <View style={st.mini}><MiniDiana disparos={d.disparos} tamano={48} modelo={modelo} /></View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={st.titulo}>Diana {i + 1}</Text>
+            <Text style={s.muted}>
+              {d.disparos.length} disparos · {d.series.length} {d.series.length === 1 ? 'serie' : 'series'}
+              {d.radio !== undefined ? ` · grupo ${Math.round(d.radio)} mm` : ''}
+            </Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={[st.puntosDiana, i === mejor && { color: colors.green }]}>{d.puntos}</Text>
+            <Text style={s.muted}>media {formatoMedia(d.media)}</Text>
+          </View>
+          <Icon name="chevron" color={colors.textMuted} />
+        </Card>
+      ))}
+    </>
   );
 }
 
@@ -411,6 +514,17 @@ function resumenSesion(mediaHoy: number, mediaAntes: number | undefined, diferen
     : { titulo: `${formatoMedia(-cambio)} puntos por debajo de la última vez`, texto: `Respecto a la sesión anterior con esta arma. ${regularidad}` };
 }
 
+/** Una frase para una diana: comparación con la diana anterior de la misma sesión. */
+function resumenDiana(i: number, mediaHoy: number, mediaAntes: number | undefined, diferencia: number, porSerie: number) {
+  const { texto } = resumenSesion(mediaHoy, undefined, diferencia, porSerie);
+  if (mediaAntes === undefined) return { titulo: 'Primera diana de la sesión', texto };
+  const cambio = mediaHoy - mediaAntes;
+  if (Math.abs(cambio) < 0.05) return { titulo: 'Igual que la diana anterior', texto };
+  return cambio > 0
+    ? { titulo: `${formatoMedia(cambio)} puntos de media más que la diana ${i}`, texto }
+    : { titulo: `${formatoMedia(-cambio)} puntos de media menos que la diana ${i}`, texto };
+}
+
 /** Dónde queda el centro del grupo respecto al centro de la diana. */
 function consejo(cx: number, cy: number): string {
   if (Math.hypot(cx, cy) < 8) return 'Grupo centrado: no hace falta corregir miras.';
@@ -431,12 +545,19 @@ function Dato({ titulo, valor, grande, ancho = 1 }: { titulo: string; valor: str
   );
 }
 
-function GraficaSeries({ sumas, maximo }: { sumas: number[]; maximo: number }) {
+/** Línea con un punto por serie (o por diana) y su valor encima. */
+function GraficaSeries({ valores: sumas, maximo, minimo: min, texto = String, etiqueta = (i) => String(i + 1) }: {
+  valores: number[];
+  maximo: number;
+  minimo?: number;
+  texto?: (v: number) => string;
+  etiqueta?: (i: number) => string;
+}) {
   const { width } = useWindowDimensions();
   const w = Math.min(width - 4 * space.lg, 400);
   const h = 140;
   const pad = { l: 30, r: 12, t: 22, b: 22 };
-  const minimo = Math.max(0, Math.floor((Math.min(...sumas) - 5) / 10) * 10);
+  const minimo = min ?? Math.max(0, Math.floor((Math.min(...sumas) - 5) / 10) * 10);
   const x = (i: number) => pad.l + 16 + (i * (w - pad.l - pad.r - 32)) / Math.max(1, sumas.length - 1);
   const y = (v: number) => pad.t + ((maximo - v) * (h - pad.t - pad.b)) / (maximo - minimo);
   const marcas = [minimo, Math.round((minimo + maximo) / 2), maximo];
@@ -453,10 +574,10 @@ function GraficaSeries({ sumas, maximo }: { sumas: number[]; maximo: number }) {
         <Circle key={i} cx={x(i)} cy={y(v)} r={4} fill={colors.accent} />
       ))}
       {sumas.map((v, i) => (
-        <SvgText key={`t${i}`} x={x(i)} y={y(v) - 8} fontSize={11} fontWeight="600" fill={colors.text} textAnchor="middle">{v}</SvgText>
+        <SvgText key={`t${i}`} x={x(i)} y={y(v) - 8} fontSize={11} fontWeight="600" fill={colors.text} textAnchor="middle">{texto(v)}</SvgText>
       ))}
       {sumas.map((_, i) => (
-        <SvgText key={`s${i}`} x={x(i)} y={h - 6} fontSize={10} fill={colors.textMuted} textAnchor="middle">{i + 1}</SvgText>
+        <SvgText key={`s${i}`} x={x(i)} y={h - 6} fontSize={10} fill={colors.textMuted} textAnchor="middle">{etiqueta(i)}</SvgText>
       ))}
     </Svg>
   );
@@ -506,4 +627,7 @@ const st = StyleSheet.create({
   gasto: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   lectura: { gap: 4, borderLeftWidth: 4, borderLeftColor: colors.accent },
   lecturaTitulo: { color: colors.text, fontSize: 16, fontWeight: '800' },
+  filaDiana: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
+  mini: { borderRadius: 24, overflow: 'hidden' },
+  puntosDiana: { color: colors.text, fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] },
 });

@@ -25,6 +25,7 @@ interface Store {
   anadirValor: (sesionId: string, valor: number) => void;
   deshacerDisparo: (sesionId: string) => void;
   nuevaSerie: (sesionId: string) => void;
+  nuevaDiana: (sesionId: string) => void;
   terminarSesion: (sesionId: string) => void;
   apuntarGasto: (sesionId: string, desdeCasa: boolean) => void;
   borrarSesion: (sesionId: string) => void;
@@ -121,7 +122,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setDatos((d) => d && { ...d, sesiones: d.sesiones.map((x) => (x.id === id ? cambio(x) : x)) });
     const conUltimaSerie = (s: Sesion, cambio: (disparos: Disparo[]) => Disparo[]): Sesion => ({
       ...s,
-      series: s.series.map((serie, i) => (i === s.series.length - 1 ? { disparos: cambio(serie.disparos) } : serie)),
+      series: s.series.map((serie, i) => (i === s.series.length - 1 ? { ...serie, disparos: cambio(serie.disparos) } : serie)),
     });
 
     return {
@@ -176,10 +177,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }),
       anadirValor: (sesionId, valor) =>
         actualizarSesion(sesionId, (s) => conUltimaSerie(s, (ds) => [...ds, { x: 0, y: 0, valor, sinPosicion: true }])),
+      // Con la serie aún vacía, Deshacer vuelve a la serie (o diana) anterior.
       deshacerDisparo: (sesionId) =>
-        actualizarSesion(sesionId, (s) => conUltimaSerie(s, (ds) => ds.slice(0, -1))),
+        actualizarSesion(sesionId, (s) => (s.series.length > 1 && s.series[s.series.length - 1].disparos.length === 0
+          ? { ...s, series: s.series.slice(0, -1) }
+          : conUltimaSerie(s, (ds) => ds.slice(0, -1)))),
       nuevaSerie: (sesionId) =>
-        actualizarSesion(sesionId, (s) => ({ ...s, series: [...s.series, { disparos: [] }] })),
+        actualizarSesion(sesionId, (s) => {
+          const ultima = s.series[s.series.length - 1];
+          return { ...s, series: [...s.series, { disparos: [], diana: ultima?.diana }] };
+        }),
+      // Papel nuevo: la serie siguiente (o la actual, si aún está vacía) va a otra diana.
+      nuevaDiana: (sesionId) =>
+        actualizarSesion(sesionId, (s) => {
+          const ultima = s.series[s.series.length - 1];
+          const actual = ultima?.diana ?? 0;
+          if (!ultima || ultima.disparos.length > 0) return { ...s, series: [...s.series, { disparos: [], diana: actual + 1 }] };
+          const hayDisparos = s.series.some((x) => (x.diana ?? 0) === actual && x.disparos.length > 0);
+          return hayDisparos ? { ...s, series: [...s.series.slice(0, -1), { disparos: [], diana: actual + 1 }] } : s;
+        }),
       terminarSesion: (sesionId) =>
         setDatos((d) => {
           if (!d) return d;
