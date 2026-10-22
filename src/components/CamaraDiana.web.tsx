@@ -29,11 +29,12 @@ function anguloPantalla(): number {
   return ((a % 360) + 360) % 360;
 }
 
-type Estado = 'arrancando' | 'sin-permiso' | 'buscando' | 'calibrando' | 'vigilando';
+type Estado = 'arrancando' | 'sin-permiso' | 'sin-camara' | 'buscando' | 'calibrando' | 'vigilando';
 
 const TEXTOS: Record<Estado, string> = {
   arrancando: 'Abriendo la cámara…',
-  'sin-permiso': 'No puedo usar la cámara. Permite el acceso a la cámara en Safari (aA › Ajustes del sitio web).',
+  'sin-permiso': 'No tengo permiso para la cámara. En Safari: aA › Ajustes del sitio web › Cámara › Permitir. Después toca Reintentar.',
+  'sin-camara': 'No se ha podido abrir la cámara (puede que otra app la esté usando). Toca Reintentar.',
   buscando: 'Apunta al centro de la diana: tiene que verse el círculo negro entero.',
   calibrando: 'Diana encontrada. Mantén el móvil quieto…',
   vigilando: 'Listo: dispara. Cada impacto se apunta solo.',
@@ -48,6 +49,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
   const caja = useRef<unknown>(null); // en la web, el elemento del DOM de la vista
   const [estado, setEstado] = useState<Estado>('arrancando');
   const [ultimo, setUltimo] = useState<number | null>(null);
+  const [intento, setIntento] = useState(0); // «Reintentar» vuelve a pedir la cámara
   // Giro que añade la persona con el botón «Girar», por si el automático no acierta.
   const giroManual = useRef(leerGiro(horizontal));
   // Visor: aumento digital para ver mejor los agujeros pequeños.
@@ -175,15 +177,16 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         if (!vivo) return s.getTracks().forEach((t) => t.stop());
         flujo = s;
         video.srcObject = s;
-        return video.play().then(() => {
-          encajar(giro());
-          setEstado('buscando');
-          reloj = setInterval(mirar, props.current.soloVer ? 250 : CADA_MS);
-        });
+        encajar(giro());
+        setEstado('buscando');
+        reloj = setInterval(mirar, props.current.soloVer ? 250 : CADA_MS);
+        // Si el vídeo no arranca solo (autoplay), no es un problema de permiso: se sigue intentando.
+        video.play().catch((e) => console.warn('El vídeo no arranca solo', e));
       })
       .catch((e) => {
         console.warn('No se pudo abrir la cámara', e);
-        setEstado('sin-permiso');
+        const nombre = (e as { name?: string })?.name;
+        setEstado(nombre === 'NotAllowedError' || nombre === 'SecurityError' || !navigator.mediaDevices ? 'sin-permiso' : 'sin-camara');
       });
 
     return () => {
@@ -193,10 +196,11 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       video.remove();
       capa.remove();
     };
-  }, []);
+  }, [intento]);
 
   const ok = estado === 'vigilando';
-  const enMarcha = estado !== 'arrancando' && estado !== 'sin-permiso';
+  const fallo = estado === 'sin-permiso' || estado === 'sin-camara';
+  const enMarcha = estado !== 'arrancando' && !fallo;
   return (
     <View style={st.marco}>
       <View ref={caja as never} style={alto ? [st.videoHorizontal, { height: alto }] : horizontal ? [st.videoHorizontal, { height: Math.max(160, altoPantalla - 170) }] : st.video} />
@@ -224,6 +228,18 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
             accessibilityLabel="Volver a buscar la diana"
           >
             <Text style={st.boton}>Recolocar</Text>
+          </Pressable>
+        )}
+        {fallo && (
+          <Pressable
+            hitSlop={8}
+            onPress={() => {
+              setEstado('arrancando');
+              setIntento((n) => n + 1);
+            }}
+            accessibilityLabel="Volver a pedir la cámara"
+          >
+            <Text style={st.boton}>Reintentar</Text>
           </Pressable>
         )}
         {enMarcha && (
