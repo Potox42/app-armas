@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Speech from 'expo-speech';
 import { Button, Card, Screen, Segmented, s } from '@/components/ui';
+import { pitar, prepararPitidos } from '@/lib/pitidos';
 import { pasoEn, plan, PROGRAMAS, type Idioma, type Paso, type Programa } from '@/lib/simulador';
 import { colors, radius, space } from '@/theme';
 
@@ -14,9 +15,10 @@ export default function Simulador() {
   const [programa, setPrograma] = useState<Programa>(PROGRAMAS[0]);
   const [series, setSeries] = useState(String(PROGRAMAS[0].series));
   const [idioma, setIdioma] = useState<Idioma>('es');
+  const [sonido, setSonido] = useState<Sonido>('ambos');
   const [pasos, setPasos] = useState<Paso[] | null>(null);
 
-  if (pasos) return <EnMarcha pasos={pasos} idioma={idioma} onFin={() => setPasos(null)} />;
+  if (pasos) return <EnMarcha pasos={pasos} idioma={idioma} sonido={sonido} onFin={() => setPasos(null)} />;
 
   return (
     <Screen title="Simulador de tirada" kicker="Entrenar" back="/entrenar">
@@ -41,11 +43,27 @@ export default function Simulador() {
       <Segmented value={series} onChange={setSeries} options={['1', '2', '4', '6'].map((n) => ({ value: n, label: n }))} />
       <Text style={st.etiqueta}>Órdenes</Text>
       <Segmented value={idioma} onChange={setIdioma} options={[{ value: 'es', label: 'En español' }, { value: 'en', label: 'En inglés' }]} />
+      {Platform.OS === 'web' && (
+        <>
+          <Text style={st.etiqueta}>Sonido</Text>
+          <Segmented
+            value={sonido}
+            onChange={setSonido}
+            options={[{ value: 'ambos', label: 'Voz y pitidos' }, { value: 'voz', label: 'Solo voz' }, { value: 'pitidos', label: 'Solo pitidos' }]}
+          />
+          <Text style={[s.muted, { fontSize: 12 }]}>
+            Pitido largo agudo: fuego. Dos pitidos graves: alto. Pip cada segundo: faltan 3 s para acabar la preparación o la
+            pausa. Tres pips rápidos: quedan 30 s de la serie (solo en 150 s y precisión).
+          </Text>
+        </>
+      )}
       <Button
         title="Empezar"
         onPress={() => {
-          // En el iPhone la voz tiene que arrancar con un toque: se dice algo ya.
-          Speech.speak(idioma === 'es' ? 'Empezamos.' : 'Starting.', { language: idioma === 'es' ? 'es-ES' : 'en-GB' });
+          // En el iPhone la voz y el audio tienen que arrancar con un toque: se preparan aquí.
+          prepararPitidos();
+          if (sonido !== 'pitidos') Speech.speak(idioma === 'es' ? 'Empezamos.' : 'Starting.', { language: idioma === 'es' ? 'es-ES' : 'en-GB' });
+          else pitar('cuenta');
           setPasos(plan(programa, Number(series)));
         }}
       />
@@ -58,7 +76,9 @@ export default function Simulador() {
   );
 }
 
-function EnMarcha({ pasos, idioma, onFin }: { pasos: Paso[]; idioma: Idioma; onFin: () => void }) {
+type Sonido = 'ambos' | 'voz' | 'pitidos';
+
+function EnMarcha({ pasos, idioma, sonido, onFin }: { pasos: Paso[]; idioma: Idioma; sonido: Sonido; onFin: () => void }) {
   // Pantalla siempre encendida mientras dura la tirada (en la web, solo si Safari lo permite).
   useEffect(() => {
     let activa = false;
@@ -70,6 +90,7 @@ function EnMarcha({ pasos, idioma, onFin }: { pasos: Paso[]; idioma: Idioma; onF
   const [comienzo, setComienzo] = useState(() => Date.now());
   const [ahora, setAhora] = useState(() => Date.now());
   const dicho = useRef(-1);
+  const pitado = useRef('');
 
   useEffect(() => {
     const t = setInterval(() => setAhora(Date.now()), 100);
@@ -82,12 +103,34 @@ function EnMarcha({ pasos, idioma, onFin }: { pasos: Paso[]; idioma: Idioma; onF
   const t = ahora - comienzo;
   const i = pasoEn(pasos, t);
 
+  const voz = sonido !== 'pitidos';
+  const pitidos = sonido !== 'voz';
+
   useEffect(() => {
-    if (i === null || i === dicho.current) return;
-    dicho.current = i;
-    const orden = pasos[i].orden;
-    if (orden) Speech.speak(orden[idioma], { language: idioma === 'es' ? 'es-ES' : 'en-GB' });
-  }, [i, pasos, idioma]);
+    // El último paso dura 1 ms y casi nunca coincide con el reloj: al terminar se anuncia igual.
+    const k = i ?? pasos.length - 1;
+    if (k === dicho.current) return;
+    dicho.current = k;
+    const orden = pasos[k].orden;
+    if (voz && orden) Speech.speak(orden[idioma], { language: idioma === 'es' ? 'es-ES' : 'en-GB' });
+    if (pitidos) {
+      if (pasos[k].luz === 'verde') pitar('fuego');
+      else if (pasos[k - 1]?.luz === 'verde') pitar('alto');
+    }
+  }, [i, pasos, idioma, voz, pitidos]);
+
+  // Avisos de tiempo: cuenta atrás de 3 s antes de acabar la preparación o la pausa, y aviso a
+  // falta de 30 s en las series largas.
+  const restante = i === null ? 0 : Math.ceil((pasos[i].fin - t) / 1000);
+  useEffect(() => {
+    if (i === null || !pitidos) return;
+    const p = pasos[i];
+    const clave = `${i}:${restante}`;
+    if (clave === pitado.current) return;
+    pitado.current = clave;
+    if (p.luz === 'nada' && p.saltable && restante >= 1 && restante <= 3) pitar('cuenta');
+    else if (p.luz === 'verde' && p.fin - p.inicio >= 60_000 && restante === 30) pitar('aviso');
+  }, [i, restante, pasos, pitidos]);
 
   if (i === null) {
     return (
@@ -99,7 +142,7 @@ function EnMarcha({ pasos, idioma, onFin }: { pasos: Paso[]; idioma: Idioma; onF
   }
 
   const paso = pasos[i];
-  const quedan = Math.ceil((paso.fin - t) / 1000);
+  const quedan = restante;
   const siguiente = pasos[i + 1];
   const fondo = paso.luz === 'verde' ? '#0E8A4A' : paso.luz === 'roja' ? '#B3202E' : colors.bg;
 
