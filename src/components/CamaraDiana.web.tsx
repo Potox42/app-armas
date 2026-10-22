@@ -72,7 +72,10 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     video.muted = true;
     video.autoplay = true;
     video.setAttribute('playsinline', '');
-    Object.assign(video.style, { position: 'absolute', left: '50%', top: '50%', objectFit: 'contain', display: 'block' });
+    // El vídeo no recibe toques: en Safari, girado o ampliado, puede salirse de su caja aunque no se
+    // vea y tapar lo que hay debajo (la diana donde se marcan los disparos).
+    Object.assign(video.style, { position: 'absolute', left: '50%', top: '50%', objectFit: 'contain', display: 'block', pointerEvents: 'none' });
+    Object.assign(raiz.style, { clipPath: 'inset(0)' });
     const capa = document.createElement('canvas');
     Object.assign(capa.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none' });
     raiz.appendChild(video);
