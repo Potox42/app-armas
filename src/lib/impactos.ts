@@ -424,6 +424,16 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
   const alrededor = desenfocar(g, Math.max(4, Math.round(rAgujero * 3)));
   const rPico = Math.max(2, Math.round(rAgujero * 1.6)); // dos agujeros se tocan a 2 radios
   const margen = rBala + 2; // sin mirar el borde de la foto (fuera de la diana)
+  // Una raya (la de un anillo, el borde de una sombra) sigue igual de marcada a los dos lados del
+  // punto en su dirección; un agujero se acaba enseguida en todas las direcciones.
+  const lejos = Math.max(3, Math.round(rAgujero * 1.8));
+  const dirs = [[1, 0], [0, 1], [0.7071, 0.7071], [0.7071, -0.7071]];
+  const difEn = (x: number, y: number) => {
+    const xi = Math.round(x), yi = Math.round(y);
+    return xi < 0 || yi < 0 || xi >= w || yi >= h ? 0 : dif[yi * w + xi];
+  };
+  const alargado = (x: number, y: number, v: number) =>
+    dirs.some(([ux, uy]) => Math.min(difEn(x + ux * lejos, y + uy * lejos), difEn(x - ux * lejos, y - uy * lejos)) > 0.5 * v);
   const picos: { x: number; y: number; v: number }[] = [];
   for (let y = margen; y < h - margen; y++) {
     for (let x = margen; x < w - margen; x++) {
@@ -446,7 +456,7 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
           if (o > v || (o === v && (dy < 0 || (dy === 0 && dx < 0)))) { maximo = false; break; }
         }
       }
-      if (maximo) picos.push({ x, y, v });
+      if (maximo && !alargado(x, y, v)) picos.push({ x, y, v });
     }
   }
 
@@ -462,10 +472,10 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
     const r = Math.hypot(x, y);
     const raya = Math.abs(x) > Math.abs(y) ? (x > 0 ? 0 : 2) : y > 0 ? 1 : 3;
     // Con margen: la diana puede estar un poco girada en la foto y las cifras se apartan de la raya.
-    if (Math.min(Math.abs(x), Math.abs(y)) > 0.5 * paso) return null;
+    if (Math.min(Math.abs(x), Math.abs(y)) > 0.4 * paso + 0.05 * r) return null;
     for (const [v, dm] of Object.entries(diana.anillos)) {
       const rc = dm / 2 - paso / 2;
-      if (Number(v) <= 9 && Math.abs(r - rc) < 0.4 * paso) return { rc, raya };
+      if (Number(v) <= 9 && Math.abs(r - rc) <= 0.5 * paso) return { rc, raya };
     }
     return null;
   };
@@ -562,8 +572,13 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
     }
     return papel - min > 1 ? (papel - suma / n) / (papel - min) : 0;
   };
+  // Si los agujeros de esta foto se ven muy marcados, lo que apenas destaca es ruido (rayas con el
+  // enfoque del móvil, textura del papel): se pide al menos un tercio de lo que marcan los agujeros.
+  const fuertes = picos.map((k) => k.v).sort((a, b) => a - b);
+  const tipico = fuertes.length ? fuertes[Math.floor(fuertes.length * 0.75)] : 0;
   const res: Agujero[] = [];
   for (const k of picos) {
+    if (k.v < 0.33 * tipico) continue;
     const mm = aMm(cal, k.x, k.y, diana);
     if (esCifra(mm.x, mm.y)) continue;
     // En el blanco, en el sitio de una cifra (que a veces no se puede comparar con la de otra raya
