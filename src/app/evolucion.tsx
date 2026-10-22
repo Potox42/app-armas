@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import { Analisis } from '@/components/Analisis';
+import { Chips } from '@/components/Chips';
 import { Card, Screen, Segmented, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import type { Sesion } from '@/data/types';
@@ -21,13 +22,18 @@ interface Punto {
 
 export default function Evolucion() {
   const { datos } = useStore();
-  const [armaId, setArmaId] = useState<string>('todas');
+  const { arma: armaParam } = useLocalSearchParams<{ arma?: string }>();
+  // Cada arma por separado: no se parece tirar con pistola que con carabina.
+  // Al entrar, la que pidas o la del último entrenamiento.
+  const [armaId, setArmaId] = useState<string>(
+    armaParam ?? datos.sesiones.find((x) => x.terminada)?.armaId ?? '',
+  );
   const [periodo, setPeriodo] = useState<Periodo>('182');
 
   const hoy = new Date().toISOString().slice(0, 10);
   const puntos: Punto[] = datos.sesiones
     .filter((x) => x.terminada && todosLosDisparos(x).length > 0)
-    .filter((x) => armaId === 'todas' || x.armaId === armaId)
+    .filter((x) => x.armaId === armaId)
     .map((x) => {
       const disparos = todosLosDisparos(x);
       return {
@@ -40,7 +46,8 @@ export default function Evolucion() {
     .filter((p) => periodo === 'todo' || -p.dia <= Number(periodo))
     .sort((a, b) => a.dia - b.dia);
 
-  const armasUsadas = datos.armas.filter((a) => datos.sesiones.some((x) => x.armaId === a.id));
+  const armasUsadas = datos.armas.filter((a) => datos.sesiones.some((x) => x.terminada && x.armaId === a.id));
+  const armaElegida = datos.armas.find((a) => a.id === armaId);
   const primero = puntos[0];
   const ultimo = puntos[puntos.length - 1];
   const tendencia = regresion(puntos.map((p) => [p.dia, p.media]));
@@ -49,11 +56,16 @@ export default function Evolucion() {
 
   return (
     <Screen title="Mi evolución" back="/entrenar">
-      <Segmented
-        value={armaId}
-        onChange={setArmaId}
-        options={[{ value: 'todas', label: 'Todas' }, ...armasUsadas.map((a) => ({ value: a.id, label: `${a.marca} ${a.modelo}` }))]}
-      />
+      {armasUsadas.length > 1 && (
+        <Chips
+          opciones={armasUsadas.map((a) => ({ value: a.id, label: `${a.marca} ${a.modelo}` }))}
+          valor={armaId}
+          onChange={setArmaId}
+        />
+      )}
+      {armaElegida && (
+        <Text style={st.arma}>{armaElegida.marca} {armaElegida.modelo} · {armaElegida.tipo}</Text>
+      )}
       <Segmented
         value={periodo}
         onChange={setPeriodo}
@@ -66,7 +78,7 @@ export default function Evolucion() {
       />
 
       {puntos.length < 2 ? (
-        <Card><Text style={s.muted}>Hacen falta al menos dos entrenamientos en este periodo para ver la evolución.</Text></Card>
+        <Card><Text style={s.muted}>Hacen falta al menos dos entrenamientos con esta arma en este periodo para ver su evolución.</Text></Card>
       ) : (
         <>
           <View style={st.fila}>
@@ -102,13 +114,12 @@ export default function Evolucion() {
 
       <SectionTitle>Entrenamientos</SectionTitle>
       {[...puntos].reverse().map((p) => {
-        const a = datos.armas.find((x) => x.id === p.sesion.armaId);
         const n = todosLosDisparos(p.sesion).length;
         return (
           <Card key={p.sesion.id} onPress={() => router.push(`/sesion/${p.sesion.id}`)} style={st.sesion}>
             <View style={{ flex: 1 }}>
               <Text style={s.text}>{formatear(p.sesion.fecha.slice(0, 10))}</Text>
-              <Text style={s.muted}>{a ? `${a.marca} ${a.modelo}` : ''} · {p.sesion.distancia} m</Text>
+              <Text style={s.muted}>{p.sesion.modalidad} · {p.sesion.distancia} m</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={st.total}>{totalSesion(p.sesion)} / {n * 10}</Text>
@@ -206,6 +217,7 @@ function Grafica({ puntos, tendencia, decimales }: {
 
 const st = StyleSheet.create({
   fila: { flexDirection: 'row', gap: space.sm },
+  arma: { color: colors.text, fontSize: 17, fontWeight: '700' },
   sesion: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
   total: { color: colors.green, fontSize: 17, fontWeight: '700' },
 });

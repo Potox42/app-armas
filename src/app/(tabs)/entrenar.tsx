@@ -72,6 +72,13 @@ export default function Entrenar() {
                 <Icon name="chevron" color={colors.textMuted} />
               </View>
             </Card>
+            {abierta === armaId && sesiones.length > 1 && (
+              <Card onPress={() => router.push(`/evolucion?arma=${armaId}`)} style={[st.fila, st.dentro]}>
+                <Icon name="chart" color={colors.accent} />
+                <Text style={[st.nombre, { flex: 1 }]}>Evolución con esta arma</Text>
+                <Icon name="chevron" color={colors.textMuted} />
+              </Card>
+            )}
             {abierta === armaId && sesiones.map((x) => {
               const d = todosLosDisparos(x);
               const nDianas = dianasDe(x).length;

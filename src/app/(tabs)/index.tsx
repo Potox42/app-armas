@@ -32,7 +32,7 @@ const ACCESOS: { titulo: string; texto: string; icono: IconName; ruta: Href }[] 
   { titulo: 'Mis armas', texto: '', icono: 'gun', ruta: '/armas' },
   { titulo: 'Munición', texto: 'Compras, cupo y depósito', icono: 'box', ruta: '/municion' },
   { titulo: 'Entrenar', texto: 'Diana, números o cámara', icono: 'target', ruta: '/entrenar' },
-  { titulo: 'Evolución', texto: 'Medias y tendencia', icono: 'chart', ruta: '/evolucion' },
+  { titulo: 'Evolución', texto: 'Tendencia por arma', icono: 'chart', ruta: '/evolucion' },
 ];
 
 const rutaAviso = (a: Aviso): Href =>
