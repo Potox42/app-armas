@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MiniDiana } from '@/components/Diana';
@@ -14,6 +15,15 @@ export default function Entrenar() {
   const { datos, arma } = useStore();
   const enCurso = datos.sesiones.find((x) => !x.terminada);
   const terminadas = datos.sesiones.filter((x) => x.terminada);
+  // Carpeta abierta: al principio, la del arma con la que entrenaste por última vez.
+  const [abierta, setAbierta] = useState<string | null>(terminadas[0]?.armaId ?? null);
+  // Agrupadas por arma; primero el arma con la que entrenaste por última vez.
+  const porArma: { armaId: string; sesiones: typeof terminadas }[] = [];
+  for (const x of terminadas) {
+    const g = porArma.find((p) => p.armaId === x.armaId);
+    if (g) g.sesiones.push(x);
+    else porArma.push({ armaId: x.armaId, sesiones: [x] });
+  }
 
   return (
     <Screen title="Entrenar">
@@ -41,22 +51,45 @@ export default function Entrenar() {
 
       <SectionTitle>Sesiones de entrenamiento</SectionTitle>
       {terminadas.length === 0 && <Text style={s.muted}>Aún no hay sesiones.</Text>}
-      {terminadas.map((x) => {
-        const a = arma(x.armaId);
-        const disparos = todosLosDisparos(x);
-        const nDianas = dianasDe(x).length;
+      {porArma.map(({ armaId, sesiones }) => {
+        const a = arma(armaId);
+        const disparos = sesiones.flatMap(todosLosDisparos);
         return (
-          <Card key={x.id} onPress={() => router.push(`/sesion/${x.id}`)} style={st.fila}>
-            <View style={st.mini}><MiniDiana disparos={disparos} tamano={52} modelo={geometria(x).diana} /></View>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={st.nombre} numberOfLines={1}>{a ? `${a.marca} ${a.modelo}` : 'Arma'} · {x.distancia} m</Text>
-              <Text style={s.muted} numberOfLines={1}>{formatear(x.fecha.slice(0, 10))} · {nDianas > 1 ? `${nDianas} dianas · ` : ''}{disparos.length} disparos</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={st.total}>{totalSesion(x)}</Text>
-              <Text style={s.muted}>media {formatoMedia(media(disparos))}</Text>
-            </View>
-          </Card>
+          <View key={armaId} style={{ gap: space.sm }}>
+            <Card onPress={() => setAbierta(abierta === armaId ? null : armaId)} style={st.fila}>
+              <Icon name="gun" color={colors.accent} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={st.nombre} numberOfLines={1}>{a ? `${a.marca} ${a.modelo}` : 'Arma borrada'}</Text>
+                <Text style={s.muted} numberOfLines={1}>
+                  {a ? `${a.tipo} · ` : ''}{sesiones.length === 1 ? '1 sesión' : `${sesiones.length} sesiones`} · última {formatear(sesiones[0].fecha.slice(0, 10))}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={st.media}>{formatoMedia(media(disparos))}</Text>
+                <Text style={s.muted}>media</Text>
+              </View>
+              <View style={{ transform: [{ rotate: abierta === armaId ? '90deg' : '0deg' }] }}>
+                <Icon name="chevron" color={colors.textMuted} />
+              </View>
+            </Card>
+            {abierta === armaId && sesiones.map((x) => {
+              const d = todosLosDisparos(x);
+              const nDianas = dianasDe(x).length;
+              return (
+                <Card key={x.id} onPress={() => router.push(`/sesion/${x.id}`)} style={[st.fila, st.dentro]}>
+                  <View style={st.mini}><MiniDiana disparos={d} tamano={52} modelo={geometria(x).diana} /></View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={st.nombre} numberOfLines={1}>{formatear(x.fecha.slice(0, 10))} · {x.distancia} m</Text>
+                    <Text style={s.muted} numberOfLines={1}>{nDianas > 1 ? `${nDianas} dianas · ` : ''}{d.length} disparos</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={st.total}>{totalSesion(x)}</Text>
+                    <Text style={s.muted}>media {formatoMedia(media(d))}</Text>
+                  </View>
+                </Card>
+              );
+            })}
+          </View>
         );
       })}
     </Screen>
@@ -73,6 +106,8 @@ const st = StyleSheet.create({
   nuevaSub: { color: 'rgba(255,255,255,0.8)', fontSize: 13 },
   fila: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
   mini: { borderRadius: 26, overflow: 'hidden' },
+  dentro: { marginLeft: space.lg },
+  media: { color: colors.green, fontSize: 20, fontWeight: '800' },
   nombre: { color: colors.text, fontSize: 16, fontWeight: '700' },
   total: { color: colors.green, fontSize: 22, fontWeight: '700' },
 });
