@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { Vigia, type Calibracion, type Gris } from '@/lib/impactos';
+import { aMm, Vigia, type Calibracion, type Gris } from '@/lib/impactos';
 import { colors, radius, space } from '@/theme';
 import type { PropsCamaraDiana } from './CamaraDiana.types';
 
-const ANCHO = 480; // ancho de la imagen que se analiza
+const ANCHO = 640; // ancho de la imagen que se analiza (más, para ver los agujeros de .22 por el catalejo)
 const CADA_MS = 450; // cada cuánto se mira la diana
 const ESPERA_MS = 400; // al girar el móvil, el iPhone tarda un poco en girar también la cámara
 
@@ -35,9 +35,9 @@ const TEXTOS: Record<Estado, string> = {
   arrancando: 'Abriendo la cámara…',
   'sin-permiso': 'No tengo permiso para la cámara. En Safari: aA › Ajustes del sitio web › Cámara › Permitir. Después toca Reintentar.',
   'sin-camara': 'No se ha podido abrir la cámara (puede que otra app la esté usando). Toca Reintentar.',
-  buscando: 'Apunta al centro de la diana: tiene que verse el círculo negro entero.',
+  buscando: 'Busco la diana: tiene que verse el círculo negro entero. Si no está en medio, toca su centro en la imagen.',
   calibrando: 'Diana encontrada. Mantén el móvil quieto…',
-  vigilando: 'Listo: dispara. Cada impacto se apunta solo.',
+  vigilando: 'Listo: dispara. Si se salta un disparo, tócalo en la imagen.',
 };
 
 /**
@@ -59,6 +59,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     aumento.current = zoom;
   }, [zoom]);
   const vigia = useRef(new Vigia(modelo, calibre));
+  const modeloRef = useRef(modelo);
   const marcas = useRef<{ x: number; y: number }[]>([]); // impactos vistos, en píxeles de la imagen analizada
   // Siempre la última versión de las props, sin reiniciar la cámara.
   const props = useRef({ activo, onImpacto, horizontal, soloVer });
@@ -89,6 +90,28 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     let reloj: ReturnType<typeof setInterval> | undefined;
     let vivo = true;
     let forma = ''; // tamaño y giro de la imagen con los que se calibró
+    let mapa: { ox: number; oy: number; k: number } | null = null; // de la imagen analizada a la capa
+
+    // Un toque en la imagen: antes de encontrar la diana, dice dónde está; después, marca a mano un
+    // disparo que la cámara no ha visto.
+    const toque = (e: MouseEvent) => {
+      if (!mapa || props.current.soloVer) return;
+      const caja = capa.getBoundingClientRect();
+      const x = ((e.clientX - caja.left) * devicePixelRatio - mapa.ox) / mapa.k;
+      const y = ((e.clientY - caja.top) * devicePixelRatio - mapa.oy) / mapa.k;
+      const v = vigia.current;
+      if (!v.cal) {
+        v.centro = { x, y };
+        setEstado('buscando');
+        return;
+      }
+      if (!props.current.activo) return;
+      const mm = aMm(v.cal, x, y, modeloRef.current);
+      impactos.push({ x, y });
+      v.marcadoAMano();
+      props.current.onImpacto(mm.x, mm.y);
+    };
+    raiz.addEventListener('click', toque);
 
     // Con el móvil en horizontal, el iPhone a veces sigue dando la imagen de la cámara en vertical
     // (sobre todo en la app de la pantalla de inicio): se gira aquí para que la diana se vea derecha.
@@ -117,6 +140,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       const k = Math.min(capa.width / W, capa.height / H);
       const ox = (capa.width - W * k) / 2, oy = (capa.height - H * k) / 2;
       const a = W / ANCHO; // de la imagen analizada al vídeo
+      mapa = { ox, oy, k: a * k };
       const c = capa.getContext('2d')!;
       c.clearRect(0, 0, capa.width, capa.height);
       if (cal) {
@@ -191,6 +215,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
 
     return () => {
       vivo = false;
+      raiz.removeEventListener('click', toque);
       clearInterval(reloj);
       flujo?.getTracks().forEach((t) => t.stop());
       video.remove();
