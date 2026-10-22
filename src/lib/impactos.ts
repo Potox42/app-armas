@@ -107,18 +107,6 @@ function manchas(m: Uint8Array, w: number, h: number): Mancha[] {
   return res;
 }
 
-/** Cierre morfológico de una máscara (dilatar y luego erosionar r píxeles): rellena lo que queda dentro de un contorno. */
-function cerrar(m: Uint8Array, w: number, h: number, r: number): Uint8Array {
-  const f = new Float32Array(w * h);
-  for (let i = 0; i < f.length; i++) f[i] = m[i];
-  const dil = desenfocar({ w, h, d: f }, r);
-  for (let i = 0; i < f.length; i++) f[i] = dil.d[i] > 1e-4 ? 1 : 0;
-  const ero = desenfocar({ w, h, d: f }, r);
-  const o = new Uint8Array(w * h);
-  for (let i = 0; i < o.length; i++) o[i] = ero.d[i] > 1 - 1e-4 ? 1 : 0;
-  return o;
-}
-
 /**
  * Localiza el círculo negro. Solo mira el centro de la imagen (el borde del ocular sale oscuro)
  * y suaviza antes para que las rayas blancas de los anillos no lo partan en trozos.
@@ -363,9 +351,10 @@ export interface Agujero extends Impacto {
  * Busca los agujeros en UNA foto de la diana ya tirada (sin imagen de referencia).
  * 1. Con la calibración se dibuja cómo sería la diana limpia: negro dentro de la elipse y papel
  *    fuera, con el nivel de luz de cada zona medido en la propia foto (así da igual la sombra).
- * 2. Se resta de la foto suavizada (el suavizado borra las rayas finas de los anillos).
- * 3. Lo que sobra con tamaño de bala es un agujero: más claro en el negro, más oscuro en el blanco.
- *    Una mancha de 2 o 3 balas cuenta como 2 o 3 disparos.
+ * 2. Se resta de la foto suavizada con una ventana del tamaño de una bala.
+ * 3. Cada máximo local de lo que sobra es un agujero: más claro en el negro, más oscuro en el blanco.
+ *    Así se separan los agujeros que se tocan (en la prueba real de octubre de 2026 se escapaban
+ *    los del centro, juntos en una sola mancha, y los del blanco, grises y poco marcados).
  * Es una propuesta: el tirador la revisa (quita o añade agujeros) antes de apuntarla.
  */
 export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, calibreMm: number): Agujero[] {
@@ -375,6 +364,14 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
   const rZona = Math.max(1.05, (diametroExterior(diana) / diana.negro) * 1.02);
   const zonaDe = (x: number, y: number) => Math.sqrt(((x - cal.cx) / cal.rx) ** 2 + ((y - cal.cy) / cal.ry) ** 2);
 
+  // Entre el negro y el papel: la mitad entre el nivel típico de dentro y el de justo fuera.
+  const anillo = (z0: number, z1: number) => {
+    const v: number[] = [];
+    for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) { const z = zonaDe(x, y); if (z > z0 && z < z1) v.push(d[y * w + x]); }
+    v.sort((a, b) => a - b);
+    return v.length ? v[v.length >> 1] : 128;
+  };
+  const corte = (anillo(0, 0.9) + anillo(1.1, 1.5)) / 2;
   // Niveles de luz locales del negro y del papel: media ponderada en una ventana grande.
   const enNegro = new Float32Array(w * h), enPapel = new Float32Array(w * h);
   const vNegro = new Float32Array(w * h), vPapel = new Float32Array(w * h);
@@ -382,7 +379,8 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
     for (let x = 0; x < w; x++) {
       const i = y * w + x, z = zonaDe(x, y);
       // Lejos del borde del negro, para no mezclar niveles.
-      if (z < 0.92) { enNegro[i] = 1; vNegro[i] = d[i]; } else if (z > 1.08 && z < rZona) { enPapel[i] = 1; vPapel[i] = d[i]; }
+      // En el papel no cuenta lo oscuro (la mesa o el soporte que asoman por el borde de la hoja).
+      if (z < 0.92) { enNegro[i] = 1; vNegro[i] = d[i]; } else if (z > 1.08 && z < rZona && d[i] > corte) { enPapel[i] = 1; vPapel[i] = d[i]; }
     }
   }
   const rLuz = Math.max(4, Math.round(cal.rx * 0.35));
@@ -397,8 +395,10 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
   const negroG = nn ? tn / nn : 30, papelG = np ? tp / np : 220;
   const contraste = Math.max(40, papelG - negroG);
 
-  const suave = desenfocar(g, Math.max(1, Math.round(rAgujero * 0.45)));
-  // La plantilla también se suaviza igual, para que el borde del negro no deje un anillo de restos.
+  // Cada punto se compara con una ventana del tamaño de una bala, y la plantilla se suaviza igual
+  // para que el borde del negro no deje un anillo de restos.
+  const rBala = Math.max(2, Math.round(rAgujero * 0.8));
+  const suave = desenfocar(g, rBala);
   const plantilla = new Float32Array(w * h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -408,59 +408,64 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
       plantilla[i] = zonaDe(x, y) < 1 ? n : p;
     }
   }
-  const plant = desenfocar({ w, h, d: plantilla }, Math.max(1, Math.round(rAgujero * 0.45)));
+  const plant = desenfocar({ w, h, d: plantilla }, rBala);
 
-  const umbral = 0.3 * contraste;
-  const m = new Uint8Array(w * h);
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const z = zonaDe(x, y);
-      if (z > rZona) continue;
-      const i = y * w + x;
-      const dif = suave.d[i] - plant.d[i];
-      // Junto al borde del negro cualquier pequeño error de la elipse deja restos: se pide el doble.
-      const u = Math.abs(z - 1) * cal.rx < rAgujero * 1.2 ? 2 * umbral : umbral;
-      if (z < 1 ? dif > u : dif < -u) m[i] = 1;
+  // Cuánto se sale cada punto de la diana limpia: más claro en el negro (el papel roto y el fondo
+  // que asoma), más oscuro en el blanco. Un agujero es un máximo local de esa diferencia; buscando
+  // máximos (y no manchas) se separan los agujeros que se tocan.
+  const dif = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x, z = zonaDe(x, y);
+      dif[i] = z > rZona ? 0 : z < 1 ? suave.d[i] - plant.d[i] : plant.d[i] - suave.d[i];
     }
   }
-
-  // Si detrás de la diana hay un fondo oscuro, un agujero en el negro no se ve claro: se ve oscuro
-  // con el borde de papel roto en gris. Se buscan esos bordes claros (sin contar las rayas de los
-  // anillos) y se rellenan para que cada agujero quede como una mancha.
-  const radiosRaya = Object.values(diana.anillos).map((dm) => dm / 2).filter((r) => r < diana.negro / 2 - 1);
-  if (diana.diezInterior) radiosRaya.push(diana.diezInterior / 2);
-  const tolRaya = Math.max(1.2, 1.5 / pxMm);
-  const fino = desenfocar(g, 1);
-  const bordes = new Uint8Array(w * h);
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const i = y * w + x;
-      // Un agujero que ya se ve claro entero (fondo claro detrás) ya está en la máscara.
-      if (zonaDe(x, y) > 0.95 || m[i]) continue;
-      const mm = aMm(cal, x, y, diana);
-      const r = Math.hypot(mm.x, mm.y);
-      if (radiosRaya.some((rr) => Math.abs(r - rr) < tolRaya)) continue;
-      const n = pesN.d[i] > 0.05 ? sumN.d[i] / pesN.d[i] : negroG;
-      if (fino.d[i] - n > 0.2 * contraste) bordes[i] = 1;
+  const umbral = 0.15 * contraste;
+  const alrededor = desenfocar(g, Math.max(4, Math.round(rAgujero * 3)));
+  const rPico = Math.max(2, Math.round(rAgujero * 1.6)); // dos agujeros se tocan a 2 radios
+  const margen = rBala + 2; // sin mirar el borde de la foto (fuera de la diana)
+  const picos: { x: number; y: number; v: number }[] = [];
+  for (let y = margen; y < h - margen; y++) {
+    for (let x = margen; x < w - margen; x++) {
+      const i = y * w + x, v = dif[i];
+      if (v < umbral) continue;
+      // Junto al borde del negro cualquier pequeño error de la elipse deja restos: se pide más.
+      if (Math.abs(zonaDe(x, y) - 1) * cal.rx < rAgujero * 1.2 && v < 1.6 * umbral) continue;
+      // En el blanco, alrededor del agujero tiene que haber papel: si no, es el borde de la hoja o lo
+      // que hay detrás (la mesa, el soporte).
+      if (zonaDe(x, y) > 1 && Math.abs(alrededor.d[i] - plantilla[i]) > 0.3 * contraste) continue;
+      let maximo = true;
+      for (let dy = -rPico; dy <= rPico && maximo; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= h) continue;
+        for (let dx = -rPico; dx <= rPico; dx++) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= w || (dx === 0 && dy === 0)) continue;
+          const o = dif[yy * w + xx];
+          // En una meseta solo cuenta el primer punto.
+          if (o > v || (o === v && (dy < 0 || (dy === 0 && dx < 0)))) { maximo = false; break; }
+        }
+      }
+      if (maximo) picos.push({ x, y, v });
     }
   }
-  const rellenos = cerrar(bordes, w, h, Math.max(1, Math.round(rAgujero)));
-  for (let i = 0; i < m.length; i++) if (rellenos[i]) m[i] = 1;
 
   // Los números de los anillos (del 1 al 9, en las cuatro rayas que cruzan la diana: arriba, abajo,
   // izquierda y derecha, en el centro de cada anillo) se parecen a un agujero. Cada número está
   // impreso igual (derecho) en las cuatro rayas: si lo que hay en el sitio de un número se parece a lo
   // que hay en el mismo anillo de otra raya, es la cifra. Un agujero encima de la cifra la estropea y
   // deja de parecerse, así que ese sí se cuenta.
+  const fino = desenfocar(g, 1);
   const paso = (diana.anillos[8] - diana.anillos[9]) / 2;
   const rayas = [[1, 0], [0, 1], [-1, 0], [0, -1]];
   const numeroEn = (x: number, y: number): { rc: number; raya: number } | null => {
     const r = Math.hypot(x, y);
     const raya = Math.abs(x) > Math.abs(y) ? (x > 0 ? 0 : 2) : y > 0 ? 1 : 3;
-    if (Math.min(Math.abs(x), Math.abs(y)) > 0.4 * paso) return null;
+    // Con margen: la diana puede estar un poco girada en la foto y las cifras se apartan de la raya.
+    if (Math.min(Math.abs(x), Math.abs(y)) > 0.5 * paso) return null;
     for (const [v, dm] of Object.entries(diana.anillos)) {
       const rc = dm / 2 - paso / 2;
-      if (Number(v) <= 9 && Math.abs(r - rc) < 0.3 * paso) return { rc, raya };
+      if (Number(v) <= 9 && Math.abs(r - rc) < 0.4 * paso) return { rc, raya };
     }
     return null;
   };
@@ -499,9 +504,10 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
     const k = bb ? ab / bb : 0;
     const res = new Float32Array(a.length);
     for (let i = 0; i < a.length; i++) res[i] = a[i] - ma - k * (b[i] - mb);
+    // Solo cuenta lo que sobra en el centro: un agujero al lado de la cifra no la convierte en agujero.
     let max = 0;
-    for (let j = 1; j < N - 1; j++) {
-      for (let i = 1; i < N - 1; i++) {
+    for (let j = N >> 2; j < N - (N >> 2); j++) {
+      for (let i = N >> 2; i < N - (N >> 2); i++) {
         let t = 0;
         for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) t += res[(j + dj) * N + i + di];
         max = Math.max(max, Math.abs(t / 9));
@@ -541,30 +547,32 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
     return mejor > 0.5 && resto < 0.18 * contraste;
   };
 
-  const esperada = Math.PI * rAgujero * rAgujero;
-  const res: Agujero[] = [];
-  for (const k of manchas(m, w, h)) {
-    const bw = k.x1 - k.x0 + 1, bh = k.y1 - k.y0 + 1;
-    if (k.area < 0.55 * esperada) continue;
-    const tam = k.area / esperada;
-    const xPx = k.sx / k.area, yPx = k.sy / k.area;
-    const mm = aMm(cal, xPx, yPx, diana);
-    const relleno = k.area / (bw * bh);
-    if (tam > 4.5) {
-      // Muchos agujeros juntos (diana ya usada o una agrupación): no se cuentan uno a uno.
-      if (zonaDe(xPx, yPx) < 1 && relleno > 0.2) {
-        const radioPx = Math.hypot(bw, bh) / 2;
-        res.push({ xPx, yPx, x: mm.x, y: mm.y, valor: puntuar(mm.x, mm.y, calibreMm, diana), veces: 0, tam, grupo: { radioPx } });
+  // Cómo de rellena está la mancha: lo oscura que es de media frente a su punto más oscuro.
+  const relleno = (x: number, y: number): number => {
+    const papel = plantilla[y * w + x];
+    let min = Infinity, suma = 0, n = 0;
+    for (let dy = -rBala - 2; dy <= rBala + 2; dy++) {
+      for (let dx = -rBala - 2; dx <= rBala + 2; dx++) {
+        const yy = y + dy, xx = x + dx;
+        if (yy < 0 || xx < 0 || yy >= h || xx >= w) continue;
+        min = Math.min(min, fino.d[yy * w + xx]);
+        suma += d[yy * w + xx];
+        n++;
       }
-      continue;
     }
-    // Más alargado que dos balas juntas: no es un agujero (números, rayas, bordes).
-    if (bw / bh > 2.6 || bh / bw > 2.6 || relleno < 0.35) continue;
-    // Un agujero suelto mide entre 0,9 y 1,5 balas (el borde roto y el suavizado lo agrandan).
-    const veces = tam < 1.75 ? 1 : Math.min(4, Math.round(tam / 1.2));
-    res.push({ xPx, yPx, x: mm.x, y: mm.y, valor: puntuar(mm.x, mm.y, calibreMm, diana), veces, tam });
+    return papel - min > 1 ? (papel - suma / n) / (papel - min) : 0;
+  };
+  const res: Agujero[] = [];
+  for (const k of picos) {
+    const mm = aMm(cal, k.x, k.y, diana);
+    if (esCifra(mm.x, mm.y)) continue;
+    // En el blanco, en el sitio de una cifra (que a veces no se puede comparar con la de otra raya
+    // porque queda fuera de la foto) solo vale una mancha gris rellena; los trazos de una cifra
+    // son finos y muy oscuros.
+    if (zonaDe(k.x, k.y) > 1 && numeroEn(mm.x, mm.y) && relleno(k.x, k.y) < 0.33) continue;
+    res.push({ xPx: k.x, yPx: k.y, x: mm.x, y: mm.y, valor: puntuar(mm.x, mm.y, calibreMm, diana), veces: 1, tam: k.v / contraste });
   }
-  return res.filter((a) => a.grupo || !esCifra(a.x, a.y));
+  return res;
 }
 
 /**
