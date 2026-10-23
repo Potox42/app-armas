@@ -183,6 +183,13 @@ export interface Ajustes {
   campo?: ListaCampo;
 }
 
+/** Datos guardados aparte justo antes de borrarlos o restaurar una copia encima. */
+export interface Anteriores {
+  datos: Datos;
+  fecha: string; // ISO
+  motivo: 'borrado' | 'restaurado';
+}
+
 export interface Datos {
   nombre: string;
   ajustes?: Ajustes;
