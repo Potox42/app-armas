@@ -3,9 +3,9 @@ import { Pressable, Text, View } from 'react-native';
 import { geometria, puntuar } from '@/lib/diana';
 import { colors, space } from '@/theme';
 import { hoyISO } from '@/lib/fechas';
-import { cargarDatos, guardarDatos } from './db';
+import { cargarDatos, guardarAnteriores, guardarDatos } from './db';
 import { datosDeEjemplo } from './ejemplo';
-import type { Ajustes, Arma, Competicion, Datos, Documento, Plantilla, MovimientoMunicion, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Registro, Sesion } from './types';
+import type { Ajustes, Anteriores, Arma, Competicion, Datos, Documento, Plantilla, MovimientoMunicion, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Registro, Sesion } from './types';
 
 // Los datos se cargan de la base de datos cifrada al arrancar y se guardan en cada cambio.
 // Mientras no existan las pantallas de alta, el primer arranque parte del ejemplo.
@@ -43,8 +43,8 @@ interface Store {
   actualizarPermiso: (cambios: Partial<PermisoArmas>) => void;
   guardarPermiso: (permiso: PermisoArmas) => void;
   guardarFederacion: (f: Federacion) => void;
-  empezarDeCero: () => void;
-  restaurar: (d: Datos) => void;
+  empezarDeCero: () => Promise<void>;
+  restaurar: (d: Datos) => Promise<void>;
   guardarNombre: (nombre: string) => void;
   ajustes: Ajustes;
   guardarAjustes: (cambios: Partial<Ajustes>) => void;
@@ -54,6 +54,18 @@ interface Store {
 const AJUSTES_INICIALES: Ajustes = { bloqueo: false, avisos: false };
 
 export const nuevoId = (prefijo: string) => `${prefijo}-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+
+/** Sin nada apuntado: ni armas, ni licencias, ni entrenamientos, ni competiciones, ni papeles. */
+export function sinDatos(d: Datos): boolean {
+  return !d.armas.length && !d.permiso.licencias.length && !d.sesiones.length && !d.competiciones?.length && !d.documentos?.length;
+}
+
+/** Antes de borrar o sustituir los datos se guarda una copia aparte (si hay algo que guardar). */
+function apartar(d: Datos, motivo: Anteriores['motivo']): Promise<void> {
+  if (d.esEjemplo !== false || sinDatos(d)) return Promise.resolve();
+  return guardarAnteriores({ datos: d, fecha: new Date().toISOString(), motivo })
+    .catch((e) => console.error('No se pudieron apartar los datos anteriores', e));
+}
 
 function datosVacios(nombre: string): Datos {
   return {
@@ -302,9 +314,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return { ...d, permiso, armas };
         }),
       guardarFederacion: (f) => setDatos((d) => d && { ...d, federacion: f }),
-      empezarDeCero: () => setDatos((d) => d && { ...datosVacios(d.nombre), ajustes: d.ajustes }),
+      empezarDeCero: () =>
+        apartar(datos, 'borrado').then(() => setDatos((d) => d && { ...datosVacios(d.nombre), ajustes: d.ajustes })),
       // Los ajustes (Face ID, avisos) son de este móvil: no se traen de la copia.
-      restaurar: (nuevos) => setDatos((d) => d && { ...completar(nuevos), esEjemplo: false, ajustes: d.ajustes }),
+      restaurar: (nuevos) =>
+        apartar(datos, 'restaurado').then(() =>
+          setDatos((d) => d && { ...completar(nuevos), esEjemplo: false, ajustes: d.ajustes })),
       guardarNombre: (nombre) => setDatos((d) => d && { ...d, nombre }),
       ajustes: datos.ajustes ?? AJUSTES_INICIALES,
       guardarAjustes: (cambios) => setDatos((d) => d && { ...d, ajustes: { ...(d.ajustes ?? AJUSTES_INICIALES), ...cambios } }),

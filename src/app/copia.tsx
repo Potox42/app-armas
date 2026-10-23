@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Campo } from '@/components/Formulario';
 import { Button, Card, Screen, s } from '@/components/ui';
-import { guardarFoto } from '@/data/db';
+import { guardarFoto, leerAnteriores } from '@/data/db';
 import { useStore } from '@/data/store';
+import type { Anteriores } from '@/data/types';
 import { compartirArchivo, elegirArchivo } from '@/lib/archivo';
 import { confirmar } from '@/lib/confirmar';
 import { abrirCopia, crearCopia, ErrorCopia, MIN_CONTRASENA } from '@/lib/copia';
 import { bajarCopia, ErrorServidor, huella, infoServidor, subirCopia } from '@/lib/nube';
 import { formatear, hoyISO } from '@/lib/fechas';
+import { comprobarPin } from '@/lib/pin';
 import { colors, space } from '@/theme';
 
 export default function Copia() {
@@ -26,6 +28,12 @@ export default function Copia() {
   const [claveS, setClaveS] = useState(nube?.clave ?? '');
   const [contraS, setContraS] = useState('');
   const [contraS2, setContraS2] = useState('');
+  const [anteriores, setAnteriores] = useState<Anteriores | null>(null);
+  const [pinAnterior, setPinAnterior] = useState('');
+
+  useEffect(() => {
+    leerAnteriores().then(setAnteriores).catch(() => {});
+  }, [store.datos]);
 
   const errorClave = clave && clave.length < MIN_CONTRASENA ? `Mínimo ${MIN_CONTRASENA} caracteres` : undefined;
   const errorRepetida = repetida && repetida !== clave ? 'No coincide' : undefined;
@@ -147,7 +155,7 @@ export default function Copia() {
         () => {
           (async () => {
             for (const [id, f] of Object.entries(fotos)) await guardarFoto(id, f);
-            store.restaurar(datos);
+            await store.restaurar(datos);
             router.replace('/');
           })().catch(() => setError('No se pudieron guardar los datos de la copia.'));
         },
@@ -159,6 +167,30 @@ export default function Copia() {
     }
   };
 
+  // Si los datos apartados tenían PIN, hace falta ese PIN para traerlos (si no, «He olvidado el PIN»
+  // dejaría saltarse el bloqueo).
+  const pinDeAntes = anteriores?.datos.ajustes?.pin;
+  const recuperarAnteriores = () => {
+    if (!anteriores) return;
+    setError(null);
+    setHecho(null);
+    if (pinDeAntes && !comprobarPin(pinDeAntes, pinAnterior)) {
+      setError('Ese no es el PIN que tenían esos datos.');
+      return;
+    }
+    const d = anteriores.datos;
+    confirmar(
+      'Volver a los datos anteriores',
+      `Se sustituirán los datos de ahora por los apartados (${d.armas.length} armas, ${d.permiso.licencias.length} licencias, ${d.sesiones.length} entrenamientos). Los de ahora se apartan a su vez.`,
+      () => {
+        store.restaurar(d)
+          .then(() => router.replace('/'))
+          .catch(() => setError('No se pudieron recuperar los datos anteriores.'));
+      },
+      'Recuperar',
+    );
+  };
+
   return (
     <Screen title="Copia de seguridad" back="/perfil">
       <Text style={s.muted}>
@@ -167,6 +199,19 @@ export default function Copia() {
       <Text style={s.text}>
         {store.ajustes.ultimaCopia ? `Última copia: ${formatear(store.ajustes.ultimaCopia)}` : 'Aún no has guardado ninguna copia desde este móvil.'}
       </Text>
+
+      {anteriores && (
+        <Card style={{ gap: space.md }}>
+          <Text style={st.titulo}>Datos apartados</Text>
+          <Text style={s.muted}>
+            {`El ${formatear(anteriores.fecha.slice(0, 10))} ${anteriores.motivo === 'borrado' ? 'se borraron' : 'se sustituyeron por una copia'} los datos de este móvil. Se guardaron aparte: ${anteriores.datos.armas.length} armas, ${anteriores.datos.permiso.licencias.length} licencias y ${anteriores.datos.sesiones.length} entrenamientos.`}
+          </Text>
+          {pinDeAntes && (
+            <Campo etiqueta="PIN que tenían esos datos" valor={pinAnterior} onChange={setPinAnterior} teclado="number-pad" secreto />
+          )}
+          <Button title="Volver a esos datos" variant="secondary" onPress={recuperarAnteriores} />
+        </Card>
+      )}
 
       <Card style={{ gap: space.md }}>
         <Text style={st.titulo}>Copia automática en tu servidor</Text>

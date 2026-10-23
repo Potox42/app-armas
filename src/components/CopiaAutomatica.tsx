@@ -4,6 +4,9 @@ import { huella, subirCopia } from '@/lib/nube';
 
 const ESPERA_MS = 20_000; // tras un cambio, se espera un poco por si llegan más (una serie entera)
 
+/** Tamaño de los datos que guarda la huella («tamaño-hash»). */
+const tamano = (h: string | undefined) => Number(h?.split('-')[0]) || 0;
+
 /** Si la copia automática está activada, sube una copia cifrada a tu servidor cuando cambian los datos. */
 export function CopiaAutomatica() {
   const { datos, ajustes, esEjemplo, guardarAjustes } = useStore();
@@ -17,6 +20,13 @@ export function CopiaAutomatica() {
     // Al abrir la app no se sube otra vez si la última copia es de hace menos de un día y no hubo cambios.
     if (subida.current === null && nube.ultima && Date.now() - Date.parse(nube.ultima) < 86_400_000 && nube.huella === actual) {
       subida.current = actual;
+      return;
+    }
+    // Si los datos han menguado mucho desde la última copia (por ejemplo tras borrarlo todo), no se
+    // sube sola: el servidor guarda solo las 5 últimas y taparía las buenas. Se sube a mano si es lo correcto.
+    if (nube.huella && tamano(actual) < tamano(nube.huella) / 2) {
+      const aviso = 'Tus datos han bajado mucho desde la última copia y no se ha subido sola para no tapar las buenas. Si es correcto, pulsa «Subir copia ahora».';
+      if (nube.error !== aviso) guardarAjustes({ nube: { ...nube, error: aviso } });
       return;
     }
     const t = setTimeout(() => {

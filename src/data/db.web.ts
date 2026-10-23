@@ -1,4 +1,4 @@
-import type { Datos } from './types';
+import type { Anteriores, Datos } from './types';
 
 // Versión web (pantalla de inicio del iPhone): los datos se guardan en IndexedDB del navegador,
 // cifrados con AES-GCM. La clave se crea en el primer uso, no es exportable (el código de la
@@ -78,6 +78,16 @@ export async function cargarDatos(): Promise<Datos | null> {
 
 export async function guardarDatos(datos: Datos): Promise<void> {
   await escribir('documento', JSON.stringify(datos));
+}
+
+// Copia de los datos de antes de borrarlos o sustituirlos por una copia, por si fue un error.
+export async function guardarAnteriores(a: Anteriores): Promise<void> {
+  await escribir('documento-anterior', JSON.stringify(a));
+}
+
+export async function leerAnteriores(): Promise<Anteriores | null> {
+  const t = await leer('documento-anterior');
+  return t ? (JSON.parse(t) as Anteriores) : null;
 }
 
 export async function guardarFoto(id: string, dataUri: string): Promise<void> {

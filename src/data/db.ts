@@ -1,7 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import * as SQLite from 'expo-sqlite';
-import type { Datos } from './types';
+import type { Anteriores, Datos } from './types';
 
 // Base de datos cifrada con SQLCipher (activado en app.json, plugin expo-sqlite).
 // La clave es aleatoria, se genera en el primer arranque y vive en el llavero del iPhone.
@@ -36,6 +36,10 @@ async function abrir(): Promise<SQLite.SQLiteDatabase> {
       json TEXT NOT NULL,
       actualizado TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS anterior (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      json TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS foto (
       id TEXT PRIMARY KEY NOT NULL,
       datos TEXT NOT NULL
@@ -66,6 +70,16 @@ export async function guardarDatos(datos: Datos): Promise<void> {
     JSON.stringify(datos),
     new Date().toISOString(),
   );
+}
+
+// Copia de los datos de antes de borrarlos o sustituirlos por una copia, por si fue un error.
+export async function guardarAnteriores(a: Anteriores): Promise<void> {
+  await (await bd()).runAsync('INSERT OR REPLACE INTO anterior (id, json) VALUES (1, ?)', JSON.stringify(a));
+}
+
+export async function leerAnteriores(): Promise<Anteriores | null> {
+  const fila = await (await bd()).getFirstAsync<{ json: string }>('SELECT json FROM anterior WHERE id = 1');
+  return fila ? (JSON.parse(fila.json) as Anteriores) : null;
 }
 
 // Las fotos van en su propia tabla (también cifrada) para no reescribirlas en cada cambio.
