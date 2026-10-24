@@ -40,14 +40,23 @@ export default function Entrenar() {
         <Icon name="chevron" />
       </Pressable>
 
-      <Card onPress={() => router.push('/simulador')} style={st.fila}>
-        <Icon name="flash" color={colors.accent} />
-        <View style={{ flex: 1 }}>
-          <Text style={st.nombre}>Simulador de tirada</Text>
-          <Text style={s.muted}>Órdenes por voz y luces roja y verde</Text>
+      {/* Otra forma de entrenar: tan visible como «Nueva sesión», con los colores de sus luces. */}
+      <Pressable
+        onPress={() => router.push('/simulador')}
+        style={({ pressed }) => [st.nueva, st.simulador, pressed && { opacity: 0.8 }]}
+        accessibilityLabel="Simulador de tirada"
+      >
+        <Degradado desde="#1F9D5C" hasta="#0B5E36" brillo="#C8FFE0" />
+        <View style={st.luces}>
+          <View style={[st.luz, { backgroundColor: '#FF4D5E' }]} />
+          <View style={[st.luz, { backgroundColor: '#3DF08F' }]} />
         </View>
-        <Icon name="chevron" color={colors.textMuted} />
-      </Card>
+        <View style={{ flex: 1 }}>
+          <Text style={st.nuevaTitulo}>Simulador de tirada</Text>
+          <Text style={st.nuevaSub}>Entrena los tiempos: órdenes por voz y luces roja y verde</Text>
+        </View>
+        <Icon name="chevron" />
+      </Pressable>
 
       <SectionTitle>Sesiones de entrenamiento</SectionTitle>
       {terminadas.length === 0 && <Text style={s.muted}>Aún no hay sesiones.</Text>}
@@ -109,6 +118,9 @@ const st = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: space.md,
     shadowColor: colors.accentDark, shadowOpacity: 0.45, shadowRadius: 16, shadowOffset: { width: 0, height: 8 },
   },
+  simulador: { shadowColor: '#0E8A4A' },
+  luces: { width: 40, alignItems: 'center', gap: 6 },
+  luz: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: 'rgba(255,255,255,0.85)' },
   nuevaTitulo: { color: '#fff', fontSize: 19, fontWeight: '900' },
   nuevaSub: { color: 'rgba(255,255,255,0.8)', fontSize: 13 },
   fila: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
