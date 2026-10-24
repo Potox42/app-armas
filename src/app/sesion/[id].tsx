@@ -139,14 +139,18 @@ function Asistente({ sesion }: { sesion: Sesion }) {
 
   const visorVista = (altoVisor: number) => (
     <>
+      {/* El visor también busca la diana y los impactos: lo que ve (o lo que se toca en la imagen) pasa
+          a la diana de la derecha. */}
       <CamaraDiana
-        soloVer
-        activo={false}
+        key={`visor-${nDiana}`}
+        soloVer={teclado}
+        activo={!completa}
         horizontal={horizontal}
         alto={altoVisor}
         modelo={modelo}
         calibre={calibre}
-        onImpacto={() => {}}
+        disparos={disparosDiana}
+        onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)}
       />
       <Pressable onPress={() => setConVisor(false)} hitSlop={8}>
         <Text style={st.enlace}>Ocultar el visor</Text>
