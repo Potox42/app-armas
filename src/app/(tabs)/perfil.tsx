@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Avatar } from '@/components/Avatar';
 import { Campo } from '@/components/Formulario';
 import { Icon } from '@/components/Icon';
+import { RecomendarApp } from '@/components/InstalarApp';
 import { Button, Card, Screen, Segmented, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { confirmar } from '@/lib/confirmar';
@@ -114,6 +115,7 @@ export default function Perfil() {
         </View>
         <Icon name="chevron" color={colors.textMuted} />
       </Card>
+      <RecomendarApp />
       {store.esEjemplo && (
         <Card style={{ gap: space.md, borderColor: colors.orange }}>
           <Text style={s.text}>Estás viendo datos de ejemplo.</Text>
