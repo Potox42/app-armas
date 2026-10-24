@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { aMm, Vigia, type Calibracion, type Gris } from '@/lib/impactos';
+import { aMm, calibrar, Vigia, type Calibracion, type Gris } from '@/lib/impactos';
 import { colors, radius, space } from '@/theme';
 import type { PropsCamaraDiana } from './CamaraDiana.types';
 
@@ -21,6 +21,37 @@ function guardarGiro(horizontal: boolean | undefined, grados: number) {
   try {
     localStorage.setItem(claveGiro(horizontal), String(grados));
   } catch {}
+}
+
+/**
+ * Cámara elegida. Los iPhone Pro tienen tres cámaras traseras y Safari ofrece además cámaras
+ * «virtuales» (dual, triple) que saltan solas de una a otra; pegadas al ocular del catalejo saltan
+ * todo el rato (la de cerca, la ultra gran angular) y no se ve bien. Por eso se usa la normal (1×)
+ * salvo que el tirador elija otra.
+ */
+const CLAVE_CAMARA = 'camaraId';
+function leerCamara(): string {
+  try {
+    return localStorage.getItem(CLAVE_CAMARA) || '';
+  } catch {
+    return '';
+  }
+}
+function guardarCamara(id: string) {
+  try {
+    if (id) localStorage.setItem(CLAVE_CAMARA, id);
+    else localStorage.removeItem(CLAVE_CAMARA);
+  } catch {}
+}
+interface Camara { id: string; nombre: string; virtual: boolean }
+const esFrontal = (l: string) => /front|frontal|delantera|facetime/i.test(l);
+const esVirtual = (l: string) => /dual|triple|doble/i.test(l);
+/** Nombre corto para el botón, a partir del nombre que da Safari (en español o en inglés). */
+function nombreCorto(l: string): string {
+  if (esVirtual(l)) return 'Auto';
+  if (/ultra/i.test(l)) return '0,5×';
+  if (/tele/i.test(l)) return 'Tele';
+  return '1×';
 }
 
 /** Cuánto está girada la pantalla respecto al móvil en vertical (90 o 270 en horizontal). */
@@ -55,6 +86,10 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
   // Visor: aumento digital para ver mejor los agujeros pequeños.
   const [zoom, setZoom] = useState(1);
   const aumento = useRef(1);
+  // Cámaras traseras disponibles y la elegida.
+  const [camaras, setCamaras] = useState<Camara[]>([]);
+  const [camaraId, setCamaraId] = useState(leerCamara);
+  const [enUso, setEnUso] = useState(''); // nombre de la cámara abierta
   useEffect(() => {
     aumento.current = zoom;
   }, [zoom]);
@@ -91,11 +126,21 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     let vivo = true;
     let forma = ''; // tamaño y giro de la imagen con los que se calibró
     let mapa: { ox: number; oy: number; k: number } | null = null; // de la imagen analizada a la capa
+    // Qué punto de la imagen (en fracción del ancho y del alto) queda en medio al ampliar: la diana
+    // si se encuentra, o donde toque el tirador. Así al ampliar no se pierde la diana.
+    let foco: { fx: number; fy: number; mano: boolean } = { fx: 0.5, fy: 0.5, mano: false };
+    let ultimoFoco = 0;
 
     // Un toque en la imagen: antes de encontrar la diana, dice dónde está; después, marca a mano un
     // disparo que la cámara no ha visto.
     const toque = (e: MouseEvent) => {
-      if (!mapa || props.current.soloVer) return;
+      if (props.current.soloVer) {
+        // En el visor, el toque dice qué se quiere ver en medio al ampliar.
+        const f = fraccion(e.clientX, e.clientY);
+        if (f) { foco = { ...f, mano: true }; encajar(giro()); }
+        return;
+      }
+      if (!mapa) return;
       const caja = capa.getBoundingClientRect();
       const x = ((e.clientX - caja.left) * devicePixelRatio - mapa.ox) / mapa.k;
       const y = ((e.clientY - caja.top) * devicePixelRatio - mapa.oy) / mapa.k;
@@ -124,10 +169,48 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     const medidas = (g: number) => (g % 180 ? { W: video.videoHeight, H: video.videoWidth } : { W: video.videoWidth, H: video.videoHeight });
 
     // El vídeo se gira con CSS dentro de la caja; si va de lado, su ancho es el alto de la caja.
-    const encajar = (g: number) => {
+    // Escala de la imagen girada a la caja (contain) y desplazamiento para centrar el foco al ampliar.
+    const vista = (g: number) => {
       const { width, height } = raiz.getBoundingClientRect();
+      const { W, H } = medidas(g);
+      const k = W && H ? Math.min(width / W, height / H) : 1;
+      const z = aumento.current;
+      const tx = z > 1 ? -(foco.fx - 0.5) * W * k * z : 0, ty = z > 1 ? -(foco.fy - 0.5) * H * k * z : 0;
+      return { width, height, W, H, k, z, tx, ty };
+    };
+    const encajar = (g: number) => {
+      const { width, height, z, tx, ty } = vista(g);
       const [w, h] = g % 180 ? [height, width] : [width, height];
-      Object.assign(video.style, { width: `${w}px`, height: `${h}px`, transform: `translate(-50%, -50%) rotate(${g}deg) scale(${aumento.current})` });
+      Object.assign(video.style, { width: `${w}px`, height: `${h}px`, transform: `translate(-50%, -50%) translate(${tx}px, ${ty}px) rotate(${g}deg) scale(${z})` });
+    };
+    // De un toque en pantalla al punto de la imagen girada (en fracción), con el aumento puesto.
+    const fraccion = (cx: number, cy: number) => {
+      const r = raiz.getBoundingClientRect();
+      const { W, H, k, z, tx, ty } = vista(giro());
+      if (!W || !H) return null;
+      const fx = (cx - r.left - r.width / 2 - tx) / (z * k * W) + 0.5;
+      const fy = (cy - r.top - r.height / 2 - ty) / (z * k * H) + 0.5;
+      return { fx: Math.max(0, Math.min(1, fx)), fy: Math.max(0, Math.min(1, fy)) };
+    };
+    // En el visor, cada poco se busca la diana en una imagen pequeña para centrarla al ampliar.
+    const buscarFoco = (g: number) => {
+      const ahora = Date.now();
+      if (foco.mano || ahora - ultimoFoco < 1000) return;
+      ultimoFoco = ahora;
+      const { W, H } = medidas(g);
+      const ancho = 320, alto = Math.round((H / W) * ancho), e = ancho / W;
+      lienzo.width = ancho;
+      lienzo.height = alto;
+      ctx.save();
+      ctx.translate(ancho / 2, alto / 2);
+      ctx.rotate((g * Math.PI) / 180);
+      ctx.drawImage(video, (-video.videoWidth * e) / 2, (-video.videoHeight * e) / 2, video.videoWidth * e, video.videoHeight * e);
+      ctx.restore();
+      const px = ctx.getImageData(0, 0, ancho, alto).data;
+      const d = new Float32Array(ancho * alto);
+      for (let i = 0; i < d.length; i++) d[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+      const cal = calibrar({ w: ancho, h: alto, d }, 0.7);
+      if (cal) foco = { fx: cal.cx / ancho, fy: cal.cy / alto, mano: false };
     };
 
     const dibujar = (g: number, cal?: Calibracion) => {
@@ -162,8 +245,12 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       if (!video.videoWidth || video.readyState < 2) return;
       const gr = giro();
       const { W, H } = medidas(gr);
+      if (props.current.soloVer) {
+        if (aumento.current > 1) buscarFoco(gr);
+        encajar(gr);
+        return;
+      }
       encajar(gr);
-      if (props.current.soloVer) return;
       // Si la imagen cambia de forma o de giro, la calibración anterior ya no vale.
       const ahora = `${W}x${H}@${gr}`;
       if (forma && ahora !== forma) {
@@ -196,10 +283,32 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
 
     // Sin cámara en el navegador (o sin HTTPS), getUserMedia no existe: se trata como un permiso denegado.
     new Promise((ok) => setTimeout(ok, ESPERA_MS))
-      .then(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }))
-      .then((s) => {
+      .then(() => navigator.mediaDevices.getUserMedia({
+        video: { ...(camaraId ? { deviceId: { exact: camaraId } } : { facingMode: 'environment' }), width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      }))
+      .then(async (s) => {
         if (!vivo) return s.getTracks().forEach((t) => t.stop());
+        // Con el permiso dado, Safari ya dice el nombre de cada cámara.
+        try {
+          const lista = (await navigator.mediaDevices.enumerateDevices())
+            .filter((d) => d.kind === 'videoinput' && d.label && !esFrontal(d.label))
+            .map((d) => ({ id: d.deviceId, nombre: d.label, virtual: esVirtual(d.label) }));
+          if (!vivo) return s.getTracks().forEach((t) => t.stop());
+          setCamaras(lista);
+          // Sin elegir ninguna, si ha salido una virtual (que salta de cámara) se pasa a la normal.
+          const actual = s.getVideoTracks()[0]?.label ?? '';
+          const normal = lista.find((c) => !c.virtual && nombreCorto(c.nombre) === '1×');
+          if (!camaraId && esVirtual(actual) && normal) {
+            s.getTracks().forEach((t) => t.stop());
+            setCamaraId(normal.id);
+            return;
+          }
+        } catch (e) {
+          console.warn('No se pudo ver la lista de cámaras', e);
+        }
         flujo = s;
+        setEnUso(s.getVideoTracks()[0]?.label ?? '');
         video.srcObject = s;
         encajar(giro());
         setEstado('buscando');
@@ -210,6 +319,12 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       .catch((e) => {
         console.warn('No se pudo abrir la cámara', e);
         const nombre = (e as { name?: string })?.name;
+        // La cámara guardada ya no existe (otro móvil, otra versión): se vuelve a la de siempre.
+        if (camaraId && (nombre === 'OverconstrainedError' || nombre === 'NotFoundError')) {
+          guardarCamara('');
+          setCamaraId('');
+          return;
+        }
         setEstado(nombre === 'NotAllowedError' || nombre === 'SecurityError' || !navigator.mediaDevices ? 'sin-permiso' : 'sin-camara');
       });
 
@@ -221,7 +336,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       video.remove();
       capa.remove();
     };
-  }, [intento]);
+  }, [intento, camaraId]);
 
   const ok = estado === 'vigilando';
   const fallo = estado === 'sin-permiso' || estado === 'sin-camara';
@@ -237,6 +352,21 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
             : !activo && ok ? 'Serie completa: pasa a la siguiente para seguir contando.' : TEXTOS[estado]}
           {ultimo !== null && ok ? `  Último: ${ultimo}` : ''}
         </Text>
+        {enMarcha && camaras.length > 1 && (
+          <Pressable
+            hitSlop={8}
+            onPress={() => {
+              const i = camaras.findIndex((c) => c.id === camaraId || (!camaraId && c.nombre === enUso));
+              const sig = camaras[(i + 1) % camaras.length];
+              guardarCamara(sig.id);
+              setEstado('arrancando');
+              setCamaraId(sig.id);
+            }}
+            accessibilityLabel="Cambiar de cámara"
+          >
+            <Text style={st.boton}>Cámara {nombreCorto(enUso)}</Text>
+          </Pressable>
+        )}
         {soloVer && enMarcha && (
           <Pressable hitSlop={8} onPress={() => setZoom((z) => (z >= 3 ? 1 : z + 1))} accessibilityLabel="Ampliar la imagen">
             <Text style={st.boton}>Ampliar {zoom}×</Text>
