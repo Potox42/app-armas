@@ -4,7 +4,7 @@ import { formatear, hoyISO, sumarDias } from './fechas';
 const escapar = (s: string) => s.replace(/[\;,]/g, (x) => `\\${x}`).replace(/\n/g, '\\n');
 const sinGuiones = (iso: string) => iso.replace(/-/g, '');
 
-interface Caducidad {
+export interface Caducidad {
   id: string;
   nombre: string; // «la licencia F»
   fecha: string; // ISO
@@ -69,4 +69,18 @@ export function calendarioCaducidades(datos: Datos, hoy = hoyISO(), ahora = new 
   }
   const lineas = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Tirador Deportivo//ES', 'CALSCALE:GREGORIAN', ...eventos.flat(), 'END:VCALENDAR'];
   return { ics: lineas.join('\r\n') + '\r\n', eventos: eventos.length };
+}
+
+/**
+ * Enlace para crear el evento en Google Calendar (se abre en la app o en la web de Google).
+ * Si el iPhone tiene la cuenta de Google, el evento sale también en el Calendario del iPhone.
+ * Google no recibe alarmas por enlace: usa los avisos que tengas configurados por defecto.
+ */
+export function enlaceGoogleCalendar(c: Caducidad): string {
+  const titulo = `Caduca ${c.nombre}`;
+  const nota = [c.nota, 'Creado desde Tirador Deportivo. Consejo: añade un aviso 3 meses y 1 mes antes.'].filter(Boolean).join('\n\n');
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+    `&text=${encodeURIComponent(titulo)}` +
+    `&dates=${sinGuiones(c.fecha)}/${sinGuiones(sumarDias(c.fecha, 1))}` +
+    `&details=${encodeURIComponent(nota)}`;
 }

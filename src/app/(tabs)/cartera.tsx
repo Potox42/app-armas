@@ -11,7 +11,7 @@ import { Badge, Button, Card, FakeQr, Screen, Segmented, nivelColor, s } from '@
 import { useStore } from '@/data/store';
 import { nivelPorDias } from '@/lib/avisos';
 import { diasHasta, formatear, plazo } from '@/lib/fechas';
-import { cupoArmasF } from '@/lib/papeles';
+import { cupoArmasD, cupoArmasE, cupoArmasF, LIMITES_E, MAXIMO_D } from '@/lib/papeles';
 import { colors, space } from '@/theme';
 
 type Vista = 'licencias' | 'federacion' | 'otros';
@@ -74,6 +74,8 @@ export default function Cartera() {
             </View>
           )}
           <ArmasLicenciaF />
+          <ArmasLicenciaE />
+          <ArmasLicenciaD />
         </>
       )}
 
@@ -89,13 +91,21 @@ export default function Cartera() {
             </Card>
           )}
           {documentos.map((d) => (
-            <Card key={d.id} style={st.doc} onPress={() => router.push({ pathname: '/documento/editar', params: { id: d.id } })}>
-              <Icon name={d.tipo === 'Seguro' ? 'shield' : 'doc'} color={colors.accent} />
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={s.text}>{d.nombre}</Text>
-                <Text style={s.muted}>{d.tipo}{d.numero ? ` · ${d.numero}` : ''}</Text>
+            <Card key={d.id} style={{ gap: space.sm }} onPress={() => router.push({ pathname: '/documento/editar', params: { id: d.id } })}>
+              <View style={st.doc}>
+                <Icon name={d.tipo === 'Seguro' ? 'shield' : 'doc'} color={colors.accent} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={s.text}>{d.nombre}</Text>
+                  <Text style={s.muted}>{d.tipo}{d.numero ? ` · ${d.numero}` : ''}</Text>
+                </View>
+                {d.caducidad ? <Badge nivel={nivelPorDias(diasHasta(d.caducidad))}>{plazo(d.caducidad)}</Badge> : null}
               </View>
-              {d.caducidad ? <Badge nivel={nivelPorDias(diasHasta(d.caducidad))}>{plazo(d.caducidad)}</Badge> : null}
+              {(d.foto || d.fotoReverso) && (
+                <View style={{ flexDirection: 'row', gap: space.sm }}>
+                  {d.foto ? <MiniFoto id={d.foto} titulo={`${d.nombre} · anverso`} /> : null}
+                  {d.fotoReverso ? <MiniFoto id={d.fotoReverso} titulo={`${d.nombre} · reverso`} /> : null}
+                </View>
+              )}
             </Card>
           ))}
           <Button title="+  Añadir documento" onPress={() => router.push('/documento/editar')} />
@@ -202,8 +212,90 @@ function ArmasLicenciaF() {
   );
 }
 
+/** Miniatura de la foto de un documento: al tocarla se ve a pantalla completa. */
+function MiniFoto({ id, titulo }: { id: string; titulo: string }) {
+  const uri = useFoto(id);
+  return (
+    <Pressable
+      style={st.mini}
+      accessibilityLabel={titulo}
+      onPress={() => router.push({ pathname: '/ver-foto', params: { id, titulo } })}
+    >
+      {uri ? <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" /> : null}
+    </Pressable>
+  );
+}
+
+/** Color del contador: verde si cabe, naranja si está justo en el límite, rojo si se pasa. */
+function colorCupo(n: number, max: number) {
+  return n > max ? colors.red : n === max ? colors.orange : colors.green;
+}
+
+/**
+ * Armas con la licencia E: hasta 6 escopetas y 6 armas largas rayadas para tiro deportivo,
+ * 12 en total (art. 101 del Reglamento de Armas).
+ */
+function ArmasLicenciaE() {
+  const store = useStore();
+  const cupo = cupoArmasE(store.datos);
+  if (!cupo) return null;
+  const { escopetas, rayadas, total } = cupo;
+  const pasado = escopetas > LIMITES_E.escopetas || rayadas > LIMITES_E.rayadas || total > LIMITES_E.total;
+  const filas: [string, number, number][] = [
+    ['Escopetas', escopetas, LIMITES_E.escopetas],
+    ['Armas largas rayadas', rayadas, LIMITES_E.rayadas],
+  ];
+  return (
+    <Card style={{ gap: space.sm }} onPress={() => router.push('/armas')}>
+      <View style={st.doc}>
+        <Text style={[s.text, { flex: 1 }]}>Armas con tu licencia E</Text>
+        <Text style={{ color: colorCupo(total, LIMITES_E.total), fontSize: 18, fontWeight: '900' }}>
+          {total} de {LIMITES_E.total}
+        </Text>
+      </View>
+      {filas.map(([nombre, n, max]) => (
+        <View key={nombre} style={st.doc}>
+          <Text style={[s.muted, { flex: 1 }]}>{nombre}</Text>
+          <Text style={{ color: colorCupo(n, max), fontSize: 15, fontWeight: '800' }}>
+            {n} de {max}
+          </Text>
+        </View>
+      ))}
+      <Text style={[s.muted, { fontSize: 13 }]}>
+        {pasado
+          ? 'Tienes más armas apuntadas con la E de las que permite. Revisa a qué licencia va cada una.'
+          : 'La licencia E permite hasta 6 escopetas y 6 armas largas rayadas para tiro deportivo, 12 en total (art. 101 del Reglamento de Armas).'}
+      </Text>
+    </Card>
+  );
+}
+
+/** Armas con la licencia D: hasta cinco armas largas rayadas para caza mayor. */
+function ArmasLicenciaD() {
+  const store = useStore();
+  const cupo = cupoArmasD(store.datos);
+  if (!cupo) return null;
+  const { armas } = cupo;
+  return (
+    <Card style={{ gap: space.sm }} onPress={() => router.push('/armas')}>
+      <View style={st.doc}>
+        <Text style={[s.text, { flex: 1 }]}>Armas con tu licencia D</Text>
+        <Text style={{ color: colorCupo(armas, MAXIMO_D), fontSize: 18, fontWeight: '900' }}>
+          {armas} de {MAXIMO_D}
+        </Text>
+      </View>
+      <Text style={[s.muted, { fontSize: 13 }]}>
+        {armas > MAXIMO_D
+          ? 'Tienes más armas apuntadas con la D de las que permite. Revisa a qué licencia va cada una.'
+          : 'La licencia D permite hasta 5 armas largas rayadas para caza mayor.'}
+      </Text>
+    </Card>
+  );
+}
+
 const st = StyleSheet.create({
   doc: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  mini: { flex: 1, aspectRatio: 1.58, borderRadius: 10, overflow: 'hidden', backgroundColor: colors.cardAlt, borderWidth: 1, borderColor: colors.border },
   titulo: { color: colors.text, fontSize: 16, fontWeight: '700' },
   cabecera: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 });

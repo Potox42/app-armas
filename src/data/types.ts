@@ -144,7 +144,7 @@ export interface Competicion {
 }
 
 /** Otros papeles con fecha: seguro, certificado médico… */
-export type TipoDocumento = 'Seguro' | 'Certificado médico' | 'Otro';
+export type TipoDocumento = 'DNI' | 'Seguro' | 'Certificado médico' | 'Otro';
 
 export interface Documento {
   id: string;
@@ -152,7 +152,8 @@ export interface Documento {
   nombre: string; // «Seguro de responsabilidad civil», «Certificado médico»…
   caducidad?: string; // ISO
   numero?: string;
-  foto?: string;
+  foto?: string; // anverso
+  fotoReverso?: string;
   nota?: string;
 }
 
