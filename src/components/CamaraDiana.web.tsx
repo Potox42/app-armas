@@ -349,8 +349,9 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
   const enMarcha = estado !== 'arrancando' && !fallo;
   return (
     <View style={st.marco}>
-      <View ref={caja as never} style={alto ? [st.videoHorizontal, { height: alto }] : horizontal ? [st.videoHorizontal, { height: Math.max(160, altoPantalla - 170) }] : st.video} />
-      <View style={st.pie}>
+      <View ref={caja as never} style={alto ? [st.videoHorizontal, { height: alto }] : horizontal ? [st.videoHorizontal, { height: Math.max(160, altoPantalla - 110) }] : st.video} />
+      {/* En horizontal los botones van encima del vídeo (abajo), para que la diana se vea lo más grande posible. */}
+      <View style={[st.pie, (horizontal || !!alto) && st.pieEncima]}>
         {(estado === 'arrancando' || estado === 'calibrando') && <ActivityIndicator color={colors.accent} />}
         <Text style={[st.texto, ok && { color: colors.green }]}>
           {soloVer
@@ -421,9 +422,10 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
 }
 
 const st = StyleSheet.create({
-  marco: { borderRadius: radius.lg, overflow: 'hidden', backgroundColor: '#000', borderWidth: 1, borderColor: colors.border },
+  marco: { position: 'relative', borderRadius: radius.lg, overflow: 'hidden', backgroundColor: '#000', borderWidth: 1, borderColor: colors.border },
   video: { width: '100%', aspectRatio: 3 / 4, position: 'relative', overflow: 'hidden' },
   videoHorizontal: { width: '100%', position: 'relative', overflow: 'hidden' },
+  pieEncima: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingVertical: space.sm, backgroundColor: 'rgba(8, 16, 30, 0.72)' },
   pie: { flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md, backgroundColor: colors.card },
   texto: { flex: 1, color: colors.text, fontSize: 14 },
   boton: { color: colors.accent, fontWeight: '700' },

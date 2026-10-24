@@ -221,7 +221,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
     return (
       <Screen title={titulo} kicker={kicker} back="/entrenar" compacto>
         <View style={st.cabina}>
-          <View style={{ flex: 1.3, gap: space.sm }}>{visorVista(Math.max(140, alto - 150))}</View>
+          <View style={{ flex: 1.3, gap: space.sm }}>{visorVista(Math.max(140, alto - 110))}</View>
           <View style={{ flex: 1, gap: space.sm }}>
             {teclado ? tecladoNumeros : diana(ladoDiana)}
             {cifras}
@@ -238,13 +238,14 @@ function Asistente({ sesion }: { sesion: Sesion }) {
     return (
       <Screen title={titulo} kicker={kicker} back="/entrenar" compacto>
         <View style={st.cabina}>
-          <View style={{ flex: 1.5, gap: space.sm }}>
+          {/* Con la cámara en el catalejo, la imagen ocupa casi todo: a la derecha solo las cifras y los botones. */}
+          <View style={{ flex: camara && !teclado ? 2.2 : 1.5, gap: space.sm }}>
             {teclado ? tecladoNumeros : camara ? camaraVista : foto ? fotoVista : diana(ladoDiana)}
           </View>
           <View style={{ flex: 1, gap: space.sm }}>
             {cifras}
-            {resumenDiana}
-            {grafica}
+            {!(camara && !teclado) && resumenDiana}
+            {!(camara && !teclado) && grafica}
             {botones}
             {verVisor}
             <BotonBorrar sesion={sesion} />
