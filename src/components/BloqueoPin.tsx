@@ -73,7 +73,7 @@ export function BloqueoPin() {
   return (
     <View style={st.tapa}>
       <Logo size={72} />
-      <Text style={st.titulo}>Tirador Deportivo</Text>
+      <Text style={st.titulo}>Tirador 360</Text>
       <Text style={st.texto}>{espera > 0 ? `Demasiados intentos. Espera ${espera} s.` : 'Escribe tu PIN'}</Text>
       <View style={st.puntos}>
         {Array.from({ length: pin.largo }, (_, i) => (

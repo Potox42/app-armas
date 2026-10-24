@@ -52,7 +52,7 @@ export function Bloqueo({ children }: { children: ReactNode }) {
       {activado && bloqueada && (
         <View style={st.tapa}>
           <Logo size={72} />
-          <Text style={st.titulo}>Tirador Deportivo</Text>
+          <Text style={st.titulo}>Tirador 360</Text>
           <Text style={st.texto}>Tus documentos están protegidos.</Text>
           {!pidiendo && (
             <View style={{ alignSelf: 'stretch' }}>

@@ -26,7 +26,7 @@ export function InstalarApp() {
 
   const compartir = () => {
     navigator.share?.({
-      title: 'Tirador Deportivo',
+      title: 'Tirador 360',
       text: 'Licencias, armas y entrenamientos de tiro en el móvil.',
       url: window.location.origin + (process.env.EXPO_BASE_URL ?? '') + '/',
     }).catch(() => {});

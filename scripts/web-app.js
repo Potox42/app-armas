@@ -12,8 +12,8 @@ const iconos = path.join(__dirname, '..', 'assets', 'web');
 for (const f of fs.readdirSync(iconos)) fs.copyFileSync(path.join(iconos, f), path.join(dist, f));
 
 fs.writeFileSync(path.join(dist, 'manifest.json'), JSON.stringify({
-  name: 'Tirador Deportivo',
-  short_name: 'Tirador',
+  name: 'Tirador 360',
+  short_name: 'Tirador 360',
   start_url: `${base}/`,
   scope: `${base}/`,
   display: 'standalone',
@@ -35,13 +35,13 @@ fs.copyFileSync(path.join(nm, '@tesseract.js-data', 'spa', '4.0.0_best_int', 'sp
 
 let html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
 html = html.replace('<html lang="en">', '<html lang="es">');
-html = html.replace(/<title>[^<]*<\/title>/, '<title>Tirador Deportivo</title>');
+html = html.replace(/<title>[^<]*<\/title>/, '<title>Tirador 360</title>');
 html = html.replace('</head>', `  <link rel="manifest" href="${base}/manifest.json">
   <link rel="apple-touch-icon" href="${base}/icono-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Tirador">
+  <meta name="apple-mobile-web-app-title" content="Tirador 360">
   <meta name="theme-color" content="#03070B">
   <style>body { background: #03070B; }</style>
 </head>`);

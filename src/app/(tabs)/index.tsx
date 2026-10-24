@@ -60,7 +60,7 @@ export default function Inicio() {
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Logo size={20} />
-            <Kicker>Tirador deportivo</Kicker>
+            <Kicker>Tirador 360</Kicker>
           </View>
           <Text style={st.saludo}>{datos.nombre ? `Hola, ${datos.nombre.split(' ')[0]}` : 'Hola'}</Text>
           <Text style={s.muted}>Tu centro deportivo personal</Text>

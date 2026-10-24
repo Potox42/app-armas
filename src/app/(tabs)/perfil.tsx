@@ -51,7 +51,7 @@ export default function Perfil() {
     if (!activar) return store.guardarAjustes({ avisos: false });
     if (!avisosDisponibles) return avisar('Avisos', 'Los avisos solo funcionan en la app instalada en el móvil.');
     if (!(await pedirPermisoAvisos())) {
-      return avisar('Avisos', 'Permite las notificaciones de Tirador Deportivo en Ajustes del iPhone > Notificaciones.');
+      return avisar('Avisos', 'Permite las notificaciones de Tirador 360 en Ajustes del iPhone > Notificaciones.');
     }
     store.guardarAjustes({ avisos: true });
   };

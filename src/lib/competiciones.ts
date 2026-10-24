@@ -88,7 +88,7 @@ export function archivoCalendario(c: Competicion, ahora = new Date()): string {
   const fin = new Date(inicio.getTime() + 4 * 3600 * 1000);
   const titulo = `${c.categoria}: ${c.modalidad}`;
   const lineas = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Tirador Deportivo//ES', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Tirador 360//ES', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT',
     `UID:${c.id}@tirador-deportivo`, `DTSTAMP:${enUtc(ahora)}`,
     ...(c.hora
       ? [`DTSTART:${enUtc(inicio)}`, `DTEND:${enUtc(fin)}`]

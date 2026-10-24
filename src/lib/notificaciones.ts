@@ -35,7 +35,7 @@ export async function quitarAvisos(): Promise<void> {
 
 export async function avisoDePrueba(): Promise<void> {
   await Notifications.scheduleNotificationAsync({
-    content: { title: 'Tirador Deportivo', body: 'Así te llegarán los avisos de caducidad y revista.' },
+    content: { title: 'Tirador 360', body: 'Así te llegarán los avisos de caducidad y revista.' },
     trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5 },
   });
 }
