@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, radius, space } from '@/theme';
 import { Icon } from './Icon';
 import { Card } from './ui';
@@ -12,24 +12,43 @@ export function enNavegador(): boolean {
   return !standalone;
 }
 
+// Web de venta (cambiar a https://tirador360.es cuando el dominio esté conectado).
+export const WEB_VENTA = 'https://tirador3602164.live-website.com/';
+const CLAVE_CODIGO = 'codigoAmigo';
+
+function leerCodigo(): string {
+  try { return localStorage.getItem(CLAVE_CODIGO) ?? ''; } catch { return ''; }
+}
+function guardarCodigo(c: string) {
+  try { if (c) localStorage.setItem(CLAVE_CODIGO, c); else localStorage.removeItem(CLAVE_CODIGO); } catch { /* sin almacenamiento */ }
+}
+
+/** Mensaje para recomendar la app: enlace a la web de venta y, si lo hay, el código de descuento del 10 %. */
+export function mensajeRecomendacion(codigo: string): { text: string; url: string } {
+  const c = codigo.trim().toUpperCase();
+  const url = c ? `${WEB_VENTA}?amigo=${encodeURIComponent(c)}` : WEB_VENTA;
+  const text = c
+    ? `Te recomiendo Tirador 360: armas, guías, licencias, munición y entrenamientos en el móvil. Con mi código ${c} tienes un 10 % de descuento:`
+    : 'Te recomiendo Tirador 360: armas, guías, licencias, munición y entrenamientos en el móvil.';
+  return { text, url };
+}
+
 const puedeCompartir = () => Platform.OS === 'web' && typeof navigator !== 'undefined' && !!navigator.share;
 
 /**
- * En la versión web: cómo instalarla en el iPhone y un botón para pasársela a otros tiradores.
- * Una vez instalada, solo queda el botón de compartir.
+ * En la versión web: cómo instalarla en el iPhone. Una vez instalada, un botón para recomendarla:
+ * se envía el enlace a la web de venta (no a la app) con el código de recomendado, que da un 10 %
+ * de descuento a hasta tres tiradores.
  */
 export function InstalarApp() {
   const [abierto, setAbierto] = useState(false);
+  const [codigo, setCodigo] = useState(leerCodigo);
   if (Platform.OS !== 'web') return null;
   const navegador = enNavegador();
   if (!navegador && !puedeCompartir()) return null;
 
   const compartir = () => {
-    navigator.share?.({
-      title: 'Tirador 360',
-      text: 'Licencias, armas y entrenamientos de tiro en el móvil.',
-      url: window.location.origin + (process.env.EXPO_BASE_URL ?? '') + '/',
-    }).catch(() => {});
+    navigator.share?.({ title: 'Tirador 360', ...mensajeRecomendacion(codigo) }).catch(() => {});
   };
 
   return (
@@ -37,9 +56,11 @@ export function InstalarApp() {
       <View style={st.fila}>
         <View style={st.icono}><Icon name="share" size={22} /></View>
         <View style={{ flex: 1 }}>
-          <Text style={st.titulo}>{navegador ? 'Instálala en tu móvil' : 'Pásasela a otros tiradores'}</Text>
+          <Text style={st.titulo}>{navegador ? 'Instálala en tu móvil' : 'Recomiéndala a otros tiradores'}</Text>
           <Text style={st.texto}>
-            {navegador ? 'Con su icono en la pantalla de inicio, a pantalla completa y sin barra de Safari.' : 'Comparte el enlace por WhatsApp o mensaje.'}
+            {navegador
+              ? 'Con su icono en la pantalla de inicio, a pantalla completa y sin barra de Safari.'
+              : 'Envía el enlace de la web. Con tu código de recomendado tienen un 10 % de descuento (hasta 3 tiradores).'}
           </Text>
         </View>
       </View>
@@ -57,6 +78,17 @@ export function InstalarApp() {
           ))}
         </View>
       )}
+      {!navegador && (
+        <TextInput
+          style={st.campo}
+          value={codigo}
+          onChangeText={(t) => { const c = t.toUpperCase().replace(/\s/g, ''); setCodigo(c); guardarCodigo(c); }}
+          placeholder="Tu código de recomendado (viene en el correo de compra)"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="characters"
+          autoCorrect={false}
+        />
+      )}
       <View style={st.fila}>
         {navegador && (
           <Pressable style={st.boton} onPress={() => setAbierto((x) => !x)}>
@@ -65,7 +97,7 @@ export function InstalarApp() {
         )}
         {puedeCompartir() && (
           <Pressable style={st.boton} onPress={compartir}>
-            <Text style={st.botonTexto}>Compartir</Text>
+            <Text style={st.botonTexto}>Recomendar</Text>
           </Pressable>
         )}
       </View>
@@ -81,6 +113,10 @@ const st = StyleSheet.create({
   },
   titulo: { color: colors.text, fontSize: 16, fontWeight: '700' },
   texto: { color: colors.textMuted, fontSize: 14 },
+  campo: {
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.cardAlt,
+    color: colors.text, paddingHorizontal: space.md, paddingVertical: 10, fontSize: 15,
+  },
   paso: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
   num: {
     width: 24, height: 24, borderRadius: 12, backgroundColor: colors.accent, color: '#fff',
