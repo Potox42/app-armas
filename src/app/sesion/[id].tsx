@@ -16,7 +16,7 @@ import { confirmar } from '@/lib/confirmar';
 import { geometria } from '@/lib/diana';
 import { formatear } from '@/lib/fechas';
 import { volver } from '@/lib/volver';
-import { agrupacion, conPosicion, dianasDe, extremos, formatoMedia, media, numDiana, soloDiana, sumaSerie, todosLosDisparos, totalSesion } from '@/lib/sesiones';
+import { agrupacion, conPosicion, diametroGrupo, dianasDe, extremos, formatoMedia, media, numDiana, soloDiana, sumaSerie, todosLosDisparos, totalSesion } from '@/lib/sesiones';
 import { colors, radius, space } from '@/theme';
 
 export default function SesionPantalla() {
@@ -448,6 +448,11 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
             <View style={{ flex: 1 }}>
               <Text style={s.text}>Centro de impactos</Text>
               <Text style={s.muted}>{consejo(g.cx, g.cy)}</Text>
+              {conPosicion(disparos).length >= 2 && (
+                <Text style={[s.muted, { marginTop: 4 }]}>
+                  Diámetro del grupo: {Math.round(diametroGrupo(disparos))} mm (entre los centros de los dos impactos más alejados) · radio medio {Math.round(g.radio)} mm.
+                </Text>
+              )}
             </View>
           </Card>
         </>

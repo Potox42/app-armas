@@ -49,6 +49,15 @@ export default function Entrenar() {
         <Icon name="chevron" color={colors.textMuted} />
       </Card>
 
+      <Card onPress={() => router.push('/dianas')} style={st.fila}>
+        <Icon name="target" color={colors.accent} />
+        <View style={{ flex: 1 }}>
+          <Text style={st.nombre}>Dianas para imprimir</Text>
+          <Text style={s.muted}>ISSF a tamaño real o reducidas, con barra de 10 cm</Text>
+        </View>
+        <Icon name="chevron" color={colors.textMuted} />
+      </Card>
+
       <SectionTitle>Sesiones de entrenamiento</SectionTitle>
       {terminadas.length === 0 && <Text style={s.muted}>Aún no hay sesiones.</Text>}
       {porArma.map(({ armaId, sesiones }) => {

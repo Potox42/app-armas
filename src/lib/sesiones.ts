@@ -21,6 +21,19 @@ export function agrupacion(todos: Disparo[]) {
   return { cx, cy, radio };
 }
 
+/**
+ * Diámetro del grupo: distancia entre los centros de los dos impactos más alejados (mm), la medida
+ * habitual de agrupación. Para medirlo de borde a borde en el papel, súmale un calibre.
+ */
+export function diametroGrupo(todos: Disparo[]): number {
+  const d = conPosicion(todos);
+  let max = 0;
+  for (let i = 0; i < d.length; i++) {
+    for (let j = i + 1; j < d.length; j++) max = Math.max(max, Math.hypot(d[i].x - d[j].x, d[i].y - d[j].y));
+  }
+  return max;
+}
+
 /** Mejor y peor serie (índice y puntos) y diferencia entre ellas. */
 export function extremos(s: Sesion) {
   const sumas = s.series.map(sumaSerie);
