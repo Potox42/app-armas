@@ -112,6 +112,158 @@ function manchas(m: Uint8Array, w: number, h: number): Mancha[] {
  * y suaviza antes para que las rayas blancas de los anillos no lo partan en trozos.
  */
 export function calibrar(g: Gris, alcance = 0.48, centro?: { x: number; y: number }): Calibracion | null {
+  return buscarNegro(g, alcance, centro) ?? calibrarOtsu(g, alcance, centro);
+}
+
+/**
+ * Busca el negro probando varios umbrales de gris. Con el catalejo el negro sale gris (a veces casi
+ * tan claro como el papel), alrededor queda el tubo oscuro y la imagen tiene viñeteado: un solo umbral
+ * separa el tubo del resto y el negro se pierde (prueba en el campo de octubre de 2026). Aquí vale
+ * una mancha redonda, maciza, que no toque el borde de la imagen ni el del tubo, y rodeada de algo
+ * más claro (el papel). Se queda la que más contraste tiene con lo que la rodea.
+ */
+function buscarNegro(g: Gris, alcance: number, centro?: { x: number; y: number }): Calibracion | null {
+  // Media resolución: basta para el negro y prueba muchos umbrales deprisa.
+  const w = g.w >> 1, h = g.h >> 1;
+  if (w < 40 || h < 40) return null;
+  const media = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = 2 * y * g.w + 2 * x;
+      media[y * w + x] = (g.d[i] + g.d[i + 1] + g.d[i + g.w] + g.d[i + g.w + 1]) / 4;
+    }
+  }
+  const lado = Math.min(w, h);
+  const s = desenfocar({ w, h, d: media }, Math.max(1, Math.round(lado / 120)));
+  const cx0 = centro ? centro.x / 2 : w / 2, cy0 = centro ? centro.y / 2 : h / 2, rMax = alcance * lado;
+  const dentro = (x: number, y: number) => (x - cx0) ** 2 + (y - cy0) ** 2 < rMax * rMax;
+  const valores: number[] = [];
+  for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) if (dentro(x, y)) valores.push(s.d[y * w + x]);
+  if (valores.length < 100) return null;
+  valores.sort((a, b) => a - b);
+  // Media de gris en una corona de la elipse (z0 a z1 radios) y qué parte es más clara que t.
+  const corona = (c: Calibracion, z0: number, z1: number, t: number) => {
+    let suma = 0, n = 0, claros = 0;
+    const R = z1 * Math.max(c.rx, c.ry);
+    for (let y = Math.max(0, Math.floor(c.cy - R)); y <= Math.min(h - 1, Math.ceil(c.cy + R)); y += 2) {
+      for (let x = Math.max(0, Math.floor(c.cx - R)); x <= Math.min(w - 1, Math.ceil(c.cx + R)); x += 2) {
+        const z = Math.sqrt(((x - c.cx) / c.rx) ** 2 + ((y - c.cy) / c.ry) ** 2);
+        if (z < z0 || z > z1) continue;
+        const v = s.d[y * w + x];
+        suma += v; n++;
+        if (v >= t) claros++;
+      }
+    }
+    return { media: n ? suma / n : 0, claros: n ? claros / n : 0, n };
+  };
+  let mejor: { cal: Calibracion; nota: number; corte: number } | null = null;
+  const m = new Uint8Array(w * h);
+  for (let p = 0.04; p <= 0.8; p += 0.03) {
+    const t = valores[Math.floor(p * (valores.length - 1))];
+    m.fill(0);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (dentro(x, y) && s.d[y * w + x] < t) m[y * w + x] = 1;
+    for (const k of manchas(m, w, h)) {
+      const bw = k.x1 - k.x0 + 1, bh = k.y1 - k.y0 + 1;
+      if (Math.min(bw, bh) < 0.07 * lado || bw / bh > 1.45 || bh / bw > 1.45) continue;
+      if (k.area / (bw * bh) < 0.62) continue;
+      // Ni el borde de la imagen ni el del tubo del catalejo (lo que está fuera del alcance).
+      if (k.x0 <= 1 || k.y0 <= 1 || k.x1 >= w - 2 || k.y1 >= h - 2) continue;
+      const cal = { cx: (k.x0 + k.x1) / 2, cy: (k.y0 + k.y1) / 2, rx: bw / 2, ry: bh / 2 };
+      if (Math.hypot(cal.cx - cx0, cal.cy - cy0) + Math.max(cal.rx, cal.ry) > 0.98 * rMax) continue;
+      const fuera = corona(cal, 1.12, 1.45, t);
+      const negro = corona(cal, 0, 0.85, t);
+      if (fuera.n < 20 || fuera.claros < 0.85) continue;
+      const contraste = fuera.media - negro.media;
+      if (contraste < 12) continue;
+      const nota = contraste * fuera.claros * (k.area / (bw * bh));
+      if (!mejor || nota > mejor.nota) mejor = { cal, nota, corte: (fuera.media + negro.media) / 2 };
+    }
+  }
+  if (!mejor) return null;
+  const c = mejor.cal;
+  const aprox = { cx: 2 * c.cx + 0.5, cy: 2 * c.cy + 0.5, rx: 2 * c.rx, ry: 2 * c.ry };
+  return afinarNegro(g, aprox, mejor.corte) ?? aprox;
+}
+
+/** El borde del negro a resolución completa, cortando a medio camino entre el negro y el papel. */
+function afinarNegro(g: Gris, c: Calibracion, corte: number): Calibracion | null {
+  const { w, h } = g;
+  const s = desenfocar(g, Math.max(1, Math.round(Math.min(w, h) / 160)));
+  const R = 1.3 * Math.max(c.rx, c.ry);
+  const m = new Uint8Array(w * h);
+  for (let y = Math.max(0, Math.floor(c.cy - R)); y < Math.min(h, Math.ceil(c.cy + R)); y++) {
+    for (let x = Math.max(0, Math.floor(c.cx - R)); x < Math.min(w, Math.ceil(c.cx + R)); x++) {
+      if ((x - c.cx) ** 2 + (y - c.cy) ** 2 < R * R && s.d[y * w + x] < corte) m[y * w + x] = 1;
+    }
+  }
+  const todas = manchas(m, w, h);
+  let mejor: Mancha | null = null;
+  for (const k of todas) {
+    // La que contiene el centro aproximado (o la más grande cerca de él).
+    if (Math.hypot((k.x0 + k.x1) / 2 - c.cx, (k.y0 + k.y1) / 2 - c.cy) > 0.25 * c.rx) continue;
+    if (!mejor || k.area > mejor.area) mejor = k;
+  }
+  if (!mejor) return null;
+  const bw0 = mejor.x1 - mejor.x0 + 1, bh0 = mejor.y1 - mejor.y0 + 1;
+  // Trozos de la corona exterior separados por una raya blanca de anillo.
+  for (const k of todas) {
+    if (k === mejor || k.area < 0.02 * mejor.area) continue;
+    if (k.x0 < mejor.x0 - 0.35 * bw0 || k.x1 > mejor.x1 + 0.35 * bw0 || k.y0 < mejor.y0 - 0.35 * bh0 || k.y1 > mejor.y1 + 0.35 * bh0) continue;
+    mejor = { ...mejor, x0: Math.min(mejor.x0, k.x0), x1: Math.max(mejor.x1, k.x1), y0: Math.min(mejor.y0, k.y0), y1: Math.max(mejor.y1, k.y1) };
+  }
+  const r = { cx: (mejor.x0 + mejor.x1) / 2, cy: (mejor.y0 + mejor.y1) / 2, rx: (mejor.x1 - mejor.x0 + 1) / 2, ry: (mejor.y1 - mejor.y0 + 1) / 2 };
+  // Si se ha ido de tamaño (se ha unido al fondo, o se ha partido), mejor la aproximada.
+  if (Math.abs(r.rx / c.rx - 1) > 0.12 || Math.abs(r.ry / c.ry - 1) > 0.12) return null;
+  return r;
+}
+
+/**
+ * Afina el centro con las rayas blancas de los anillos de dentro del negro: con el centro bueno,
+ * a cada distancia del centro todo es raya o todo es negro, y el perfil de gris por distancias sale
+ * lo más marcado posible. El borde del negro solo da el centro con un par de píxeles de error, y
+ * eso deja restos de las rayas al buscar agujeros.
+ */
+export function centrarAnillos(g: Gris, cal: Calibracion): Calibracion {
+  const { w, h } = g;
+  const s = desenfocar(g, 1);
+  const dz = 0.6 / Math.max(cal.rx, cal.ry), nb = Math.ceil(0.95 / dz) + 1;
+  const suma = new Float64Array(nb), n = new Float64Array(nb);
+  const nota = (cx: number, cy: number) => {
+    suma.fill(0); n.fill(0);
+    const R = 0.95 * Math.max(cal.rx, cal.ry);
+    let total = 0, cuenta = 0;
+    for (let y = Math.max(0, Math.floor(cy - R)); y < Math.min(h, cy + R); y += 2) {
+      for (let x = Math.max(0, Math.floor(cx - R)); x < Math.min(w, cx + R); x += 2) {
+        const z = Math.sqrt(((x - cx) / cal.rx) ** 2 + ((y - cy) / cal.ry) ** 2);
+        if (z >= 0.95) continue;
+        const v = s.d[y * w + x], b = Math.floor(z / dz);
+        suma[b] += v; n[b]++; total += v; cuenta++;
+      }
+    }
+    if (!cuenta) return 0;
+    const media = total / cuenta;
+    let entre = 0;
+    for (let b = 0; b < nb; b++) if (n[b]) entre += n[b] * (suma[b] / n[b] - media) ** 2;
+    return entre / cuenta;
+  };
+  let mejor = { cx: cal.cx, cy: cal.cy, p: nota(cal.cx, cal.cy) };
+  const probar = (paso: number, alcance: number) => {
+    const c0 = { ...mejor };
+    for (let dy = -alcance; dy <= alcance + 1e-9; dy += paso) {
+      for (let dx = -alcance; dx <= alcance + 1e-9; dx += paso) {
+        const p = nota(c0.cx + dx, c0.cy + dy);
+        if (p > mejor.p) mejor = { cx: c0.cx + dx, cy: c0.cy + dy, p };
+      }
+    }
+  };
+  const r = Math.max(2, Math.round(Math.max(cal.rx, cal.ry) * 0.02));
+  probar(1, r);
+  probar(0.25, 1);
+  return { ...cal, cx: mejor.cx, cy: mejor.cy };
+}
+
+/** El método anterior (un solo umbral de Otsu): de reserva si el nuevo no encuentra nada. */
+function calibrarOtsu(g: Gris, alcance = 0.48, centro?: { x: number; y: number }): Calibracion | null {
   const { w, h } = g;
   const lado = Math.min(w, h);
   const r = Math.max(1, Math.round(lado / 160));
@@ -368,12 +520,13 @@ export interface Agujero extends Impacto {
 
 /**
  * Busca los agujeros en UNA foto de la diana ya tirada (sin imagen de referencia).
- * 1. Con la calibración se dibuja cómo sería la diana limpia: negro dentro de la elipse y papel
- *    fuera, con el nivel de luz de cada zona medido en la propia foto (así da igual la sombra).
- * 2. Se resta de la foto suavizada con una ventana del tamaño de una bala.
- * 3. Cada máximo local de lo que sobra es un agujero: más claro en el negro, más oscuro en el blanco.
- *    Así se separan los agujeros que se tocan (en la prueba real de octubre de 2026 se escapaban
- *    los del centro, juntos en una sola mancha, y los del blanco, grises y poco marcados).
+ * 1. La diana limpia se mide en la propia foto: la mediana por sectores y distancias al centro (con
+ *    las rayas de los anillos, el viñeteado y la sombra). Se resta y queda lo que no es de la diana.
+ * 2. En el negro cuenta lo que se aparta en los dos sentidos (con el catalejo el agujero tiene partes
+ *    claras y oscuras); en el blanco, lo más oscuro. Se quitan los restos de rayas.
+ * 3. Cada máximo local suelto es un agujero (así se separan los que se tocan); las cifras impresas
+ *    se reconocen comparándolas con las de las otras rayas.
+ * Probado con las fotos reales de octubre de 2026 (foto de cerca y foto por el catalejo).
  * Es una propuesta: el tirador la revisa (quita o añade agujeros) antes de apuntarla.
  */
 export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, calibreMm: number): Agujero[] {
@@ -414,10 +567,8 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
   const negroG = nn ? tn / nn : 30, papelG = np ? tp / np : 220;
   const contraste = Math.max(40, papelG - negroG);
 
-  // Cada punto se compara con una ventana del tamaño de una bala, y la plantilla se suaviza igual
-  // para que el borde del negro no deje un anillo de restos.
+  // Ventana del tamaño de una bala; la plantilla de luz de negro y papel sirve para mirar alrededor.
   const rBala = Math.max(2, Math.round(rAgujero * 0.8));
-  const suave = desenfocar(g, rBala);
   const plantilla = new Float32Array(w * h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -427,16 +578,84 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
       plantilla[i] = zonaDe(x, y) < 1 ? n : p;
     }
   }
-  const plant = desenfocar({ w, h, d: plantilla }, rBala);
 
-  // Cuánto se sale cada punto de la diana limpia: más claro en el negro (el papel roto y el fondo
-  // que asoma), más oscuro en el blanco. Un agujero es un máximo local de esa diferencia; buscando
-  // máximos (y no manchas) se separan los agujeros que se tocan.
+  // La diana limpia, medida en la propia foto: como es redonda, en cada sector (16 porciones de
+  // tarta) y a cada distancia del centro, lo normal es la mediana de lo que hay; los agujeros son
+  // pocos y no la mueven. Así salen en la plantilla las rayas de los anillos, el borde del negro, el
+  // viñeteado y la sombra, y al restarla queda lo que no es de la diana: agujeros y cifras.
+  const casiFino = desenfocar(g, 1);
+  const S = 16, dz = 0.6 / Math.max(cal.rx, cal.ry), nb = Math.ceil(rZona / dz) + 2;
+  const cajas: number[][] = Array.from({ length: S * nb }, () => []);
+  const angulo = (x: number, y: number) => {
+    const a = Math.atan2((y - cal.cy) / cal.ry, (x - cal.cx) / cal.rx) / (2 * Math.PI) * S;
+    return a < 0 ? a + S : a;
+  };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const z = zonaDe(x, y);
+      if (z > rZona) continue;
+      cajas[Math.floor(angulo(x, y)) % S * nb + Math.floor(z / dz)].push(casiFino.d[y * w + x]);
+    }
+  }
+  const mediana = new Float32Array(S * nb).fill(NaN);
+  cajas.forEach((c, k) => { if (c.length) { c.sort((a, b) => a - b); mediana[k] = c[c.length >> 1]; } });
+  // Huecos (cerca del centro hay pocos puntos por caja): el valor de la caja vecina.
+  for (let sct = 0; sct < S; sct++) for (let b = 1; b < nb; b++) if (isNaN(mediana[sct * nb + b])) mediana[sct * nb + b] = mediana[sct * nb + b - 1];
+  for (let sct = 0; sct < S; sct++) for (let b = nb - 2; b >= 0; b--) if (isNaN(mediana[sct * nb + b])) mediana[sct * nb + b] = mediana[sct * nb + b + 1];
+  // Cerca del centro un sector es muy estrecho (un agujero lo llenaría): allí se juntan sectores
+  // (de 16 a 4) y, en el mismo centro, una sola mediana para toda la vuelta.
+  const juntar = (n: number) => {
+    const m = new Float32Array(n * nb).fill(NaN), por = S / n;
+    for (let j = 0; j < n; j++) {
+      for (let b = 0; b < nb; b++) {
+        const v: number[] = [];
+        for (let k = 0; k < por; k++) for (const x of cajas[(j * por + k) * nb + b]) v.push(x);
+        if (v.length) { v.sort((p, q) => p - q); m[j * nb + b] = v[v.length >> 1]; }
+      }
+      for (let b = 1; b < nb; b++) if (isNaN(m[j * nb + b])) m[j * nb + b] = m[j * nb + b - 1];
+      for (let b = nb - 2; b >= 0; b--) if (isNaN(m[j * nb + b])) m[j * nb + b] = m[j * nb + b + 1];
+    }
+    return m;
+  };
+  const perfiles = [{ n: 1, m: juntar(1) }, { n: 4, m: juntar(4) }, { n: S, m: mediana }];
+  // A partir de qué distancia vale cada reparto: que cada sector abarque unas 8 balas.
+  const zDesde = (n: number) => (8 * rAgujero * n) / (2 * Math.PI * Math.min(cal.rx, cal.ry));
+  const valorEn = (p: { n: number; m: Float32Array }, x: number, y: number, b: number) => {
+    if (p.n === 1) return p.m[b];
+    const a = (angulo(x, y) / S) * p.n - 0.5, s0 = Math.floor(a), f = a - s0;
+    return p.m[((s0 + p.n) % p.n) * nb + b] * (1 - f) + p.m[((s0 + 1) % p.n) * nb + b] * f;
+  };
+  const resto = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const z = zonaDe(x, y);
+      if (z > rZona) continue;
+      const b = Math.floor(z / dz);
+      // Paso suave de un reparto al siguiente.
+      let v = valorEn(perfiles[0], x, y, b);
+      for (const p of perfiles.slice(1)) {
+        const z0 = zDesde(p.n), k = Math.max(0, Math.min(1, (z - z0) / (0.5 * z0)));
+        if (k > 0) v = v * (1 - k) + valorEn(p, x, y, b) * k;
+      }
+      resto[y * w + x] = casiFino.d[y * w + x] - v;
+    }
+  }
+  // En el negro, con el catalejo, el agujero tiene partes más claras (el borde roto) y más oscuras (el
+  // fondo) que el negro, que se ve gris: de media casi no cambia. Allí se suma cuánto se aparta cada
+  // punto en los dos sentidos, en la ventana de una bala, menos lo que se aparta de normal (grano).
+  // En el blanco el agujero es más oscuro que el papel.
+  const aparta = new Float32Array(w * h), oscuro = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) { aparta[i] = Math.abs(resto[i]); oscuro[i] = -resto[i]; }
+  const apartaS = desenfocar({ w, h, d: aparta }, rBala), oscuroS = desenfocar({ w, h, d: oscuro }, rBala);
+  const ruidoV: number[] = [];
+  for (let y = 0; y < h; y += 3) for (let x = 0; x < w; x += 3) if (zonaDe(x, y) < 0.9) ruidoV.push(apartaS.d[y * w + x]);
+  ruidoV.sort((a, b) => a - b);
+  const ruido = ruidoV.length ? ruidoV[ruidoV.length >> 1] : 0;
   const dif = new Float32Array(w * h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x, z = zonaDe(x, y);
-      dif[i] = z > rZona ? 0 : z < 1 ? suave.d[i] - plant.d[i] : plant.d[i] - suave.d[i];
+      dif[i] = z > rZona ? 0 : z < 1 ? apartaS.d[i] - ruido : oscuroS.d[i];
     }
   }
   const umbral = 0.15 * contraste;
@@ -451,12 +670,32 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
     const xi = Math.round(x), yi = Math.round(y);
     return xi < 0 || yi < 0 || xi >= w || yi >= h ? 0 : dif[yi * w + xi];
   };
-  const alargado = (x: number, y: number, v: number) =>
-    dirs.some(([ux, uy]) => Math.min(difEn(x + ux * lejos, y + uy * lejos), difEn(x - ux * lejos, y - uy * lejos)) > 0.5 * v);
+  // Antes de buscar máximos se quitan las rayas (anillos, borde del negro): a cada punto se le resta
+  // lo que sigue habiendo a los dos lados en la dirección en que más sigue. En una raya queda casi
+  // nada; en un agujero (aunque esté encima de una raya) queda el agujero. Si no, una raya clara
+  // junto a un agujero lo tapa al buscar el máximo.
+  const sinRayas = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const v = dif[y * w + x];
+      if (v <= 0) continue;
+      let raya = 0;
+      for (const [ux, uy] of dirs) raya = Math.max(raya, Math.min(difEn(x + ux * lejos, y + uy * lejos), difEn(x - ux * lejos, y - uy * lejos)));
+      sinRayas[y * w + x] = v - Math.max(0, raya);
+    }
+  }
+  // Un agujero es una mancha suelta: a poco más de su tamaño, alrededor, ya no hay nada (los textos y
+  // botones de la cámara que salen en una captura, o el borde oscuro del catalejo, sí siguen).
+  const ocho = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7071, 0.7071], [-0.7071, 0.7071], [0.7071, -0.7071], [-0.7071, -0.7071]];
+  const aislado = (x: number, y: number, v: number) => {
+    const r = Math.max(4, Math.round(rAgujero * 2.4));
+    if (x < r || y < r || x >= w - r || y >= h - r) return false;
+    return ocho.filter(([ux, uy]) => difEn(x + ux * r, y + uy * r) > 0.45 * v).length < 3;
+  };
   const picos: { x: number; y: number; v: number }[] = [];
   for (let y = margen; y < h - margen; y++) {
     for (let x = margen; x < w - margen; x++) {
-      const i = y * w + x, v = dif[i];
+      const i = y * w + x, v = sinRayas[i];
       if (v < umbral) continue;
       // Junto al borde del negro cualquier pequeño error de la elipse deja restos: se pide más.
       if (Math.abs(zonaDe(x, y) - 1) * cal.rx < rAgujero * 1.2 && v < 1.6 * umbral) continue;
@@ -470,12 +709,12 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
         for (let dx = -rPico; dx <= rPico; dx++) {
           const xx = x + dx;
           if (xx < 0 || xx >= w || (dx === 0 && dy === 0)) continue;
-          const o = dif[yy * w + xx];
+          const o = sinRayas[yy * w + xx];
           // En una meseta solo cuenta el primer punto.
           if (o > v || (o === v && (dy < 0 || (dy === 0 && dx < 0)))) { maximo = false; break; }
         }
       }
-      if (maximo && !alargado(x, y, v)) picos.push({ x, y, v });
+      if (maximo && aislado(x, y, dif[i])) picos.push({ x, y, v });
     }
   }
 

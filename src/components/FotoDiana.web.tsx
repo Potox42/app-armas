@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, s } from '@/components/ui';
 import { puntuar } from '@/lib/diana';
-import { agujerosNuevos, aMm, buscarAgujeros, calibrar, type Calibracion, type Gris } from '@/lib/impactos';
+import { agujerosNuevos, aMm, buscarAgujeros, calibrar, centrarAnillos, type Calibracion, type Gris } from '@/lib/impactos';
 import { colors, radius, space } from '@/theme';
 import type { PropsFotoDiana } from './FotoDiana.types';
 
@@ -50,7 +50,8 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
       const g: Gris = { w, h, d };
       // Se deja trabajar al navegador un momento para que se vea «Buscando agujeros…».
       setTimeout(() => {
-        const cal = calibrar(g, 0.75);
+        const bruta = calibrar(g, 0.75);
+        const cal = bruta && centrarAnillos(g, bruta);
         if (!cal) {
           setEstado('sin-diana');
           return;
