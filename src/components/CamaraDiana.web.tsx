@@ -148,9 +148,10 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         return;
       }
       if (!mapa) return;
+      // La capa puede estar ampliada (Ampliar): se pasa del toque a sus píxeles en proporción.
       const caja = capa.getBoundingClientRect();
-      const x = ((e.clientX - caja.left) * devicePixelRatio - mapa.ox) / mapa.k;
-      const y = ((e.clientY - caja.top) * devicePixelRatio - mapa.oy) / mapa.k;
+      const x = (((e.clientX - caja.left) / caja.width) * capa.width - mapa.ox) / mapa.k;
+      const y = (((e.clientY - caja.top) / caja.height) * capa.height - mapa.oy) / mapa.k;
       const v = vigia.current;
       if (!v.cal) {
         v.centro = { x, y };
@@ -188,6 +189,8 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       const { width, height, z, tx, ty } = vista(g);
       const [w, h] = g % 180 ? [height, width] : [width, height];
       Object.assign(video.style, { width: `${w}px`, height: `${h}px`, transform: `translate(-50%, -50%) translate(${tx}px, ${ty}px) rotate(${g}deg) scale(${z})` });
+      // Las marcas se amplían igual que el vídeo.
+      Object.assign(capa.style, { transformOrigin: '50% 50%', transform: `translate(${tx}px, ${ty}px) scale(${z})` });
     };
     // De un toque en pantalla al punto de la imagen girada (en fracción), con el aumento puesto.
     const fraccion = (cx: number, cy: number) => {
@@ -222,8 +225,9 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     const dibujar = (g: number, cal?: Calibracion) => {
       const { W, H } = medidas(g);
       if (!W) return;
-      // La capa usa las mismas coordenadas que el vídeo; se encaja igual (contain).
-      const caja = capa.getBoundingClientRect();
+      // La capa usa las mismas coordenadas que el vídeo; se encaja igual (contain). Su tamaño es el de
+      // la caja (la capa ampliada mide más en pantalla).
+      const caja = raiz.getBoundingClientRect();
       capa.width = caja.width * devicePixelRatio;
       capa.height = caja.height * devicePixelRatio;
       const k = Math.min(capa.width / W, capa.height / H);
@@ -258,6 +262,9 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         encajar(gr);
         return;
       }
+      // Al ampliar, en medio queda la diana encontrada (salvo que el tirador haya tocado otro sitio).
+      const fija = vigia.current.cal;
+      if (fija && !foco.mano) foco = { fx: fija.cx / ANCHO, fy: fija.cy / Math.round((H / W) * ANCHO), mano: false };
       encajar(gr);
       // Si la imagen cambia de forma o de giro, la calibración anterior ya no vale.
       const ahora = `${W}x${H}@${gr}`;
@@ -374,7 +381,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
             <Text style={st.boton}>Cámara {nombreCorto(enUso)}</Text>
           </Pressable>
         )}
-        {soloVer && enMarcha && (
+        {enMarcha && (
           <Pressable hitSlop={8} onPress={() => setZoom((z) => (z >= 3 ? 1 : z + 1))} accessibilityLabel="Ampliar la imagen">
             <Text style={st.boton}>Ampliar {zoom}×</Text>
           </Pressable>
