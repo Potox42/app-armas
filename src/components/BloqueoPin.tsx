@@ -8,7 +8,7 @@ import { bajarCopia, ErrorServidor } from '@/lib/nube';
 import { comprobarPin } from '@/lib/pin';
 import { colors, radius, space } from '@/theme';
 import { Campo } from './Formulario';
-import { Icon } from './Icon';
+import { Logo } from './Logo';
 import { Button } from './ui';
 
 const INTENTOS = 5; // fallos seguidos antes de esperar
@@ -72,7 +72,7 @@ export function BloqueoPin() {
 
   return (
     <View style={st.tapa}>
-      <Icon name="lock" size={48} color={colors.accent} />
+      <Logo size={72} />
       <Text style={st.titulo}>Tirador Deportivo</Text>
       <Text style={st.texto}>{espera > 0 ? `Demasiados intentos. Espera ${espera} s.` : 'Escribe tu PIN'}</Text>
       <View style={st.puntos}>
