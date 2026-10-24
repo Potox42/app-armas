@@ -67,7 +67,7 @@ export function calendarioCaducidades(datos: Datos, hoy = hoyISO(), ahora = new 
       ]);
     }
   }
-  const lineas = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Tirador Deportivo//ES', 'CALSCALE:GREGORIAN', ...eventos.flat(), 'END:VCALENDAR'];
+  const lineas = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Tirador 360//ES', 'CALSCALE:GREGORIAN', ...eventos.flat(), 'END:VCALENDAR'];
   return { ics: lineas.join('\r\n') + '\r\n', eventos: eventos.length };
 }
 
@@ -78,7 +78,7 @@ export function calendarioCaducidades(datos: Datos, hoy = hoyISO(), ahora = new 
  */
 export function enlaceGoogleCalendar(c: Caducidad): string {
   const titulo = `Caduca ${c.nombre}`;
-  const nota = [c.nota, 'Creado desde Tirador Deportivo. Consejo: añade un aviso 3 meses y 1 mes antes.'].filter(Boolean).join('\n\n');
+  const nota = [c.nota, 'Creado desde Tirador 360. Consejo: añade un aviso 3 meses y 1 mes antes.'].filter(Boolean).join('\n\n');
   return 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
     `&text=${encodeURIComponent(titulo)}` +
     `&dates=${sinGuiones(c.fecha)}/${sinGuiones(sumarDias(c.fecha, 1))}` +

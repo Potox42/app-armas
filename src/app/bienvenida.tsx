@@ -32,8 +32,8 @@ export default function Bienvenida() {
       <ScrollView contentContainerStyle={st.contenido}>
         <View style={st.cabecera}>
           <Logo size={120} />
-          <Text style={st.titulo}>Tirador Deportivo</Text>
-          <Text style={st.lema}>Tu documentación y tus entrenamientos, en un solo sitio.</Text>
+          <Text style={st.titulo}>Tirador 360</Text>
+          <Text style={st.lema}>Todo tu tiro deportivo. En un solo lugar.</Text>
         </View>
 
         {PUNTOS.map((p) => (

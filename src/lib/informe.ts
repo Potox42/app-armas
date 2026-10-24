@@ -108,9 +108,9 @@ export function informeHtml(datos: Datos, o: OpcionesInforme, hoy = hoyISO()): s
   }
 
   const periodo = o.deportivo ? (o.desde ? ` · historial desde el ${f(o.desde)}` : ' · todo el historial') : '';
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Tirador Deportivo · ${esc(datos.nombre)}</title>
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Tirador 360 · ${esc(datos.nombre)}</title>
 <style>${ESTILO}</style></head><body><div class="informe">
-<header><div class="marca">Tirador Deportivo</div><h1>${esc(datos.nombre || 'Mi informe')}</h1>
+<header><div class="marca">Tirador 360</div><h1>${esc(datos.nombre || 'Mi informe')}</h1>
 <p class="sub">Generado el ${esc(f(hoy))}${esc(periodo)}. Datos apuntados por el titular en la app; no es un documento oficial.</p></header>
 ${partes.join('\n')}
 </div></body></html>`;

@@ -12,7 +12,7 @@ import { Degradado } from './Degradado';
 import { Icon } from './Icon';
 import { SILUETAS } from './siluetas';
 
-export function Screen({ title, kicker = 'Tirador deportivo', back, right, compacto, scrollRef, children }: {
+export function Screen({ title, kicker = 'Tirador 360', back, right, compacto, scrollRef, children }: {
   title?: string;
   compacto?: boolean; // cabecera baja, para el móvil en horizontal
   kicker?: string; // rótulo pequeño encima del título

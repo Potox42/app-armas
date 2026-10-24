@@ -11,7 +11,7 @@ export async function motivoSinBloqueo(): Promise<string | null> {
 
 export async function autenticar(): Promise<boolean> {
   const r = await LocalAuthentication.authenticateAsync({
-    promptMessage: 'Desbloquear Tirador Deportivo',
+    promptMessage: 'Desbloquear Tirador 360',
     cancelLabel: 'Cancelar',
   });
   return r.success;

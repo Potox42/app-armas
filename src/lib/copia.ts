@@ -95,10 +95,10 @@ export async function abrirCopia(texto: string, contrasena: string): Promise<Con
   try {
     archivo = JSON.parse(texto);
   } catch {
-    throw new ErrorCopia('Este archivo no es una copia de Tirador Deportivo.');
+    throw new ErrorCopia('Este archivo no es una copia de Tirador 360.');
   }
   if (archivo?.app !== 'tirador' || archivo.version !== 1 || archivo.kdf?.alg !== 'pbkdf2-sha256') {
-    throw new ErrorCopia('Este archivo no es una copia de Tirador Deportivo.');
+    throw new ErrorCopia('Este archivo no es una copia de Tirador 360.');
   }
   const k = await clave(contrasena, deBase64(archivo.kdf.sal), archivo.kdf.iteraciones);
   let bytes: Uint8Array;
