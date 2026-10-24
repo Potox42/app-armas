@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Speech from 'expo-speech';
+import { Chips } from '@/components/Chips';
+import { Campo } from '@/components/Formulario';
 import { Button, Card, Screen, Segmented, s } from '@/components/ui';
+import { useStore } from '@/data/store';
 import { pitar, prepararPitidos } from '@/lib/pitidos';
 import { pasoEn, plan, PROGRAMAS, type Idioma, type Paso, type Programa } from '@/lib/simulador';
 import { colors, radius, space } from '@/theme';
@@ -18,7 +21,7 @@ export default function Simulador() {
   const [sonido, setSonido] = useState<Sonido>('ambos');
   const [pasos, setPasos] = useState<Paso[] | null>(null);
 
-  if (pasos) return <EnMarcha pasos={pasos} idioma={idioma} sonido={sonido} onFin={() => setPasos(null)} />;
+  if (pasos) return <EnMarcha pasos={pasos} idioma={idioma} sonido={sonido} disparos={5 * Number(series)} onFin={() => setPasos(null)} />;
 
   return (
     <Screen title="Simulador de tirada" kicker="Entrenar" back="/entrenar">
@@ -78,7 +81,7 @@ export default function Simulador() {
 
 type Sonido = 'ambos' | 'voz' | 'pitidos';
 
-function EnMarcha({ pasos, idioma, sonido, onFin }: { pasos: Paso[]; idioma: Idioma; sonido: Sonido; onFin: () => void }) {
+function EnMarcha({ pasos, idioma, sonido, disparos, onFin }: { pasos: Paso[]; idioma: Idioma; sonido: Sonido; disparos: number; onFin: () => void }) {
   // Pantalla siempre encendida mientras dura la tirada (en la web, solo si Safari lo permite).
   useEffect(() => {
     let activa = false;
@@ -89,6 +92,7 @@ function EnMarcha({ pasos, idioma, sonido, onFin }: { pasos: Paso[]; idioma: Idi
   }, []);
   const [comienzo, setComienzo] = useState(() => Date.now());
   const [ahora, setAhora] = useState(() => Date.now());
+  const [parado, setParado] = useState(false); // «Parar»: también se pregunta por los disparos
   const dicho = useRef(-1);
   const pitado = useRef('');
 
@@ -108,6 +112,7 @@ function EnMarcha({ pasos, idioma, sonido, onFin }: { pasos: Paso[]; idioma: Idi
 
   useEffect(() => {
     // El último paso dura 1 ms y casi nunca coincide con el reloj: al terminar se anuncia igual.
+    if (parado) return;
     const k = i ?? pasos.length - 1;
     if (k === dicho.current) return;
     dicho.current = k;
@@ -117,25 +122,26 @@ function EnMarcha({ pasos, idioma, sonido, onFin }: { pasos: Paso[]; idioma: Idi
       if (pasos[k].luz === 'verde') pitar('fuego');
       else if (pasos[k - 1]?.luz === 'verde') pitar('alto');
     }
-  }, [i, pasos, idioma, voz, pitidos]);
+  }, [i, pasos, idioma, voz, pitidos, parado]);
 
   // Avisos de tiempo: cuenta atrás de 3 s antes de acabar la preparación o la pausa, y aviso a
   // falta de 30 s en las series largas.
   const restante = i === null ? 0 : Math.ceil((pasos[i].fin - t) / 1000);
   useEffect(() => {
-    if (i === null || !pitidos) return;
+    if (i === null || !pitidos || parado) return;
     const p = pasos[i];
     const clave = `${i}:${restante}`;
     if (clave === pitado.current) return;
     pitado.current = clave;
     if (p.luz === 'nada' && p.saltable && restante >= 1 && restante <= 3) pitar('cuenta');
     else if (p.luz === 'verde' && p.fin - p.inicio >= 60_000 && restante === 30) pitar('aviso');
-  }, [i, restante, pasos, pitidos]);
+  }, [i, restante, pasos, pitidos, parado]);
 
-  if (i === null) {
+  if (i === null || parado) {
     return (
-      <Screen title="Tirada terminada" kicker="Simulador" back="/entrenar">
+      <Screen title={parado ? 'Tirada parada' : 'Tirada terminada'} kicker="Simulador" back="/entrenar">
         <Text style={s.muted}>Buen trabajo. Apunta tus puntos en un entrenamiento si quieres guardarlos.</Text>
+        <ApuntarDisparos previstos={disparos} />
         <Button title="Otra tirada" onPress={onFin} />
       </Screen>
     );
@@ -157,11 +163,93 @@ function EnMarcha({ pasos, idioma, sonido, onFin }: { pasos: Paso[]; idioma: Idi
             <Text style={st.botonTexto}>Listo</Text>
           </Pressable>
         )}
-        <Pressable style={st.boton} onPress={onFin}>
+        <Pressable
+          style={st.boton}
+          onPress={() => {
+            Speech.stop().catch(() => {});
+            setParado(true);
+          }}
+        >
           <Text style={st.botonTexto}>Parar</Text>
         </Pressable>
       </View>
     </View>
+  );
+}
+
+/**
+ * Al acabar la tirada: si se ha tirado con munición (no en seco), los disparos se suman al arma
+ * (para el aviso de limpieza) y, si los cartuchos eran de casa, se restan de su munición. Igual que
+ * al terminar un entrenamiento; nada se apunta sin que el tirador lo diga.
+ */
+function ApuntarDisparos({ previstos }: { previstos: number }) {
+  const store = useStore();
+  const { armas, sesiones } = store.datos;
+  // Por defecto, el arma del último entrenamiento.
+  const ultima = [...sesiones].sort((a, b) => b.fecha.localeCompare(a.fecha))[0]?.armaId;
+  const [fuego, setFuego] = useState<'seco' | 'si' | undefined>(undefined);
+  const [armaId, setArmaId] = useState<string | undefined>(armas.find((a) => a.id === ultima)?.id ?? armas[0]?.id);
+  const [cuantos, setCuantos] = useState(String(previstos));
+  const [origen, setOrigen] = useState<'club' | 'casa'>('club');
+  const [hecho, setHecho] = useState<{ armaId: string; n: number; casa: boolean; fecha: string } | null>(null);
+  const arma = armas.find((a) => a.id === (hecho?.armaId ?? armaId));
+  const nombre = arma ? `${arma.marca} ${arma.modelo}`.trim() : '';
+  const n = Math.max(0, Math.round(Number(cuantos.replace(',', '.')) || 0));
+  const NOTA = 'Simulador de tirada';
+
+  if (hecho) {
+    return (
+      <Card style={{ gap: space.sm }}>
+        <Text style={s.text}>
+          Apuntados {hecho.n} disparos a {nombre}{hecho.casa ? ' y restados de la munición de casa' : ''}.
+        </Text>
+        <Pressable
+          hitSlop={10}
+          onPress={() => {
+            store.sumarDisparos(hecho.armaId, -hecho.n);
+            if (hecho.casa) {
+              const m = store.arma(hecho.armaId)?.municion?.find((x) => x.tipo === 'gasto' && x.nota === NOTA && x.cartuchos === hecho.n && x.fecha === hecho.fecha);
+              if (m) store.borrarMunicion(hecho.armaId, m.id);
+            }
+            setHecho(null);
+          }}
+        >
+          <Text style={{ color: colors.accent, fontWeight: '700' }}>Deshacer</Text>
+        </Pressable>
+      </Card>
+    );
+  }
+  if (!armas.length) return null;
+  return (
+    <Card style={{ gap: space.md, borderColor: colors.accent }}>
+      <Text style={s.text}>¿Has disparado con munición? Si es así, los disparos cuentan para la limpieza del arma.</Text>
+      <Segmented
+        value={fuego ?? ('' as 'seco')}
+        onChange={setFuego}
+        options={[{ value: 'seco', label: 'No, en seco' }, { value: 'si', label: 'Sí, con munición' }]}
+      />
+      {fuego === 'seco' && <Text style={s.muted}>No se apunta nada.</Text>}
+      {fuego === 'si' && (
+        <>
+          <Text style={st.etiqueta}>Arma</Text>
+          <Chips opciones={armas.map((a) => ({ value: a.id, label: `${a.marca} ${a.modelo}`.trim() }))} valor={armaId} onChange={setArmaId} />
+          <Campo etiqueta="Disparos" valor={cuantos} onChange={setCuantos} teclado="number-pad" />
+          <Text style={st.etiqueta}>Munición</Text>
+          <Segmented value={origen} onChange={setOrigen} options={[{ value: 'club', label: 'Del club' }, { value: 'casa', label: 'De casa (restar)' }]} />
+          <Button
+            title={`Apuntar ${n} disparos`}
+            onPress={() => {
+              if (!armaId || !n) return;
+              const h = new Date();
+              const fecha = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`;
+              store.sumarDisparos(armaId, n);
+              if (origen === 'casa') store.anadirMunicion(armaId, { fecha, tipo: 'gasto', cartuchos: n, nota: NOTA });
+              setHecho({ armaId, n, casa: origen === 'casa', fecha });
+            }}
+          />
+        </>
+      )}
+    </Card>
   );
 }
 
