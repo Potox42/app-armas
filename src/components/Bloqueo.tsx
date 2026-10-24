@@ -4,7 +4,7 @@ import { useStore } from '@/data/store';
 import { autenticar } from '@/lib/seguridad';
 import { colors, space } from '@/theme';
 import { BloqueoPin } from './BloqueoPin';
-import { Icon } from './Icon';
+import { Logo } from './Logo';
 import { Button } from './ui';
 
 /** Si el bloqueo está activado, tapa la app al abrirla y al volver de segundo plano hasta pasar Face ID. */
@@ -51,7 +51,7 @@ export function Bloqueo({ children }: { children: ReactNode }) {
       {Platform.OS === 'web' && <BloqueoPin />}
       {activado && bloqueada && (
         <View style={st.tapa}>
-          <Icon name="lock" size={48} color={colors.accent} />
+          <Logo size={72} />
           <Text style={st.titulo}>Tirador Deportivo</Text>
           <Text style={st.texto}>Tus documentos están protegidos.</Text>
           {!pidiendo && (

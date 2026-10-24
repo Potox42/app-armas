@@ -4,6 +4,7 @@ import { Avatar } from '@/components/Avatar';
 import { Anillo, Cifra } from '@/components/Cifra';
 import { AvisoSafari, InstalarApp } from '@/components/InstalarApp';
 import { Icon, type IconName } from '@/components/Icon';
+import { Logo } from '@/components/Logo';
 import { Degradado } from '@/components/Degradado';
 import { Button, Card, Kicker, Screen, SectionTitle, nivelColor, s } from '@/components/ui';
 import { useStore } from '@/data/store';
@@ -57,7 +58,10 @@ export default function Inicio() {
       <AvisoSafari />
       <View style={st.hello}>
         <View style={{ flex: 1 }}>
-          <Kicker>Tirador deportivo</Kicker>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Logo size={20} />
+            <Kicker>Tirador deportivo</Kicker>
+          </View>
           <Text style={st.saludo}>{datos.nombre ? `Hola, ${datos.nombre.split(' ')[0]}` : 'Hola'}</Text>
           <Text style={s.muted}>Tu centro deportivo personal</Text>
         </View>
