@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { DIANAS } from '@/lib/diana';
 import { aMm, calibrar, Vigia, type Calibracion, type Gris } from '@/lib/impactos';
 import { colors, radius, space } from '@/theme';
 import type { PropsCamaraDiana } from './CamaraDiana.types';
@@ -75,7 +76,7 @@ const TEXTOS: Record<Estado, string> = {
  * Vídeo de la cámara trasera (con el móvil en el catalejo) que vigila la diana y avisa de cada
  * impacto nuevo con su posición en mm. Todo se procesa en el móvil; no se guarda el vídeo.
  */
-export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto, onImpacto }: PropsCamaraDiana) {
+export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto, disparos = [], onImpacto }: PropsCamaraDiana) {
   const { height: altoPantalla } = useWindowDimensions();
   const caja = useRef<unknown>(null); // en la web, el elemento del DOM de la vista
   const [estado, setEstado] = useState<Estado>('arrancando');
@@ -95,12 +96,19 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
   }, [zoom]);
   const vigia = useRef(new Vigia(modelo, calibre));
   const modeloRef = useRef(modelo);
-  const marcas = useRef<{ x: number; y: number }[]>([]); // impactos vistos, en píxeles de la imagen analizada
   // Siempre la última versión de las props, sin reiniciar la cámara.
-  const props = useRef({ activo, onImpacto, horizontal, soloVer });
+  const props = useRef({ activo, onImpacto, horizontal, soloVer, disparos });
   useEffect(() => {
-    props.current = { activo, onImpacto, horizontal, soloVer };
+    props.current = { activo, onImpacto, horizontal, soloVer, disparos };
   });
+  // Se pintan los disparos apuntados en la sesión (no los que ha visto la cámara): así, al pulsar
+  // Deshacer, la marca desaparece también de la imagen. Lo que se ve ahora pasa a ser la referencia,
+  // para que la cámara no vuelva a contar el agujero que se acaba de quitar.
+  const cuantos = useRef(disparos.length);
+  useEffect(() => {
+    if (disparos.length < cuantos.current) vigia.current.marcadoAMano();
+    cuantos.current = disparos.length;
+  }, [disparos.length]);
 
   useEffect(() => {
     const raiz = caja.current as unknown as HTMLElement | null;
@@ -120,7 +128,6 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     raiz.appendChild(capa);
     const lienzo = document.createElement('canvas');
     const ctx = lienzo.getContext('2d', { willReadFrequently: true })!;
-    const impactos = marcas.current;
     let flujo: MediaStream | null = null;
     let reloj: ReturnType<typeof setInterval> | undefined;
     let vivo = true;
@@ -152,7 +159,6 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       }
       if (!props.current.activo) return;
       const mm = aMm(v.cal, x, y, modeloRef.current);
-      impactos.push({ x, y });
       v.marcadoAMano();
       props.current.onImpacto(mm.x, mm.y);
     };
@@ -234,7 +240,9 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         c.stroke();
       }
       c.fillStyle = '#FF3B30';
-      for (const p of impactos) {
+      const cal0 = vigia.current.cal, radio = (modeloRef.current ?? DIANAS.precision).negro / 2;
+      for (const d of cal0 ? props.current.disparos.filter((d) => !d.sinPosicion) : []) {
+        const p = { x: cal0!.cx + (d.x / radio) * cal0!.rx, y: cal0!.cy + (d.y / radio) * cal0!.ry };
         c.beginPath();
         c.arc(ox + p.x * a * k, oy + p.y * a * k, 6 * devicePixelRatio, 0, Math.PI * 2);
         c.fill();
@@ -255,7 +263,6 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       const ahora = `${W}x${H}@${gr}`;
       if (forma && ahora !== forma) {
         vigia.current.reiniciar();
-        impactos.length = 0;
       }
       forma = ahora;
       const h = Math.round((H / W) * ANCHO);
@@ -274,7 +281,6 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       const r = vigia.current.procesar(g);
       setEstado(r.estado);
       if (r.impacto && props.current.activo) {
-        impactos.push({ x: r.impacto.xPx, y: r.impacto.yPx });
         setUltimo(r.impacto.valor);
         props.current.onImpacto(r.impacto.x, r.impacto.y);
       }
@@ -377,7 +383,6 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
             hitSlop={8}
             onPress={() => {
               vigia.current.reiniciar();
-              marcas.current.length = 0;
               setEstado('buscando');
             }}
             accessibilityLabel="Volver a buscar la diana"

@@ -132,6 +132,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
       horizontal={horizontal}
       modelo={modelo}
       calibre={calibre}
+      disparos={disparosDiana}
       onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)}
     />
   );
