@@ -9,10 +9,10 @@ import { nuevoId, useStore } from '@/data/store';
 import type { Documento, TipoDocumento } from '@/data/types';
 import { confirmar } from '@/lib/confirmar';
 import { volver } from '@/lib/volver';
-import { colors } from '@/theme';
+import { colors, space } from '@/theme';
 
-const TIPOS: TipoDocumento[] = ['Seguro', 'Certificado médico', 'Otro'];
-const NOMBRE: Record<TipoDocumento, string> = { Seguro: 'Seguro', 'Certificado médico': 'Certificado médico', Otro: '' };
+const TIPOS: TipoDocumento[] = ['DNI', 'Seguro', 'Certificado médico', 'Otro'];
+const NOMBRE: Record<TipoDocumento, string> = { DNI: 'DNI', Seguro: 'Seguro', 'Certificado médico': 'Certificado médico', Otro: '' };
 
 /** Alta y edición de otros papeles: seguro, certificado médico o lo que quieras tener a mano. */
 export default function EditarDocumento() {
@@ -51,8 +51,9 @@ export default function EditarDocumento() {
       <Campo etiqueta={d.tipo === 'Seguro' ? 'Nº de póliza (opcional)' : 'Número (opcional)'} valor={d.numero ?? ''} onChange={(numero) => cambiar({ numero })} />
       <CampoFecha etiqueta="Válido hasta (opcional)" valor={d.caducidad ?? ''} onChange={(caducidad) => cambiar({ caducidad })} />
       <Text style={[st.etiqueta, { fontWeight: '400' }]}>Con fecha, te aviso antes de que caduque, igual que con la licencia.</Text>
-      <View style={{ flexDirection: 'row' }}>
-        <FotoCampo etiqueta="Foto del documento" documento fotoId={d.foto} onChange={(foto) => cambiar({ foto })} />
+      <View style={{ flexDirection: 'row', gap: space.sm }}>
+        <FotoCampo etiqueta="Anverso" documento fotoId={d.foto} onChange={(foto) => cambiar({ foto })} />
+        <FotoCampo etiqueta="Reverso (opcional)" documento fotoId={d.fotoReverso} onChange={(fotoReverso) => cambiar({ fotoReverso })} />
       </View>
       <Campo etiqueta="Nota (opcional)" valor={d.nota ?? ''} onChange={(nota) => cambiar({ nota })} placeholder="Compañía, teléfono de asistencia…" />
       <Button title="Guardar" onPress={guardar} />

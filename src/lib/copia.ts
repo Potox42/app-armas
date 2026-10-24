@@ -65,6 +65,7 @@ export function idsDeFotos(d: Datos): string[] {
     d.permiso.fotoAnverso, d.permiso.fotoReverso, d.federacion.fotoCarnet, d.federacion.fotoQr,
     ...d.permiso.licencias.flatMap((l) => [l.fotoAnverso, l.fotoReverso]),
     ...d.armas.flatMap((a) => [a.foto, a.fotoGuiaAnverso, a.fotoGuiaReverso]),
+    ...(d.documentos ?? []).flatMap((x) => [x.foto, x.fotoReverso]),
   ];
   return [...new Set(ids.filter((x): x is string => !!x))];
 }
