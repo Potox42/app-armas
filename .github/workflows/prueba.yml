@@ -1,0 +1,30 @@
+name: Probar rama (sin publicar)
+
+on:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  probar:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: /app-armas
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx expo lint
+      - run: npx expo export --platform web
+      - run: node scripts/web-app.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: dist
+          retention-days: 3
