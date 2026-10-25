@@ -71,6 +71,8 @@ function Asistente({ sesion }: { sesion: Sesion }) {
     if (!voz || antes.serie !== nSerie || serie.disparos.length <= antes.n || !ultimo) return;
     const valor = String(ultimo.valor).replace('.', ',');
     decir(completa ? `${valor}. Serie completa: ${String(sumaSerie(serie)).replace('.', ',')} puntos.` : valor);
+    // Solo debe sonar cuando cambia el número de disparos, no con cada cambio de la serie.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serie.disparos.length, nSerie]);
   const cambiarVoz = () => {
     const nueva = !voz;
