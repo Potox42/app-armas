@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View, type ScrollViewInstance } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
@@ -16,6 +16,7 @@ import { confirmar } from '@/lib/confirmar';
 import { geometria } from '@/lib/diana';
 import { formatear } from '@/lib/fechas';
 import { volver } from '@/lib/volver';
+import { decir, guardarVoz, leerVoz } from '@/lib/voz';
 import { agrupacion, conPosicion, dianasDe, extremos, formatoMedia, media, numDiana, soloDiana, sumaSerie, todosLosDisparos, totalSesion } from '@/lib/sesiones';
 import { colors, radius, space } from '@/theme';
 
@@ -61,6 +62,38 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   const [conVisor, setConVisor] = useState(true);
   const visor = conVisor && (teclado || sesion.registro === undefined || sesion.registro === 'diana');
 
+  // Puntuación por voz (opcional): dice el valor de cada disparo nuevo y el total al completar la serie.
+  const [voz, setVoz] = useState(leerVoz);
+  const cuenta = useRef({ serie: nSerie, n: serie.disparos.length });
+  useEffect(() => {
+    const antes = cuenta.current;
+    cuenta.current = { serie: nSerie, n: serie.disparos.length };
+    if (!voz || antes.serie !== nSerie || serie.disparos.length <= antes.n || !ultimo) return;
+    const valor = String(ultimo.valor).replace('.', ',');
+    decir(completa ? `${valor}. Serie completa: ${String(sumaSerie(serie)).replace('.', ',')} puntos.` : valor);
+    // Solo debe sonar cuando cambia el número de disparos, no con cada cambio de la serie.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serie.disparos.length, nSerie]);
+  const cambiarVoz = () => {
+    const nueva = !voz;
+    setVoz(nueva);
+    guardarVoz(nueva);
+    // En el iPhone, la voz solo arranca tras un toque: se aprovecha este para avisar.
+    decir(nueva ? 'Voz activada' : 'Voz desactivada');
+  };
+  const botonVoz = (
+    <Pressable
+      onPress={cambiarVoz}
+      hitSlop={6}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: voz }}
+      accessibilityLabel="Decir la puntuación en voz alta"
+      style={[st.voz, voz && st.vozActiva]}
+    >
+      <Text style={[st.vozTexto, voz && { color: colors.accent }]}>{voz ? '🔊  Voz activada' : '🔇  Voz apagada'}</Text>
+    </Pressable>
+  );
+
   const terminar = () => {
     store.terminarSesion(sesion.id);
   };
@@ -74,11 +107,14 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   const kicker = `Diana ${nDiana + 1} · ${sesion.modalidad} · ${sesion.distancia} m${arma ? ` · ${arma.marca} ${arma.modelo}` : ''}`;
 
   const cifras = (
-    <View style={st.datos}>
-      <Dato titulo="Último" valor={ultimo ? String(ultimo.valor) : '–'} grande />
-      <Dato titulo="Serie" valor={`${sumaSerie(serie)}`} />
-      <Dato titulo="Media" valor={serie.disparos.length ? formatoMedia(media(serie.disparos)) : '–'} />
-    </View>
+    <>
+      <View style={st.datos}>
+        <Dato titulo="Último" valor={ultimo ? String(ultimo.valor) : '–'} grande />
+        <Dato titulo="Serie" valor={`${sumaSerie(serie)}`} />
+        <Dato titulo="Media" valor={serie.disparos.length ? formatoMedia(media(serie.disparos)) : '–'} />
+      </View>
+      {botonVoz}
+    </>
   );
 
   const resumenDiana = (variasDianas || sesion.series.length > 1) && (
@@ -645,6 +681,9 @@ function GraficaSeries({ valores: sumas, maximo, minimo: min, texto = String, et
 }
 
 const st = StyleSheet.create({
+  voz: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cardAlt },
+  vozActiva: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+  vozTexto: { color: colors.textMuted, fontSize: 14, fontWeight: '700' },
   datos: { flexDirection: 'row', gap: space.sm },
   botones: { flexDirection: 'row', gap: space.sm },
   borrar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm, paddingVertical: space.md },

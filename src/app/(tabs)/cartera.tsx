@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Chips } from '@/components/Chips';
@@ -7,6 +7,8 @@ import { Icon } from '@/components/Icon';
 import { AvisosCalendario } from '@/components/AvisosCalendario';
 import { DocumentoLicencia } from '@/components/DocumentoLicencia';
 import { DatoTarjeta, EstadoTarjeta, Tarjeta } from '@/components/Tarjeta';
+import { LetraLicencia, tonoLicencia } from '@/components/LetraLicencia';
+import type { Licencia } from '@/data/types';
 import { Badge, Button, Card, FakeQr, Screen, Segmented, nivelColor, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { nivelPorDias } from '@/lib/avisos';
@@ -195,19 +197,57 @@ function ArmasLicenciaF() {
   }
   const lleno = armas >= maximo;
   return (
-    <Card style={{ gap: space.sm }} onPress={() => router.push('/armas')}>
-      <View style={st.doc}>
-        <Text style={[s.text, { flex: 1 }]}>Armas con tu licencia F ({licencia.categoria}ª clase)</Text>
-        <Text style={{ color: armas > maximo ? colors.red : lleno ? colors.orange : colors.green, fontSize: 18, fontWeight: '900' }}>
-          {armas} de {maximo}
-        </Text>
-      </View>
+    <CajaLicencia
+      licencia={licencia}
+      titulo={`Licencia F · ${licencia.categoria}ª clase`}
+      contador={<Text style={[st.contador, { color: armas > maximo ? colors.red : lleno ? colors.orange : colors.green }]}>{armas} de {maximo}</Text>}
+    >
       <Text style={[s.muted, { fontSize: 13 }]}>
         {armas > maximo
           ? `Tienes más armas apuntadas con la F de las que permite la ${licencia.categoria}ª clase. Revisa a qué licencia va cada una.`
           : `La ${licencia.categoria}ª clase permite ${maximo === 1 ? 'un arma' : `hasta ${maximo} armas`} de concurso (art. 132 del Reglamento de Armas).`}
         {' '}Para cada arma más hace falta autorización previa de la Intervención de Armas.
       </Text>
+    </CajaLicencia>
+  );
+}
+
+/**
+ * Tarjeta de una licencia en su color, con la lista de sus armas. Al tocarla se abren
+ * solo las armas de esa licencia.
+ */
+function CajaLicencia({ licencia, titulo, contador, children }: { licencia: Licencia; titulo: string; contador: ReactNode; children: ReactNode }) {
+  const { datos } = useStore();
+  const tono = tonoLicencia(licencia.tipo);
+  const suyas = datos.armas.filter((a) => a.licenciaId === licencia.id);
+  return (
+    <Card
+      style={[st.caja, { borderColor: tono.fuerte }]}
+      onPress={() => router.push({ pathname: '/armas', params: { licencia: licencia.tipo } })}
+    >
+      <View style={[st.franja, { backgroundColor: tono.fuerte }]} />
+      <View style={st.doc}>
+        <LetraLicencia tipo={licencia.tipo} grande />
+        <Text style={[s.text, { flex: 1, fontWeight: '800' }]}>{titulo}</Text>
+        {contador}
+      </View>
+      {suyas.length > 0 ? (
+        <View style={st.lista}>
+          {suyas.map((a) => (
+            <View key={a.id} style={[st.chip, { backgroundColor: tono.suave }]}>
+              <Text style={[st.chipTexto, { color: colors.text }]} numberOfLines={1}>{a.marca} {a.modelo}</Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={s.muted}>Aún no tienes armas apuntadas con esta licencia.</Text>
+      )}
+      {children}
+      {suyas.length > 0 && (
+        <Text style={[st.ver, { color: tono.fuerte }]}>
+          Ver {suyas.length === 1 ? 'su arma' : `sus ${suyas.length} armas`} ›
+        </Text>
+      )}
     </Card>
   );
 }
@@ -246,13 +286,11 @@ function ArmasLicenciaE() {
     ['Armas largas rayadas', rayadas, LIMITES_E.rayadas],
   ];
   return (
-    <Card style={{ gap: space.sm }} onPress={() => router.push('/armas')}>
-      <View style={st.doc}>
-        <Text style={[s.text, { flex: 1 }]}>Armas con tu licencia E</Text>
-        <Text style={{ color: colorCupo(total, LIMITES_E.total), fontSize: 18, fontWeight: '900' }}>
-          {total} de {LIMITES_E.total}
-        </Text>
-      </View>
+    <CajaLicencia
+      licencia={cupo.licencia}
+      titulo="Licencia E"
+      contador={<Text style={[st.contador, { color: colorCupo(total, LIMITES_E.total) }]}>{total} de {LIMITES_E.total}</Text>}
+    >
       {filas.map(([nombre, n, max]) => (
         <View key={nombre} style={st.doc}>
           <Text style={[s.muted, { flex: 1 }]}>{nombre}</Text>
@@ -266,7 +304,7 @@ function ArmasLicenciaE() {
           ? 'Tienes más armas apuntadas con la E de las que permite. Revisa a qué licencia va cada una.'
           : 'La licencia E permite hasta 6 escopetas y 6 armas largas rayadas para tiro deportivo, 12 en total (art. 101 del Reglamento de Armas).'}
       </Text>
-    </Card>
+    </CajaLicencia>
   );
 }
 
@@ -277,19 +315,17 @@ function ArmasLicenciaD() {
   if (!cupo) return null;
   const { armas } = cupo;
   return (
-    <Card style={{ gap: space.sm }} onPress={() => router.push('/armas')}>
-      <View style={st.doc}>
-        <Text style={[s.text, { flex: 1 }]}>Armas con tu licencia D</Text>
-        <Text style={{ color: colorCupo(armas, MAXIMO_D), fontSize: 18, fontWeight: '900' }}>
-          {armas} de {MAXIMO_D}
-        </Text>
-      </View>
+    <CajaLicencia
+      licencia={cupo.licencia}
+      titulo="Licencia D"
+      contador={<Text style={[st.contador, { color: colorCupo(armas, MAXIMO_D) }]}>{armas} de {MAXIMO_D}</Text>}
+    >
       <Text style={[s.muted, { fontSize: 13 }]}>
         {armas > MAXIMO_D
           ? 'Tienes más armas apuntadas con la D de las que permite. Revisa a qué licencia va cada una.'
           : 'La licencia D permite hasta 5 armas largas rayadas para caza mayor.'}
       </Text>
-    </Card>
+    </CajaLicencia>
   );
 }
 
@@ -298,4 +334,11 @@ const st = StyleSheet.create({
   mini: { flex: 1, aspectRatio: 1.58, borderRadius: 10, overflow: 'hidden', backgroundColor: colors.cardAlt, borderWidth: 1, borderColor: colors.border },
   titulo: { color: colors.text, fontSize: 16, fontWeight: '700' },
   cabecera: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  caja: { gap: space.sm, borderWidth: 1.5, paddingLeft: space.lg + 4, overflow: 'hidden' },
+  franja: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 6 },
+  contador: { fontSize: 18, fontWeight: '900' },
+  lista: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
+  chip: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, maxWidth: '100%' },
+  chipTexto: { fontSize: 13, fontWeight: '700' },
+  ver: { fontSize: 14, fontWeight: '800', alignSelf: 'flex-end' },
 });

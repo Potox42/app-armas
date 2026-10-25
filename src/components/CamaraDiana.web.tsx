@@ -67,7 +67,7 @@ const TEXTOS: Record<Estado, string> = {
   arrancando: 'Abriendo la cámara…',
   'sin-permiso': 'No tengo permiso para la cámara. En Safari: aA › Ajustes del sitio web › Cámara › Permitir. Después toca Reintentar.',
   'sin-camara': 'No se ha podido abrir la cámara (puede que otra app la esté usando). Toca Reintentar.',
-  buscando: 'Busco la diana: tiene que verse el círculo negro entero. Si no está en medio, toca su centro en la imagen.',
+  buscando: 'Encaja el negro de la diana dentro del círculo blanco, entero y lo más grande posible. Si no la encuentro, toca su centro en la imagen.',
   calibrando: 'Diana encontrada. Mantén el móvil quieto…',
   vigilando: 'Listo: dispara. Si se salta un disparo, tócalo en la imagen.',
 };
@@ -236,6 +236,31 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       mapa = { ox, oy, k: a * k };
       const c = capa.getContext('2d')!;
       c.clearRect(0, 0, capa.width, capa.height);
+      if (!cal && !props.current.soloVer) {
+        // Guía mientras busca: el negro tiene que quedar entero dentro de este círculo (es la zona en
+        // la que se busca). Si el tirador ha tocado el centro de la diana, el círculo va ahí.
+        const h = Math.round((H / W) * ANCHO);
+        const centro = vigia.current.centro ?? { x: ANCHO / 2, y: h / 2 };
+        const r = 0.46 * Math.min(ANCHO, h) * a * k;
+        const x = ox + centro.x * a * k, y = oy + centro.y * a * k;
+        const dpr = devicePixelRatio;
+        c.save();
+        c.shadowColor = 'rgba(0,0,0,0.7)';
+        c.shadowBlur = 4 * dpr;
+        c.strokeStyle = 'rgba(255,255,255,0.9)';
+        c.lineWidth = 2.5 * dpr;
+        c.setLineDash([10 * dpr, 8 * dpr]);
+        c.beginPath();
+        c.arc(x, y, r, 0, Math.PI * 2);
+        c.stroke();
+        c.setLineDash([]);
+        const cruz = Math.min(18 * dpr, r * 0.15);
+        c.beginPath();
+        c.moveTo(x - cruz, y); c.lineTo(x + cruz, y);
+        c.moveTo(x, y - cruz); c.lineTo(x, y + cruz);
+        c.stroke();
+        c.restore();
+      }
       if (cal) {
         c.strokeStyle = vigia.current.cal ? '#2ECC71' : '#F5A623';
         c.lineWidth = 3 * devicePixelRatio;
