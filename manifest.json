@@ -1,0 +1,22 @@
+{
+  "name": "Tirador 360",
+  "short_name": "Tirador 360",
+  "start_url": "/app-armas/",
+  "scope": "/app-armas/",
+  "display": "standalone",
+  "background_color": "#03070B",
+  "theme_color": "#03070B",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/app-armas/icono-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/app-armas/icono-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
