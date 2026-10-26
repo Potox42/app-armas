@@ -20,6 +20,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit
-      - run: npx expo lint
+      - name: Revisar el código (lint)
+        run: |
+          set -o pipefail
+          npx expo lint -- -f unix | tee lint.txt || { grep -E '^[^:]+:[0-9]+:[0-9]+:' lint.txt | sed -E 's/^([^:]+):([0-9]+):([0-9]+): (.*)$/::error file=\1,line=\2::\4/'; exit 1; }
       - run: npx expo export --platform web
       - run: php -l servidor/t360-licencias/t360-licencias.php
