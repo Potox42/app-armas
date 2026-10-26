@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { SoloPro, useLicenciaApp } from '@/components/Activacion';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Speech from 'expo-speech';
@@ -15,6 +16,18 @@ import { colors, radius, space } from '@/theme';
  * pantalla se pone en rojo o en verde con la cuenta atrás, para entrenar los tiempos sin campo.
  */
 export default function Simulador() {
+  const { esPro } = useLicenciaApp();
+  if (!esPro) {
+    return (
+      <Screen title="Simulador de tirada" kicker="Entrenar" back="/entrenar">
+        <SoloPro que="El simulador de tirada" />
+      </Screen>
+    );
+  }
+  return <SimuladorPro />;
+}
+
+function SimuladorPro() {
   const [programa, setPrograma] = useState<Programa>(PROGRAMAS[0]);
   const [series, setSeries] = useState(String(PROGRAMAS[0].series));
   const [idioma, setIdioma] = useState<Idioma>('es');

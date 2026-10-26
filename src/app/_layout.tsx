@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AvisosProgramados } from '@/components/AvisosProgramados';
+import { ActivacionApp } from '@/components/Activacion';
 import { Bloqueo } from '@/components/Bloqueo';
 import { CopiaAutomatica } from '@/components/CopiaAutomatica';
 import { StoreProvider } from '@/data/store';
@@ -12,6 +13,7 @@ export default function RootLayout() {
       <StatusBar style={temaClaro ? 'dark' : 'light'} />
       <AvisosProgramados />
       <CopiaAutomatica />
+      <ActivacionApp>
       <Bloqueo>
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
           <Stack.Screen name="(tabs)" />
@@ -19,6 +21,7 @@ export default function RootLayout() {
           <Stack.Screen name="pase" options={{ presentation: 'modal' }} />
         </Stack>
       </Bloqueo>
+      </ActivacionApp>
     </StoreProvider>
   );
 }

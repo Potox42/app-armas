@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { SoloPro, useLicenciaApp } from '@/components/Activacion';
 import { router } from 'expo-router';
 import { ResumenMunicion } from '@/components/MunicionArma';
 import { Card, Screen, s } from '@/components/ui';
@@ -8,6 +9,18 @@ import { colors, space } from '@/theme';
 
 /** Munición de todas tus armas: cupo del año y cartuchos en casa. */
 export default function Municion() {
+  const { esPro } = useLicenciaApp();
+  if (!esPro) {
+    return (
+      <Screen title="Munición" kicker="Control" back="/">
+        <SoloPro que="El control de munición" />
+      </Screen>
+    );
+  }
+  return <MunicionPro />;
+}
+
+function MunicionPro() {
   const { datos } = useStore();
   const calibres = depositoPorCalibre(datos.armas);
   return (
