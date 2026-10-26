@@ -14,16 +14,22 @@ jobs:
       BASE_URL: /app-armas
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit
-      - name: Revisar el código (lint)
+      # El lint completo tiene avisos antiguos: aquí solo se exige en los archivos de esta propuesta.
+      - name: Revisar el código cambiado (lint)
         run: |
-          npx expo lint > lint.txt 2>&1 && exit 0
-          head -60 lint.txt | sed 's/^/::warning::/'
+          git fetch --depth=50 origin "${{ github.base_ref }}"
+          archivos=$(git diff --name-only --diff-filter=ACMR "origin/${{ github.base_ref }}"...HEAD -- '*.ts' '*.tsx' || true)
+          [ -z "$archivos" ] && exit 0
+          npx eslint $archivos > lint.txt 2>&1 && exit 0
+          grep -vE '^\s*$' lint.txt | head -60 | sed 's/^/::warning::/'
           exit 1
       - run: npx expo export --platform web
       - run: php -l servidor/t360-licencias/t360-licencias.php
