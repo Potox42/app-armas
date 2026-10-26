@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SoloPro, useLicenciaApp } from '@/components/Activacion';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Cifra } from '@/components/Cifra';
@@ -25,6 +26,7 @@ type Vista = 'mantenimiento' | 'documentacion' | 'entrenamientos' | 'municion';
 export default function FichaArma() {
   const { id, vista: inicial } = useLocalSearchParams<{ id: string; vista?: Vista }>();
   const store = useStore();
+  const { esPro } = useLicenciaApp();
   const arma = store.arma(id);
   const [vista, setVista] = useState<Vista>(inicial ?? 'mantenimiento');
   const [registrando, setRegistrando] = useState(false);
@@ -84,7 +86,7 @@ export default function FichaArma() {
         ]}
       />
 
-      {vista === 'municion' && <MunicionArma arma={arma} />}
+      {vista === 'municion' && (esPro ? <MunicionArma arma={arma} /> : <SoloPro que="El control de munición" />)}
 
       {vista === 'entrenamientos' && (
         <>

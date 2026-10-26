@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MiniDiana } from '@/components/Diana';
 import { geometria } from '@/lib/diana';
+import { useLicenciaApp } from '@/components/Activacion';
 import { Degradado } from '@/components/Degradado';
 import { Icon } from '@/components/Icon';
 import { Card, Screen, SectionTitle, s } from '@/components/ui';
@@ -13,6 +14,7 @@ import { colors, radius, space } from '@/theme';
 
 export default function Entrenar() {
   const { datos, arma } = useStore();
+  const { esPro } = useLicenciaApp();
   const enCurso = datos.sesiones.find((x) => !x.terminada);
   const terminadas = datos.sesiones.filter((x) => x.terminada);
   // Carpeta abierta: al principio, la del arma con la que entrenaste por última vez.
@@ -52,7 +54,7 @@ export default function Entrenar() {
           <View style={[st.luz, { backgroundColor: '#3DF08F' }]} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={st.nuevaTitulo}>Simulador de tirada</Text>
+          <Text style={st.nuevaTitulo}>Simulador de tirada{esPro ? '' : ' · Pro'}</Text>
           <Text style={st.nuevaSub}>Entrena los tiempos: órdenes por voz y luces roja y verde</Text>
         </View>
         <Icon name="chevron" />

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Alert, Platform, Switch, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { useLicenciaApp } from '@/components/Activacion';
 import { Avatar } from '@/components/Avatar';
 import { Campo } from '@/components/Formulario';
 import { Icon } from '@/components/Icon';
-import { RecomendarApp } from '@/components/InstalarApp';
+import { RecomendarApp, WEB_VENTA } from '@/components/InstalarApp';
 import { Button, Card, Screen, Segmented, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { confirmar } from '@/lib/confirmar';
@@ -90,6 +91,7 @@ export default function Perfil() {
           <Button title="Enviar un aviso de prueba" variant="secondary" onPress={() => { avisoDePrueba().catch(() => {}); }} />
         )}
       </Card>
+      <TuLicencia />
       <Apariencia />
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }} onPress={() => router.push('/copia')}>
         <Icon name="doc" color={colors.accent} />
@@ -214,5 +216,30 @@ function AjustePin() {
         </View>
       )}
     </View>
+  );
+}
+
+/** Licencia de compra de la app: edición, código y botón para pasarla a otro móvil. */
+function TuLicencia() {
+  const { activacion, esPro, liberarLicencia } = useLicenciaApp();
+  const oculto = activacion.codigo.replace(/^(T360[BP]-)[A-Z0-9]{4}-[A-Z0-9]{4}/, '$1••••-••••');
+  return (
+    <Card style={{ gap: space.md }}>
+      <Text style={s.text}>Tu licencia · {esPro ? 'Pro' : 'Básica'}</Text>
+      <Text style={s.muted}>{oculto} · activada en este móvil</Text>
+      {!esPro && (
+        <Button title="Pasar a Pro (10 €)" onPress={() => Linking.openURL(WEB_VENTA).catch(() => {})} />
+      )}
+      <Button
+        title="Liberar licencia"
+        variant="secondary"
+        onPress={() => confirmar(
+          'Liberar licencia',
+          'La app dejará de funcionar en este móvil hasta que actives otra vez el código. Úsalo si cambias de móvil. Tus datos no se borran, pero haz antes una copia de seguridad para pasarlos al móvil nuevo.',
+          () => { liberarLicencia().then((error) => error && avisar('Liberar licencia', error)); },
+          'Liberar',
+        )}
+      />
+    </Card>
   );
 }

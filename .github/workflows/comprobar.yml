@@ -1,0 +1,25 @@
+name: Comprobar cambios
+
+# Revisa cada propuesta de cambio (pull request) sin publicar nada.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  comprobar:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: /app-armas
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx expo lint
+      - run: npx expo export --platform web
+      - run: php -l servidor/t360-licencias/t360-licencias.php
