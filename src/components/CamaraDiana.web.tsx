@@ -565,8 +565,8 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
             {estadoVista}
             {!!marcador && <Text style={st.marcador}>{marcador}</Text>}
           </View>
-          <Pressable onPress={reducir} hitSlop={10} accessibilityLabel="Salir de pantalla completa" style={[st.pastilla, st.reducir]}>
-            <Text style={st.boton}>Reducir</Text>
+          <Pressable onPress={reducir} hitSlop={16} accessibilityLabel="Salir de pantalla completa" style={[st.pastilla, st.reducir]}>
+            <Text style={[st.boton, st.reducirTexto]}>Reducir</Text>
           </Pressable>
           <View style={[st.mandosEncima, st.margenSeguro]}>{mandos}</View>
         </View>
@@ -613,6 +613,12 @@ const st = StyleSheet.create({
   boton: { color: colors.accent, fontWeight: '700', fontSize: 13 },
   grande: { flex: 1, backgroundColor: '#000' },
   marcador: { color: '#fff', fontSize: 13, fontWeight: '700', width: '100%' },
-  reducir: { position: 'absolute', top: 6, right: 'max(6px, env(safe-area-inset-right))' as never },
+  // Grande y fácil de pulsar con el móvil en el catalejo.
+  reducir: {
+    position: 'absolute', top: 8, right: 'max(8px, env(safe-area-inset-right))' as never,
+    minWidth: 120, minHeight: 52, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(8, 16, 30, 0.8)', borderWidth: 2, borderColor: colors.accent,
+  },
+  reducirTexto: { fontSize: 18 },
   margenSeguro: { left: 'max(6px, env(safe-area-inset-left))' as never, right: 'max(6px, env(safe-area-inset-right))' as never },
 });
