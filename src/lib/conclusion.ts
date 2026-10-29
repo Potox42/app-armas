@@ -11,7 +11,28 @@ import { sumaSerie } from './sesiones';
 // Las causas vienen de zonatactica.es («Análisis de los impactos en el blanco» I y II) y se dan como
 // posibles: el entrenador es quien puede confirmarlas viéndote tirar.
 
+/** Tipo de fallo: sirve para contar cuáles se repiten entre entrenamientos. */
+export type TipoFallo =
+  | 'cansancio' | 'irregular' | 'centroSeMueve' | 'dosGrupos' | 'sueltos'
+  | 'vertical' | 'horizontal' | 'oblicuo' | 'repartido' | 'gatillazo' | 'miras';
+
+/** Nombre corto de cada fallo, para las listas. */
+export const NOMBRE_FALLO: Record<TipoFallo, string> = {
+  cansancio: 'Bajas en las últimas series',
+  irregular: 'Series muy desiguales',
+  centroSeMueve: 'El centro cambia entre series',
+  dosGrupos: 'Dos grupos en la diana',
+  sueltos: 'Disparos que se escapan del grupo',
+  vertical: 'Grupo estirado de arriba abajo',
+  horizontal: 'Grupo estirado de lado a lado',
+  oblicuo: 'Grupo estirado en diagonal',
+  repartido: 'Disparos repartidos por la diana',
+  gatillazo: 'Grupo bajo por el disparador',
+  miras: 'Grupo descentrado (miras)',
+};
+
 export interface Mejora {
+  tipo: TipoFallo;
   que: string; // lo que se ve en la diana
   porque: string; // la causa más habitual
   hacer: string; // qué probar en el próximo entreno
@@ -46,11 +67,13 @@ export function conclusion(sesion: Sesion, arma: Arma | undefined, mano: Mano = 
       const bajaAlFinal = mitad >= 2 && medias.slice(-mitad).reduce((t, v) => t + v, 0) < medias.slice(0, mitad).reduce((t, v) => t + v, 0) - 0.4 * mitad;
       mejorar.push(bajaAlFinal
         ? {
+            tipo: 'cansancio',
             que: 'Las últimas series te salen peor que las primeras.',
             porque: 'Suele ser cansancio: el brazo y la vista se fatigan y pierdes concentración.',
             hacer: 'Descansa un par de minutos entre series, baja el arma si no sale el disparo y trabaja la forma física del brazo.',
           }
         : {
+            tipo: 'irregular',
             que: 'Unas series te salen mucho mejor que otras.',
             porque: 'Cambias algo de una serie a otra: la postura, el agarre o la concentración.',
             hacer: 'Antes de cada serie repite la misma rutina: misma colocación de pies, mismo agarre, respira y empieza.',
@@ -70,12 +93,14 @@ export function conclusion(sesion: Sesion, arma: Arma | undefined, mano: Mano = 
   const sx = dos || cs.seMueve || f.forma !== 'redondo' ? [] : sueltos(series);
   if (cs.seMueve) {
     mejorar.push({
+      tipo: 'centroSeMueve',
       que: 'El centro de tus disparos cambia de una serie a otra.',
       porque: 'Entre series cambias la postura o el agarre del arma.',
       hacer: 'Busca tu postura natural: colócate, cierra los ojos un momento, ábrelos y mira si sigues apuntando al centro. Si no, mueve los pies, no el brazo.',
     });
   } else if (dos) {
     mejorar.push({
+      tipo: 'dosGrupos',
       que: 'Hay dos grupos separados en la diana.',
       porque: 'Has cambiado de postura o de agarre a mitad (por ejemplo, al recargar o tras un fallo): cada postura hace su propio grupo.',
       hacer: 'Después de recargar, vuelve a colocarte igual que al principio: pies, agarre y apoyo. Si hace falta, márcate la posición de los pies.',
@@ -87,6 +112,7 @@ export function conclusion(sesion: Sesion, arma: Arma | undefined, mano: Mano = 
     const alEmpezar = sx.every((x) => x.enSerie === 0);
     const alFinal = sx.every((x) => x.enSerie === x.deSerie - 1);
     mejorar.push({
+      tipo: 'sueltos',
       que: sx.length === 1 ? 'Un disparo se ha ido lejos del grupo.' : `${sx.length} disparos se han ido lejos del grupo.`,
       porque: alEmpezar
         ? 'Ha sido el primer disparo de la serie: puede que no estuvieras asentado o que te pillara el retroceso.'
@@ -106,24 +132,28 @@ export function conclusion(sesion: Sesion, arma: Arma | undefined, mano: Mano = 
   }
   if (f.forma === 'vertical') {
     mejorar.push({
+      tipo: 'vertical',
       que: 'El grupo se estira de arriba abajo.',
       porque: 'Lo más habitual: no igualas bien la altura del punto de mira con el alza, respiras mientras disparas o aprietas el agarre unas veces más que otras.',
       hacer: 'Fíjate en que el punto de mira quede justo a la altura del alza. Suelta la mitad del aire y quédate quieto antes de disparar. Agarra siempre con la misma fuerza.',
     });
   } else if (f.forma === 'horizontal') {
     mejorar.push({
+      tipo: 'horizontal',
       que: 'El grupo se estira de lado a lado.',
       porque: 'Tu postura no apunta sola al centro y tienes que forzar el brazo de lado; también puede ser el agarre.',
       hacer: 'Colócate de forma que, con el brazo relajado, el arma apunte sola al centro (mueve los pies, no el brazo). Revisa que el agarre sea el mismo en cada disparo.',
     });
   } else if (f.forma === 'oblicuo') {
     mejorar.push({
+      tipo: 'oblicuo',
       que: 'El grupo se estira en diagonal.',
       porque: 'Mezcla de las dos cosas: postura que obliga a forzar el brazo y altura de las miras o respiración.',
       hacer: 'Primero revisa la postura (que el arma apunte sola al centro) y después la respiración y la imagen de miras.',
     });
   } else if (anillo === null || anillo <= 7) {
     mejorar.push({
+      tipo: 'repartido',
       que: 'Los disparos quedan repartidos por toda la diana.',
       porque: 'Falta constancia: algo cambia entre disparo y disparo (postura, agarre, cómo aprietas el disparador o dónde miras justo antes de disparar).',
       hacer: 'Haz series cortas y despacio, cuidando una sola cosa cada vez: primero el agarre, luego el disparador. Mira las miras, no la diana, al disparar.',
@@ -144,6 +174,7 @@ export function conclusion(sesion: Sesion, arma: Arma | undefined, mano: Mano = 
     // Diestro: abajo a la izquierda suele ser gatillazo. Zurdo: abajo a la derecha.
     const gatillazo = m.cy > 0 && (mano === 'zurdo' ? m.cx > 0 : m.cx < 0) && Math.abs(m.cx) > Math.abs(m.cy) * 0.3;
     mejorar.push({
+      tipo: gatillazo ? 'gatillazo' : 'miras',
       que: `Tu grupo queda ${lado} del centro${ganas > 0 ? `: centrado habrías hecho ${ganas} ${ganas === 1 ? 'punto' : 'puntos'} más` : ''}.`,
       porque: gatillazo
         ? `En un tirador ${mano} el grupo bajo y a la ${mano === 'zurdo' ? 'derecha' : 'izquierda'} suele ser apretar el disparador de golpe o con demasiada fuerza. Si no, son las miras.`
