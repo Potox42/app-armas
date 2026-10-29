@@ -127,7 +127,7 @@ export default function NuevaSesion() {
       />
 
       <Text style={st.paso}>5. Disparos por serie</Text>
-      <Segmented value={porSerie} onChange={setPorSerie} options={[{ value: '5', label: '5' }, { value: '10', label: '10' }, { value: '0', label: 'Libre' }]} />
+      <Segmented value={porSerie} onChange={setPorSerie} options={[{ value: '0', label: 'Libre' }, { value: '5', label: '5' }, { value: '10', label: '10' }]} />
       {porSerie === '0' && <Text style={s.muted}>Sin límite: tiras los que quieras en la diana y pulsas «Finalizar serie» cuando acabes.</Text>}
 
       <Text style={st.paso}>6. Número de series</Text>
