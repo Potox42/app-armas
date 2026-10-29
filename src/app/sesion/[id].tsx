@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View, type ScrollViewInstance } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
+import { SoloPro, useLicenciaApp } from '@/components/Activacion';
 import { Conclusion, MedidasGrupo } from '@/components/AnalisisDiana';
 import { Anillo, Cifra } from '@/components/Cifra';
 import { CamaraDiana } from '@/components/CamaraDiana';
@@ -421,7 +422,8 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
   const conSeries = sesion.series.filter((x) => x.disparos.length);
   const centros = conSeries.length > 1 ? centrosSeries(conSeries).centros : [];
   const fuera = dosGrupos(disparos) ? [] : sueltos(conSeries).map((x) => x.disparo);
-  const nuevos = indice < 0 ? recordsBatidos(completa, store.datos.sesiones) : [];
+  const { esPro } = useLicenciaApp();
+  const nuevos = indice < 0 && esPro ? recordsBatidos(completa, store.datos.sesiones) : [];
   const lectura = indice < 0
     ? resumenSesion(media(disparos), previa ? media(todosLosDisparos(previa)) : undefined, ex.diferencia, porSerie)
     : resumenDiana(indice, media(disparos), indice > 0 ? media(dianas[indice - 1].disparos) : undefined, ex.diferencia, porSerie);
@@ -519,7 +521,7 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
               centros={centros.map((c) => ({ x: c.x, y: c.y, etiqueta: String(c.serie + 1) }))} sueltos={fuera}
             />
           </View>
-          {m && <MedidasGrupo sesion={sesion} m={m} arma={arma} />}
+          {m && (esPro ? <MedidasGrupo sesion={sesion} m={m} arma={arma} /> : <SoloPro que="El análisis del grupo y la corrección de miras" />)}
         </>
       )}
 

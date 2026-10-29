@@ -1,5 +1,6 @@
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, G, Line, Text as SvgText } from 'react-native-svg';
+import { useLicenciaApp } from '@/components/Activacion';
 import { Card, SectionTitle, s } from '@/components/ui';
 import type { Arma, Sesion } from '@/data/types';
 import { desvio, fatiga, porMunicion, type FilaMunicion } from '@/lib/analisis';
@@ -21,6 +22,7 @@ export function Analisis({ sesiones, armas }: { sesiones: Sesion[]; armas: Arma[
 
 function Desvio({ sesiones, arma }: { sesiones: Sesion[]; arma?: Arma }) {
   const d = desvio(sesiones);
+  const { esPro } = useLicenciaApp(); // la corrección de miras es de la versión Pro
   const lado = 150;
   const k = lado / 2 / 1.6; // el negro (radio 1) ocupa algo más de la mitad
   const P = (v: number) => lado / 2 + Math.max(-1.55, Math.min(1.55, v)) * k;
@@ -56,7 +58,7 @@ function Desvio({ sesiones, arma }: { sesiones: Sesion[]; arma?: Arma }) {
           </View>
         </View>
       )}
-      {d?.mm && (() => {
+      {esPro && d?.mm && (() => {
         const c = correccion(d.mm.x, d.mm.y, d.mm.distancia, arma?.clic);
         return (
           <View style={{ gap: 4, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.sm }}>

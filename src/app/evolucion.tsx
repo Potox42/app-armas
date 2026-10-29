@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
+import { SoloPro, useLicenciaApp } from '@/components/Activacion';
 import { Analisis } from '@/components/Analisis';
 import { Chips } from '@/components/Chips';
 import { Comparar, ExportarCsv, FallosRepetidos, Filtros, ListaPorMes, Records } from '@/components/Historial';
@@ -33,6 +34,7 @@ export default function Evolucion() {
   );
   const [periodo, setPeriodo] = useState<Periodo>('182');
   const [filtro, setFiltro] = useState<Filtro>({});
+  const { esPro } = useLicenciaApp();
 
   const hoy = new Date().toISOString().slice(0, 10);
   // Todas las sesiones del arma (para los filtros) y las que pasan los filtros (para récords y comparar).
@@ -84,7 +86,7 @@ export default function Evolucion() {
           { value: 'todo', label: 'Todo' },
         ]}
       />
-      <Filtros sesiones={delArma} filtro={filtro} onChange={setFiltro} />
+      {esPro && <Filtros sesiones={delArma} filtro={filtro} onChange={setFiltro} />}
 
       {puntos.length < 2 ? (
         <Card><Text style={s.muted}>Hacen falta al menos dos entrenamientos con esta arma en este periodo para ver su evolución.</Text></Card>
@@ -139,16 +141,22 @@ export default function Evolucion() {
         </>
       )}
 
-      <FallosRepetidos sesiones={puntos.map((p) => p.sesion)} armas={datos.armas} mano={datos.mano} />
-      <Records sesiones={filtradas} />
-      {filtradas.length > 1 && <Comparar sesiones={filtradas} />}
+      {esPro ? (
+        <>
+          <FallosRepetidos sesiones={puntos.map((p) => p.sesion)} armas={datos.armas} mano={datos.mano} />
+          <Records sesiones={filtradas} />
+          {filtradas.length > 1 && <Comparar sesiones={filtradas} />}
+        </>
+      ) : (
+        <SoloPro que="Tus fallos más repetidos, récords, comparativas y filtros" />
+      )}
 
       <Analisis sesiones={puntos.map((p) => p.sesion)} armas={datos.armas} />
 
       <SectionTitle>Entrenamientos</SectionTitle>
       {puntos.length === 0 && <Text style={s.muted}>No hay entrenamientos con estos filtros en este periodo.</Text>}
       <ListaPorMes key={`${armaId}|${periodo}|${JSON.stringify(filtro)}`} sesiones={puntos.map((p) => p.sesion)} />
-      <ExportarCsv sesiones={puntos.map((p) => p.sesion)} armas={datos.armas} nombre={armaElegida ? `${armaElegida.marca}-${armaElegida.modelo}` : 'arma'} />
+      {esPro && <ExportarCsv sesiones={puntos.map((p) => p.sesion)} armas={datos.armas} nombre={armaElegida ? `${armaElegida.marca}-${armaElegida.modelo}` : 'arma'} />}
     </Screen>
   );
 }
