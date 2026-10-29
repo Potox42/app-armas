@@ -196,6 +196,9 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     const raiz = caja.current as unknown as HTMLElement | null;
     if (!raiz) return;
     contenedor.current = raiz;
+    // Otra cámara (al cambiar el aumento entre 0,5×, 1× y Tele) ve la diana de otro tamaño: se vuelve
+    // a buscar. Los disparos ya apuntados se guardan en mm y se pintan en su sitio al encontrarla.
+    vigia.current.reiniciar();
     // La caja en la que está el vídeo ahora (la pequeña o la de pantalla completa).
     const marco = () => contenedor.current ?? raiz;
     const video = document.createElement('video');
