@@ -29,6 +29,7 @@ export default function EditarArma() {
     licenciaId: licencias[0]?.id ?? '', disparosTotales: 0, intervaloLimpieza: 500, limpiezas: [],
   });
   const [intentado, setIntentado] = useState(false);
+  const [clicTexto, setClicTexto] = useState(existente?.clic ? String(existente.clic.valor).replace('.', ',') : '');
   const cambiar = (c: Partial<Arma>) => setA((x) => ({ ...x, ...c }));
   const [leyendo, setLeyendo] = useState(false);
   const [aviso, setAviso] = useState<{ texto: string; ok: boolean } | null>(null);
@@ -163,6 +164,34 @@ export default function EditarArma() {
           />
         </View>
       </View>
+
+      <Card style={{ gap: space.md }}>
+        <Text style={st.titulo}>Miras o visor (opcional)</Text>
+        <Text style={s.muted}>Si sabes cuánto mueve cada clic, en los resultados te diré cuántos clics corregir. Viene en las instrucciones o en la torreta (por ejemplo «1 click = 1/4 MOA» o «0.1 MRAD»).</Text>
+        <Chips
+          opciones={[{ value: 'no', label: 'No lo sé' }, { value: 'MOA', label: 'MOA' }, { value: 'MIL', label: 'MIL (MRAD)' }]}
+          valor={a.clic?.unidad ?? 'no'}
+          onChange={(u) => {
+            if (u === 'no') return cambiar({ clic: undefined });
+            const valor = u === 'MOA' ? 0.25 : 0.1;
+            setClicTexto(String(valor).replace('.', ','));
+            cambiar({ clic: { unidad: u, valor } });
+          }}
+        />
+        {a.clic && (
+          <Campo
+            etiqueta={`Cada clic mueve (${a.clic.unidad})`}
+            valor={clicTexto}
+            teclado="decimal-pad"
+            placeholder={a.clic.unidad === 'MOA' ? '0,25' : '0,1'}
+            onChange={(t) => {
+              setClicTexto(t);
+              const v = Number(t.replace(',', '.'));
+              if (v > 0) cambiar({ clic: { unidad: a.clic!.unidad, valor: v } });
+            }}
+          />
+        )}
+      </Card>
 
       {intentado && faltan.length > 0 && (
         <Text style={{ color: colors.red }}>Falta: {faltan.join(', ')}.</Text>

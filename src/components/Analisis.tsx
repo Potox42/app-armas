@@ -1,8 +1,10 @@
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, G, Line, Text as SvgText } from 'react-native-svg';
+import { useLicenciaApp } from '@/components/Activacion';
 import { Card, SectionTitle, s } from '@/components/ui';
 import type { Arma, Sesion } from '@/data/types';
 import { desvio, fatiga, porMunicion, type FilaMunicion } from '@/lib/analisis';
+import { correccion, textoCorreccion } from '@/lib/grupo';
 import { formatoMedia } from '@/lib/sesiones';
 import { colors, space } from '@/theme';
 
@@ -11,15 +13,16 @@ export function Analisis({ sesiones, armas }: { sesiones: Sesion[]; armas: Arma[
   return (
     <>
       <SectionTitle>Análisis de tu tiro</SectionTitle>
-      <Desvio sesiones={sesiones} />
+      <Desvio sesiones={sesiones} arma={armas.find((a) => a.id === sesiones[0]?.armaId)} />
       <Aguante sesiones={sesiones} />
       <Municion sesiones={sesiones} armas={armas} />
     </>
   );
 }
 
-function Desvio({ sesiones }: { sesiones: Sesion[] }) {
+function Desvio({ sesiones, arma }: { sesiones: Sesion[]; arma?: Arma }) {
   const d = desvio(sesiones);
+  const { esPro } = useLicenciaApp(); // la corrección de miras es de la versión Pro
   const lado = 150;
   const k = lado / 2 / 1.6; // el negro (radio 1) ocupa algo más de la mitad
   const P = (v: number) => lado / 2 + Math.max(-1.55, Math.min(1.55, v)) * k;
@@ -55,6 +58,20 @@ function Desvio({ sesiones }: { sesiones: Sesion[] }) {
           </View>
         </View>
       )}
+      {esPro && d?.mm && (() => {
+        const c = correccion(d.mm.x, d.mm.y, d.mm.distancia, arma?.clic);
+        return (
+          <View style={{ gap: 4, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.sm }}>
+            <Text style={[s.text, { fontWeight: '700' }]}>Corrección de miras a {d.mm.distancia} m</Text>
+            {Math.abs(d.mm.x) >= 2 && <Text style={s.text}>↔ {textoCorreccion(c.horizontal, 'h', arma?.clic)}</Text>}
+            {Math.abs(d.mm.y) >= 2 && <Text style={s.text}>↕ {textoCorreccion(c.vertical, 'v', arma?.clic)}</Text>}
+            <Text style={[s.muted, { fontSize: 12 }]}>
+              Se repite en {d.mm.sesiones} entrenamientos a esta distancia. Mueve el alza o la torreta hacia donde quieres llevar
+              los disparos. Si tu grupo además es abierto, primero trabaja la técnica y luego las miras.
+            </Text>
+          </View>
+        );
+      })()}
     </Card>
   );
 }

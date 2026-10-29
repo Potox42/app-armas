@@ -92,6 +92,15 @@ export default function Perfil() {
         )}
       </Card>
       <TuLicencia />
+      <Card style={{ gap: space.md }}>
+        <Text style={s.text}>Disparas con la mano</Text>
+        <Segmented
+          value={datos.mano ?? 'diestro'}
+          onChange={store.guardarMano}
+          options={[{ value: 'diestro', label: 'Derecha' }, { value: 'zurdo', label: 'Izquierda' }]}
+        />
+        <Text style={[s.muted, { fontSize: 13 }]}>Sirve para explicarte bien algunos fallos en los resultados del entreno.</Text>
+      </Card>
       <Apariencia />
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }} onPress={() => router.push('/copia')}>
         <Icon name="doc" color={colors.accent} />

@@ -93,16 +93,26 @@ export default function Inicio() {
             color={ultima ? colors.green : colors.text}
           />
         </View>
-        <View style={{ marginTop: space.sm }}>
-          <Button title="◎  Iniciar entrenamiento" onPress={() => router.push('/entrenar')} />
-        </View>
-        <Button
-          title={siguiente && diasHasta(siguiente.fecha) <= 1
-            ? `${diasHasta(siguiente.fecha) === 0 ? 'Hoy' : 'Mañana'} compites: prepara lo que llevar`
-            : 'Voy al campo: pase, papeles y qué llevar'}
-          variant="secondary"
+        <Pressable
           onPress={() => router.push('/campo')}
-        />
+          style={({ pressed }) => [st.campo, pressed && { transform: [{ scale: 0.985 }], opacity: 0.9 }]}
+        >
+          <Degradado desde={colors.greenSoft} hasta={colors.cardBottom} brillo={colors.green} />
+          <View style={st.campoIcono}>
+            <Icon name="qr" size={26} color={colors.bg} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={st.campoEtiqueta}>
+              {siguiente && diasHasta(siguiente.fecha) <= 1
+                ? `${diasHasta(siguiente.fecha) === 0 ? 'Hoy' : 'Mañana'} compites`
+                : 'Antes de salir'}
+            </Text>
+            <Text style={st.campoTitulo}>Voy al campo</Text>
+            <Text style={st.campoTexto}>Pase, papeles y qué llevar</Text>
+          </View>
+          <Icon name="chevron" color={colors.green} />
+        </Pressable>
+        <Button title="◎  Iniciar entrenamiento" onPress={() => router.push('/entrenar')} />
       </View>
 
       {prioridad && (
@@ -231,6 +241,17 @@ const st = StyleSheet.create({
   },
   accesoTitulo: { color: colors.text, fontSize: 16, fontWeight: '800' },
   accesoTexto: { color: colors.textMuted, fontSize: 12, lineHeight: 16 },
+  campo: {
+    flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, marginTop: space.sm,
+    borderRadius: radius.lg, borderWidth: 1.5, borderColor: colors.green, overflow: 'hidden', zIndex: 0,
+    shadowColor: colors.green, shadowOpacity: 0.3, shadowRadius: 16, shadowOffset: { width: 0, height: 8 },
+  },
+  campoIcono: {
+    width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.green,
+  },
+  campoEtiqueta: { color: colors.green, fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  campoTitulo: { color: colors.text, fontSize: 20, fontWeight: '900', letterSpacing: -0.4 },
+  campoTexto: { color: colors.textMuted, fontSize: 13 },
   tile: { borderRadius: radius.lg, padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md },
   entrenar: { backgroundColor: colors.accent, paddingVertical: space.xl },
   square: { flex: 1, flexDirection: 'column', alignItems: 'flex-start', gap: 6 },

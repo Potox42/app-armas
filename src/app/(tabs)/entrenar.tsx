@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { MiniDiana } from '@/components/Diana';
-import { geometria } from '@/lib/diana';
 import { useLicenciaApp } from '@/components/Activacion';
 import { Degradado } from '@/components/Degradado';
+import { ListaPorMes } from '@/components/Historial';
 import { Icon } from '@/components/Icon';
 import { Card, Screen, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { formatear } from '@/lib/fechas';
-import { dianasDe, formatoMedia, media, todosLosDisparos, totalSesion } from '@/lib/sesiones';
+import { formatoMedia, media, todosLosDisparos } from '@/lib/sesiones';
 import { colors, radius, space } from '@/theme';
 
 export default function Entrenar() {
@@ -90,23 +89,7 @@ export default function Entrenar() {
                 <Icon name="chevron" color={colors.textMuted} />
               </Card>
             )}
-            {abierta === armaId && sesiones.map((x) => {
-              const d = todosLosDisparos(x);
-              const nDianas = dianasDe(x).length;
-              return (
-                <Card key={x.id} onPress={() => router.push(`/sesion/${x.id}`)} style={[st.fila, st.dentro]}>
-                  <View style={st.mini}><MiniDiana disparos={d} tamano={52} modelo={geometria(x).diana} /></View>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={st.nombre} numberOfLines={1}>{formatear(x.fecha.slice(0, 10))} · {x.distancia} m</Text>
-                    <Text style={s.muted} numberOfLines={1}>{nDianas > 1 ? `${nDianas} dianas · ` : ''}{d.length} disparos</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={st.total}>{totalSesion(x)}</Text>
-                    <Text style={s.muted}>media {formatoMedia(media(d))}</Text>
-                  </View>
-                </Card>
-              );
-            })}
+            {abierta === armaId && <ListaPorMes sesiones={sesiones} />}
           </View>
         );
       })}
@@ -126,9 +109,7 @@ const st = StyleSheet.create({
   nuevaTitulo: { color: '#fff', fontSize: 19, fontWeight: '900' },
   nuevaSub: { color: 'rgba(255,255,255,0.8)', fontSize: 13 },
   fila: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
-  mini: { borderRadius: 26, overflow: 'hidden' },
   dentro: { marginLeft: space.lg },
   media: { color: colors.green, fontSize: 20, fontWeight: '800' },
   nombre: { color: colors.text, fontSize: 16, fontWeight: '700' },
-  total: { color: colors.green, fontSize: 22, fontWeight: '700' },
 });

@@ -28,9 +28,10 @@ export default function NuevaSesion() {
   const [modalidad, setModalidad] = useState<Modalidad>(ultima?.modalidad ?? 'Precisión');
   const [distancia, setDistancia] = useState(ultima?.distancia ?? 25);
   const [municion, setMunicion] = useState(ultima?.municion ?? '');
-  const [porSerie, setPorSerie] = useState(String(ultima?.disparosPorSerie ?? 10) as '5' | '10');
+  const [porSerie, setPorSerie] = useState(String(ultima?.disparosPorSerie ?? 10) as '5' | '10' | '0');
   const [series, setSeries] = useState(String(ultima?.seriesPrevistas ?? 0));
   const [registro, setRegistro] = useState<Registro>(ultima?.registro ?? 'diana');
+  const [tipo, setTipo] = useState<'entreno' | 'competicion'>('entreno');
   const [nombrePlantilla, setNombrePlantilla] = useState<string | null>(null); // abierto: guardar como plantilla
   const plantillas = store.datos.plantillas ?? [];
 
@@ -39,7 +40,7 @@ export default function NuevaSesion() {
     setModalidad(p.modalidad);
     setDistancia(p.distancia);
     if (p.municion !== undefined) setMunicion(p.municion);
-    setPorSerie(String(p.disparosPorSerie) as '5' | '10');
+    setPorSerie(String(p.disparosPorSerie) as '5' | '10' | '0');
     setSeries(String(p.seriesPrevistas ?? 0));
     if (p.registro) setRegistro(p.registro);
   };
@@ -63,6 +64,7 @@ export default function NuevaSesion() {
     const id = store.nuevaSesion({
       armaId, modalidad, distancia, municion: municion.trim(), disparosPorSerie: Number(porSerie),
       seriesPrevistas: Number(series) || undefined, registro, diana: diana.id, calibreMm,
+      competicion: tipo === 'competicion' || undefined,
     });
     router.replace(`/sesion/${id}`);
   };
@@ -127,7 +129,8 @@ export default function NuevaSesion() {
       />
 
       <Text style={st.paso}>5. Disparos por serie</Text>
-      <Segmented value={porSerie} onChange={setPorSerie} options={[{ value: '5', label: '5' }, { value: '10', label: '10' }]} />
+      <Segmented value={porSerie} onChange={setPorSerie} options={[{ value: '0', label: 'Libre' }, { value: '5', label: '5' }, { value: '10', label: '10' }]} />
+      {porSerie === '0' && <Text style={s.muted}>Sin límite: tiras los que quieras en la diana y pulsas «Finalizar serie» cuando acabes.</Text>}
 
       <Text style={st.paso}>6. Número de series</Text>
       <Segmented
@@ -156,6 +159,9 @@ export default function NuevaSesion() {
             ? 'Marcas dónde entró cada disparo: la app calcula la puntuación y tu agrupación.'
             : 'Más rápido: tocas la puntuación de cada disparo (10, 9, 8…). No guarda dónde entró.'}
       </Text>
+
+      <Text style={st.paso}>8. Tipo</Text>
+      <Segmented value={tipo} onChange={setTipo} options={[{ value: 'entreno', label: 'Entreno' }, { value: 'competicion', label: 'Competición' }]} />
 
       <Text style={[s.muted, { marginTop: space.sm }]}>
         En la sesión apuntas todas las dianas del día: cuando cambies la hoja, pulsa «Cambiar de diana».

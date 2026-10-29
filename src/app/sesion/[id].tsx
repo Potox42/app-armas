@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View, type ScrollViewInstance } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
+import { SoloPro, useLicenciaApp } from '@/components/Activacion';
+import { Conclusion, MedidasGrupo } from '@/components/AnalisisDiana';
 import { Anillo, Cifra } from '@/components/Cifra';
 import { CamaraDiana } from '@/components/CamaraDiana';
 import { Diana, MiniDiana } from '@/components/Diana';
@@ -14,6 +16,8 @@ import { useStore } from '@/data/store';
 import type { Sesion } from '@/data/types';
 import { confirmar } from '@/lib/confirmar';
 import { geometria } from '@/lib/diana';
+import { centrosSeries, dosGrupos, medidas, sueltos } from '@/lib/grupo';
+import { recordsBatidos } from '@/lib/historial';
 import { formatear } from '@/lib/fechas';
 import { volver } from '@/lib/volver';
 import { decir, guardarVoz, leerVoz } from '@/lib/voz';
@@ -41,7 +45,9 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   const arma = store.arma(sesion.armaId);
   const nSerie = sesion.series.length;
   const serie = sesion.series[nSerie - 1];
-  const completa = serie.disparos.length >= sesion.disparosPorSerie;
+  // Disparos por serie «libre» (0): sin límite, para tirar 20 o 30 en la misma diana.
+  const libre = !sesion.disparosPorSerie;
+  const completa = !libre && serie.disparos.length >= sesion.disparosPorSerie;
   const ultimaSerie = !!sesion.seriesPrevistas && nSerie >= sesion.seriesPrevistas;
   const ultimo = serie.disparos[serie.disparos.length - 1];
   // Cada diana es una hoja nueva: solo se ven los disparos de las series anteriores de esta diana.
@@ -103,8 +109,12 @@ function Asistente({ sesion }: { sesion: Sesion }) {
     else store.nuevaSerie(sesion.id);
   };
 
-  const titulo = `Serie ${nSerie}${sesion.seriesPrevistas ? `/${sesion.seriesPrevistas}` : ''} · Disparo ${Math.min(serie.disparos.length + 1, sesion.disparosPorSerie)}/${sesion.disparosPorSerie}`;
+  const titulo = `Serie ${nSerie}${sesion.seriesPrevistas ? `/${sesion.seriesPrevistas}` : ''} · Disparo ${
+    libre ? serie.disparos.length + 1 : `${Math.min(serie.disparos.length + 1, sesion.disparosPorSerie)}/${sesion.disparosPorSerie}`}`;
   const kicker = `Diana ${nDiana + 1} · ${sesion.modalidad} · ${sesion.distancia} m${arma ? ` · ${arma.marca} ${arma.modelo}` : ''}`;
+
+  // A pantalla completa, la cuenta de la serie va encima de la imagen.
+  const marcador = `${titulo}${ultimo ? ` · Último ${ultimo.valor}` : ''} · Serie ${sumaSerie(serie)}`;
 
   const cifras = (
     <>
@@ -128,7 +138,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   const grafica = (valores.length > 0 || teclado) && (
     <Card style={{ alignItems: 'center', gap: space.xs }}>
       <Text style={[s.muted, { alignSelf: 'flex-start' }]}>Puntuación por disparo · media en verde</Text>
-      <GraficaDisparos valores={valores} previstos={sesion.disparosPorSerie} alto={horizontal ? 110 : 150} />
+      <GraficaDisparos valores={valores} previstos={libre ? 10 : sesion.disparosPorSerie} alto={horizontal ? 110 : 150} />
     </Card>
   );
 
@@ -148,7 +158,9 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         ))}
       </View>
       <View style={st.linea}>
-        {Array.from({ length: sesion.disparosPorSerie }, (_, i) => {
+        {/* En libre se ven los 10 últimos huecos. */}
+        {Array.from({ length: libre ? 10 : sesion.disparosPorSerie }, (_, j) => {
+          const i = libre ? Math.max(0, valores.length - 9) + j : j;
           const v = valores[i];
           return (
             <View key={i} style={[st.hueco, v !== undefined && st.huecoLleno, i === valores.length - 1 && st.huecoUltimo]}>
@@ -169,6 +181,8 @@ function Asistente({ sesion }: { sesion: Sesion }) {
       modelo={modelo}
       calibre={calibre}
       disparos={disparosDiana}
+      marcador={marcador}
+      serie={nSerie}
       onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)}
     />
   );
@@ -186,6 +200,8 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         modelo={modelo}
         calibre={calibre}
         disparos={disparosDiana}
+        marcador={marcador}
+        serie={nSerie}
         onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)}
       />
       <Pressable onPress={() => setConVisor(false)} hitSlop={8}>
@@ -205,7 +221,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
       key={`foto-${nDiana}`}
       modelo={modelo}
       calibre={calibre}
-      faltan={Math.max(0, sesion.disparosPorSerie - serie.disparos.length)}
+      faltan={libre ? 0 : Math.max(0, sesion.disparosPorSerie - serie.disparos.length)}
       onApuntar={(puntos) => store.anadirDisparos(sesion.id, puntos)}
     />
   );
@@ -400,9 +416,17 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
   const ex = extremos(sesion);
   // Sesión entera: se compara con la sesión anterior con la misma arma. Una diana: con la diana anterior.
   const previa = store.datos.sesiones.find((x) => x.terminada && x.id !== completa.id && x.armaId === completa.armaId && x.fecha < completa.fecha);
+  // En series libres (sin número fijo de disparos), los disparos que ha tenido de media cada serie.
+  const porSerie = sesion.disparosPorSerie || Math.max(1, Math.round(disparos.length / Math.max(1, sumas.length)));
+  const m = medidas(disparos);
+  const conSeries = sesion.series.filter((x) => x.disparos.length);
+  const centros = conSeries.length > 1 ? centrosSeries(conSeries).centros : [];
+  const fuera = dosGrupos(disparos) ? [] : sueltos(conSeries).map((x) => x.disparo);
+  const { esPro } = useLicenciaApp();
+  const nuevos = indice < 0 && esPro ? recordsBatidos(completa, store.datos.sesiones) : [];
   const lectura = indice < 0
-    ? resumenSesion(media(disparos), previa ? media(todosLosDisparos(previa)) : undefined, ex.diferencia, sesion.disparosPorSerie)
-    : resumenDiana(indice, media(disparos), indice > 0 ? media(dianas[indice - 1].disparos) : undefined, ex.diferencia, sesion.disparosPorSerie);
+    ? resumenSesion(media(disparos), previa ? media(todosLosDisparos(previa)) : undefined, ex.diferencia, porSerie)
+    : resumenDiana(indice, media(disparos), indice > 0 ? media(dianas[indice - 1].disparos) : undefined, ex.diferencia, porSerie);
 
   return (
     <Screen title="Resultado" back="/entrenar" scrollRef={scroll}>
@@ -421,7 +445,7 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
         <Text style={st.heroArma}>{indice >= 0 ? `Diana ${indice + 1} de ${dianas.length}` : arma ? `${arma.marca} ${arma.modelo}` : 'Arma'}</Text>
         <Text style={[s.muted, { textAlign: 'center' }]}>
           {formatear(sesion.fecha.slice(0, 10))} · {sesion.fecha.slice(11, 16)} · {sesion.modalidad} · {sesion.distancia} m
-          {dianas.length > 1 && indice < 0 ? ` · ${dianas.length} dianas` : ''}
+          {dianas.length > 1 && indice < 0 ? ` · ${dianas.length} dianas` : ''}{completa.competicion ? ' · Competición' : ''}
           {sesion.municion ? `\n${sesion.municion}` : ''}
         </Text>
       </View>
@@ -431,13 +455,22 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
         <Cifra titulo="Dieces" valor={String(reparto[0].n)} detalle={`de ${disparos.length}`} />
         {conSitio
           ? <Cifra titulo="Agrupación" valor={`${Math.round(g.radio)} mm`} detalle="radio medio" />
-          : <Cifra titulo="Series" valor={String(sumas.length)} detalle={`${sesion.disparosPorSerie} disparos c/u`} />}
+          : <Cifra titulo="Series" valor={String(sumas.length)} detalle={sesion.disparosPorSerie ? `${sesion.disparosPorSerie} disparos c/u` : 'disparos libres'} />}
       </View>
+
+      {nuevos.length > 0 && (
+        <Card style={[st.lectura, { borderLeftColor: colors.green }]}>
+          <Text style={st.lecturaTitulo}>🏆 {nuevos.length === 1 ? '¡Nuevo récord!' : `¡${nuevos.length} récords nuevos!`}</Text>
+          {nuevos.map((r) => <Text key={r} style={s.muted}>{r}</Text>)}
+        </Card>
+      )}
 
       <Card style={st.lectura}>
         <Text style={st.lecturaTitulo}>{lectura.titulo}</Text>
         <Text style={s.muted}>{lectura.texto}</Text>
       </Card>
+
+      <Conclusion sesion={sesion} arma={arma} mano={store.datos.mano} />
 
       {indice < 0 && arma && disparos.length > 0 && <GastoMunicion sesion={completa} n={disparos.length} />}
 
@@ -464,7 +497,7 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
           );
         })}
       </View>
-      {sumas.length > 1 && <Card><GraficaSeries valores={sumas} maximo={sesion.disparosPorSerie * 10} /></Card>}
+      {sumas.length > 1 && <Card><GraficaSeries valores={sumas} maximo={sesion.disparosPorSerie ? sesion.disparosPorSerie * 10 : Math.ceil(Math.max(...sumas) / 10) * 10} /></Card>}
 
       <SectionTitle>Reparto de impactos</SectionTitle>
       <Card style={{ gap: space.sm }}>
@@ -483,18 +516,18 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
         <>
           <SectionTitle>{indice < 0 ? 'Todos los impactos' : `Impactos de la diana ${indice + 1}`}</SectionTitle>
           <View style={{ alignItems: 'center' }}>
-            <Diana tamano={tamano} modelo={geometria(sesion).diana} calibre={geometria(sesion).calibre} disparos={[]} anteriores={disparos} grupo={g} />
+            <Diana
+              tamano={tamano} modelo={geometria(sesion).diana} calibre={geometria(sesion).calibre} disparos={[]} anteriores={disparos} grupo={g}
+              centros={centros.map((c) => ({ x: c.x, y: c.y, etiqueta: String(c.serie + 1) }))} sueltos={fuera}
+            />
           </View>
-          <Card style={st.centro}>
-            <Icon name="target" color={colors.accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={s.text}>Centro de impactos</Text>
-              <Text style={s.muted}>{consejo(g.cx, g.cy)}</Text>
-            </View>
-          </Card>
+          {m && (esPro ? <MedidasGrupo sesion={sesion} m={m} arma={arma} /> : <SoloPro que="El análisis del grupo y la corrección de miras" />)}
         </>
       )}
 
+      <Pressable onPress={() => store.marcarCompeticion(completa.id, !completa.competicion)} style={st.borrar} hitSlop={8}>
+        <Text style={st.enlace}>{completa.competicion ? 'Es una competición · cambiar a entreno' : 'Marcar como competición'}</Text>
+      </Pressable>
       <Button title="Volver a Entrenar" onPress={() => volver('/entrenar')} />
       <BotonBorrar sesion={completa} />
     </Screen>
@@ -622,15 +655,6 @@ function resumenDiana(i: number, mediaHoy: number, mediaAntes: number | undefine
     : { titulo: `${formatoMedia(-cambio)} puntos de media menos que la diana ${i}`, texto };
 }
 
-/** Dónde queda el centro del grupo respecto al centro de la diana. */
-function consejo(cx: number, cy: number): string {
-  if (Math.hypot(cx, cy) < 8) return 'Grupo centrado: no hace falta corregir miras.';
-  return `El grupo queda ${horizontal(cx)} y ${vertical(cy)} del centro.`;
-}
-
-const horizontal = (x: number) => (Math.abs(x) < 1 ? 'centrado en horizontal' : `${Math.round(Math.abs(x))} mm a la ${x > 0 ? 'derecha' : 'izquierda'}`);
-const vertical = (y: number) => (Math.abs(y) < 1 ? 'centrado en vertical' : `${Math.round(Math.abs(y))} mm ${y > 0 ? 'abajo' : 'arriba'}`);
-
 function Dato({ titulo, valor, grande, ancho = 1 }: { titulo: string; valor: string; grande?: boolean; ancho?: number }) {
   return (
     <Card style={{ flex: ancho, paddingVertical: space.md, paddingHorizontal: space.md }}>
@@ -724,7 +748,6 @@ const st = StyleSheet.create({
   barraFondo: { flex: 1, height: 12, borderRadius: 6, backgroundColor: colors.cardAlt, overflow: 'hidden' },
   barra: { height: '100%', borderRadius: 6, backgroundColor: colors.accent },
   barraN: { width: 28, color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  centro: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   gasto: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   lectura: { gap: 4, borderLeftWidth: 4, borderLeftColor: colors.accent },
   lecturaTitulo: { color: colors.text, fontSize: 16, fontWeight: '800' },
