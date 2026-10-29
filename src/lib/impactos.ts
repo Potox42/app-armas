@@ -481,16 +481,23 @@ export function afinar(ref: Gris, actual: Gris, dx: number, dy: number, cal: Cal
     }
   }
   let mejor = { dx, dy }, menor = Infinity;
-  for (let oy = -2; oy <= 2; oy += 0.5) {
-    for (let ox = -2; ox <= 2; ox += 0.5) {
-      let suma = 0;
-      for (let k = 0; k < puntos.length; k += 2) {
-        const x = puntos[k], y = puntos[k + 1];
-        suma += Math.abs(ref.d[y * ref.w + x] - muestra(actual, x - dx - ox, y - dy - oy));
+  // Primero a saltos de un píxel hasta 4 (el centro del negro puede fallar algo más con el móvil
+  // moviéndose en el soporte) y luego a medio píxel alrededor del mejor.
+  const probar = (cx: number, cy: number, alcance: number, paso: number) => {
+    for (let oy = -alcance; oy <= alcance; oy += paso) {
+      for (let ox = -alcance; ox <= alcance; ox += paso) {
+        let suma = 0;
+        for (let k = 0; k < puntos.length; k += 2) {
+          const x = puntos[k], y = puntos[k + 1];
+          suma += Math.abs(ref.d[y * ref.w + x] - muestra(actual, x - cx - ox, y - cy - oy));
+        }
+        if (suma < menor) { menor = suma; mejor = { dx: cx + ox, dy: cy + oy }; }
       }
-      if (suma < menor) { menor = suma; mejor = { dx: dx + ox, dy: dy + oy }; }
     }
-  }
+  };
+  probar(dx, dy, 4, 1);
+  const grueso = mejor;
+  probar(grueso.dx, grueso.dy, 1, 0.5);
   return mejor;
 }
 
@@ -523,7 +530,8 @@ export function comparar(
     for (let x = borde; x < w - borde; x++) {
       if ((x - cal.cx) ** 2 + (y - cal.cy) ** 2 > rZona * rZona) continue;
       const i = y * w + x;
-      if (actual.d[i] === 0 && ref.d[i] === 0) continue;
+      // Fuera de la imagen (al alinear, lo que entra por el borde vale 0): no se compara.
+      if (actual.d[i] === 0 || ref.d[i] === 0) continue;
       zona++;
       const dif = actual.d[i] - ref.d[i];
       if (Math.abs(dif) <= 28) continue;
@@ -570,27 +578,31 @@ export class Vigia {
   private ultima: Gris | null = null; // última imagen alineada, para tomarla de referencia
   private pendiente: Impacto | null = null;
   private estables = 0;
+  private quietas = 2; // imágenes seguidas sin moverse el móvil
 
   /** Procesa una imagen. Devuelve el impacto confirmado, si lo hay. */
   procesar(g: Gris): { estado: 'buscando' | 'calibrando' | 'vigilando'; impacto?: Impacto; cal?: Calibracion } {
     // Ya fijada, la diana se sigue buscando donde estaba; si no, donde la tocó el tirador o en medio.
-    const cerca = this.cal ? { x: this.cal.cx, y: this.cal.cy } : this.centro ?? undefined;
+    const donde = this.actual ?? this.cal;
+    const cerca = donde ? { x: donde.cx, y: donde.cy } : this.centro ?? undefined;
     // Sin pista, si no aparece en medio se mira en casi toda la imagen.
     let cal = calibrar(g, 0.48, cerca) ?? (!cerca ? calibrar(g, 0.7) : null);
     // Ya fijada, una «diana» de otro tamaño es un error de búsqueda (un anillo, un agujero): se
     // sigue con la fijada.
-    if (cal && this.cal && Math.abs(cal.rx / this.cal.rx - 1) > 0.15) cal = this.cal;
+    if (cal && this.cal && Math.abs(cal.rx / this.cal.rx - 1) > 0.15) cal = null;
     if (!cal) {
       this.estables = 0;
-      return { estado: this.cal ? 'vigilando' : 'buscando' };
+      return { estado: this.cal ? 'vigilando' : 'buscando', cal: this.actual ?? this.cal ?? undefined };
     }
     if (!this.cal) {
       // Se espera a que la diana esté quieta tres imágenes seguidas antes de fijarla.
-      const quieta = this.previa && Math.hypot(cal.cx - this.previa.cx, cal.cy - this.previa.cy) < 0.03 * cal.rx;
+      // (Con holgura: en el soporte del catalejo el móvil siempre tiembla un poco.)
+      const quieta = this.previa && Math.hypot(cal.cx - this.previa.cx, cal.cy - this.previa.cy) < 0.06 * cal.rx;
       this.previa = cal;
       this.estables = quieta ? this.estables + 1 : 0;
       if (this.estables < 2) return { estado: 'calibrando', cal };
       this.cal = cal;
+      this.actual = cal;
       this.ref = detalle(g, cal, this.diana);
       return { estado: 'vigilando', cal };
     }
@@ -598,28 +610,44 @@ export class Vigia {
     const { dx, dy } = afinar(this.ref!, det, this.cal.cx - cal.cx, this.cal.cy - cal.cy, this.cal);
     const alineada = desplazar(det, dx, dy);
     this.ultima = alineada;
+    // Dónde está ahora la diana en la imagen: si el móvil se ha movido un poco en el soporte, el
+    // círculo, las marcas y los toques la siguen (los impactos se miden siempre sobre la fijada).
+    const ahora = { ...this.cal, cx: this.cal.cx - dx, cy: this.cal.cy - dy };
+    const antes = this.actual ?? ahora;
+    // Movimientos de un par de píxeles: se suavizan para que el círculo no tiemble.
+    const salto = Math.hypot(ahora.cx - antes.cx, ahora.cy - antes.cy);
+    this.actual = salto < 3 ? { ...ahora, cx: (ahora.cx + antes.cx) / 2, cy: (ahora.cy + antes.cy) / 2 } : ahora;
+    // Justo después de un golpe al móvil no se cuenta nada: se espera a que vuelva a estar quieto.
+    if (salto >= 3) this.quietas = 0;
+    else this.quietas++;
+    if (this.quietas < 2) {
+      this.pendiente = null;
+      return { estado: 'vigilando', cal: this.actual };
+    }
     const { impacto, cambio } = comparar(this.ref!, alineada, this.cal, this.calibreMm, this.diana);
     if (cambio > 0.05) {
       // Ha cambiado demasiado (se ha movido el móvil o la luz): nueva referencia sin contar nada.
       this.ref = alineada;
       this.pendiente = null;
-      return { estado: 'vigilando', cal: this.cal };
+      return { estado: 'vigilando', cal: this.actual };
     }
     if (!impacto) {
       this.pendiente = null;
-      return { estado: 'vigilando', cal: this.cal };
+      return { estado: 'vigilando', cal: this.actual };
     }
     const r = 2 * (this.calibreMm / 2) * ((this.cal.rx + this.cal.ry) / this.diana.negro) + 2;
     if (this.pendiente && Math.hypot(impacto.xPx - this.pendiente.xPx, impacto.yPx - this.pendiente.yPx) < r) {
       this.pendiente = null;
       this.ref = alineada;
-      return { estado: 'vigilando', cal: this.cal, impacto };
+      return { estado: 'vigilando', cal: this.actual, impacto };
     }
     this.pendiente = impacto;
-    return { estado: 'vigilando', cal: this.cal };
+    return { estado: 'vigilando', cal: this.actual };
   }
 
   private previa: Calibracion | null = null;
+  /** Dónde está la diana en la imagen ahora (la fijada, movida lo que se haya movido el móvil). */
+  actual: Calibracion | null = null;
 
   /**
    * El tirador ha marcado un disparo a mano: lo que se ve ahora pasa a ser la referencia, para no
@@ -634,6 +662,8 @@ export class Vigia {
   reiniciar() {
     this.ultima = null;
     this.cal = null;
+    this.actual = null;
+    this.quietas = 2;
     this.ref = null;
     this.pendiente = null;
     this.previa = null;

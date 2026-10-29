@@ -247,7 +247,8 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         return;
       }
       if (!props.current.activo) return;
-      const mm = aMm(v.cal, x, y, modeloRef.current);
+      // Sobre la diana donde está ahora (si el móvil se ha movido un poco, no donde se fijó).
+      const mm = aMm(v.actual ?? v.cal, x, y, modeloRef.current);
       v.marcadoAMano();
       props.current.onImpacto(mm.x, mm.y);
     };
@@ -358,7 +359,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         c.stroke();
       }
       c.fillStyle = '#FF3B30';
-      const cal0 = vigia.current.cal, radio = (modeloRef.current ?? DIANAS.precision).negro / 2;
+      const cal0 = vigia.current.actual ?? vigia.current.cal, radio = (modeloRef.current ?? DIANAS.precision).negro / 2;
       for (const d of cal0 ? props.current.disparos.filter((d) => !d.sinPosicion) : []) {
         const p = { x: cal0!.cx + (d.x / radio) * cal0!.rx, y: cal0!.cy + (d.y / radio) * cal0!.ry };
         c.beginPath();
@@ -377,7 +378,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         return;
       }
       // Al ampliar, en medio queda la diana encontrada (salvo que el tirador haya tocado otro sitio).
-      const fija = vigia.current.cal;
+      const fija = vigia.current.actual ?? vigia.current.cal;
       if (fija && !foco.mano) foco = { fx: fija.cx / ANCHO, fy: fija.cy / Math.round((H / W) * ANCHO), mano: false };
       encajar(gr);
       // Si la imagen cambia de forma o de giro, la calibración anterior ya no vale.
@@ -405,7 +406,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         setUltimo(r.impacto.valor);
         props.current.onImpacto(r.impacto.x, r.impacto.y);
       }
-      dibujar(gr, r.cal ?? vigia.current.cal ?? undefined);
+      dibujar(gr, r.cal ?? vigia.current.actual ?? vigia.current.cal ?? undefined);
     };
 
     // Sin cámara en el navegador (o sin HTTPS), getUserMedia no existe: se trata como un permiso denegado.
