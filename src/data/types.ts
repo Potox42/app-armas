@@ -63,6 +63,7 @@ export interface Arma {
   municion?: MovimientoMunicion[]; // el más reciente primero
   cupoAnual?: number; // si tienes autorización para más cartuchos al año
   maxDeposito?: number; // si tienes autorización para guardar más
+  clic?: { valor: number; unidad: 'MOA' | 'MIL' }; // lo que mueve cada clic del visor o de las miras
 }
 
 export interface Federacion {
@@ -100,7 +101,7 @@ export interface Sesion {
   modalidad: Modalidad;
   distancia: number; // metros
   municion: string;
-  disparosPorSerie: number;
+  disparosPorSerie: number; // 0 = libre (sin límite por serie)
   seriesPrevistas?: number; // sin valor: series libres
   registro?: Registro; // cómo se apuntan los disparos (por defecto, tocando la diana)
   diana?: IdDiana; // diana con la que se puntúa (sin valor: pistola precisión 25 m)
@@ -108,6 +109,7 @@ export interface Sesion {
   series: Serie[];
   terminada: boolean;
   gasto?: 'casa' | 'no'; // al terminar: se restaron los cartuchos de casa o se dijo que no
+  competicion?: boolean; // tirada en competición (sin valor: entrenamiento)
 }
 
 /** Configuración de entrenamiento guardada para empezar con un toque. */
@@ -118,7 +120,7 @@ export interface Plantilla {
   modalidad: Modalidad;
   distancia: number;
   municion?: string;
-  disparosPorSerie: number;
+  disparosPorSerie: number; // 0 = libre (sin límite por serie)
   seriesPrevistas?: number;
   registro?: Registro;
 }
@@ -191,8 +193,12 @@ export interface Anteriores {
   motivo: 'borrado' | 'restaurado';
 }
 
+/** Mano con la que dispara el tirador: cambia la lectura de algunos errores (gatillazo). */
+export type Mano = 'diestro' | 'zurdo';
+
 export interface Datos {
   nombre: string;
+  mano?: Mano; // sin valor: diestro
   ajustes?: Ajustes;
   permiso: PermisoArmas;
   armas: Arma[];

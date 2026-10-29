@@ -4,11 +4,14 @@ import { router, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import { Analisis } from '@/components/Analisis';
 import { Chips } from '@/components/Chips';
+import { Comparar, ExportarCsv, FallosRepetidos, Filtros, ListaPorMes, Records } from '@/components/Historial';
 import { Card, Screen, Segmented, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import type { Sesion } from '@/data/types';
 import { diasHasta, formatear } from '@/lib/fechas';
-import { agrupacion, formatoMedia, media, todosLosDisparos, totalSesion } from '@/lib/sesiones';
+import { filtrar, type Filtro } from '@/lib/historial';
+import { MIN_IMPACTOS } from '@/lib/grupo';
+import { agrupacion, conPosicion, formatoMedia, media, todosLosDisparos } from '@/lib/sesiones';
 import { colors, space } from '@/theme';
 
 type Periodo = '30' | '182' | '365' | 'todo';
@@ -17,7 +20,7 @@ interface Punto {
   sesion: Sesion;
   dia: number; // días desde hoy (negativo)
   media: number;
-  agrupacion: number;
+  agrupacion: number | null; // radio medio en mm; null si no hay bastantes impactos marcados en la diana
 }
 
 export default function Evolucion() {
@@ -29,18 +32,20 @@ export default function Evolucion() {
     armaParam ?? datos.sesiones.find((x) => x.terminada)?.armaId ?? '',
   );
   const [periodo, setPeriodo] = useState<Periodo>('182');
+  const [filtro, setFiltro] = useState<Filtro>({});
 
   const hoy = new Date().toISOString().slice(0, 10);
-  const puntos: Punto[] = datos.sesiones
-    .filter((x) => x.terminada && todosLosDisparos(x).length > 0)
-    .filter((x) => x.armaId === armaId)
+  // Todas las sesiones del arma (para los filtros) y las que pasan los filtros (para récords y comparar).
+  const delArma = datos.sesiones.filter((x) => x.terminada && todosLosDisparos(x).length > 0 && x.armaId === armaId);
+  const filtradas = filtrar(delArma, filtro);
+  const puntos: Punto[] = filtradas
     .map((x) => {
       const disparos = todosLosDisparos(x);
       return {
         sesion: x,
         dia: diasHasta(x.fecha.slice(0, 10), hoy),
         media: media(disparos),
-        agrupacion: agrupacion(disparos).radio,
+        agrupacion: conPosicion(disparos).length >= MIN_IMPACTOS ? agrupacion(disparos).radio : null,
       };
     })
     .filter((p) => periodo === 'todo' || -p.dia <= Number(periodo))
@@ -51,7 +56,10 @@ export default function Evolucion() {
   const primero = puntos[0];
   const ultimo = puntos[puntos.length - 1];
   const tendencia = regresion(puntos.map((p) => [p.dia, p.media]));
-  const tendenciaAgrup = regresion(puntos.map((p) => [p.dia, p.agrupacion]));
+  const conGrupo = puntos.filter((p): p is Punto & { agrupacion: number } => p.agrupacion !== null);
+  const tendenciaAgrup = regresion(conGrupo.map((p) => [p.dia, p.agrupacion]));
+  const mejorGrupo = conGrupo.length ? conGrupo.reduce((a, b) => (b.agrupacion < a.agrupacion ? b : a)) : undefined;
+  const grupoMedio = conGrupo.length ? conGrupo.reduce((t, p) => t + p.agrupacion, 0) / conGrupo.length : 0;
   const disparos = puntos.reduce((t, p) => t + todosLosDisparos(p.sesion).length, 0);
 
   return (
@@ -60,7 +68,7 @@ export default function Evolucion() {
         <Chips
           opciones={armasUsadas.map((a) => ({ value: a.id, label: `${a.marca} ${a.modelo}` }))}
           valor={armaId}
-          onChange={setArmaId}
+          onChange={(v) => { setArmaId(v); setFiltro({}); }}
         />
       )}
       {armaElegida && (
@@ -76,6 +84,7 @@ export default function Evolucion() {
           { value: 'todo', label: 'Todo' },
         ]}
       />
+      <Filtros sesiones={delArma} filtro={filtro} onChange={setFiltro} />
 
       {puntos.length < 2 ? (
         <Card><Text style={s.muted}>Hacen falta al menos dos entrenamientos con esta arma en este periodo para ver su evolución.</Text></Card>
@@ -88,48 +97,72 @@ export default function Evolucion() {
               cambio={cambio(tendencia.en(primero.dia), tendencia.en(ultimo.dia))}
               mejorSiSube
             />
-            <Kpi
-              titulo="Agrupación media"
-              valor={`${Math.round(tendenciaAgrup.en(primero.dia))} → ${Math.round(tendenciaAgrup.en(ultimo.dia))} mm`}
-              cambio={cambio(tendenciaAgrup.en(primero.dia), tendenciaAgrup.en(ultimo.dia))}
-            />
+            {conGrupo.length >= 2 && (
+              <Kpi
+                titulo="Agrupación media"
+                valor={`${Math.round(tendenciaAgrup.en(conGrupo[0].dia))} → ${Math.round(tendenciaAgrup.en(conGrupo[conGrupo.length - 1].dia))} mm`}
+                cambio={cambio(tendenciaAgrup.en(conGrupo[0].dia), tendenciaAgrup.en(conGrupo[conGrupo.length - 1].dia))}
+              />
+            )}
           </View>
           <Text style={[s.muted, { fontSize: 12 }]}>
             Valores de la línea de tendencia al principio y al final del periodo. {puntos.length} entrenamientos, {disparos} disparos.
           </Text>
+          {mejorGrupo && (
+            <View style={st.fila}>
+              <Card style={{ flex: 1, gap: 4 }} onPress={() => router.push(`/sesion/${mejorGrupo.sesion.id}`)}>
+                <Text style={[s.muted, { fontSize: 12 }]}>Tu mejor grupo</Text>
+                <Text style={{ color: colors.green, fontSize: 18, fontWeight: '700' }}>{Math.round(mejorGrupo.agrupacion)} mm</Text>
+                <Text style={[s.muted, { fontSize: 12 }]}>{formatear(mejorGrupo.sesion.fecha.slice(0, 10))}</Text>
+              </Card>
+              <Card style={{ flex: 1, gap: 4 }}>
+                <Text style={[s.muted, { fontSize: 12 }]}>Tu grupo medio</Text>
+                <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>{Math.round(grupoMedio)} mm</Text>
+                <Text style={[s.muted, { fontSize: 12 }]}>en {conGrupo.length} entrenamientos</Text>
+              </Card>
+            </View>
+          )}
 
           <SectionTitle>Media por disparo</SectionTitle>
           <Card>
-            <Grafica puntos={puntos.map((p) => ({ x: p.dia, y: p.media }))} tendencia={tendencia} decimales={1} />
+            <Grafica puntos={porMeses(puntos.map((p) => ({ x: p.dia, y: p.media, mes: p.sesion.fecha.slice(0, 7) })))} tendencia={tendencia} decimales={1} />
+            {puntos.length > MAX_PUNTOS && <Text style={[s.muted, { fontSize: 12 }]}>Con tantos entrenamientos, cada punto es la media de un mes.</Text>}
           </Card>
 
           <SectionTitle>Agrupación (mm, menos es mejor)</SectionTitle>
-          <Card>
-            <Grafica puntos={puntos.map((p) => ({ x: p.dia, y: p.agrupacion }))} tendencia={tendenciaAgrup} decimales={0} />
+          <Card style={{ gap: space.sm }}>
+            {conGrupo.length >= 2
+              ? <Grafica puntos={porMeses(conGrupo.map((p) => ({ x: p.dia, y: p.agrupacion, mes: p.sesion.fecha.slice(0, 7) })))} tendencia={tendenciaAgrup} decimales={0} />
+              : <Text style={s.muted}>Hacen falta 2 entrenamientos con los impactos marcados en la diana.</Text>}
+            <Text style={[s.muted, { fontSize: 12 }]}>Distancia media de cada impacto al centro del grupo. Si baja, tus disparos se juntan más.</Text>
           </Card>
         </>
       )}
 
+      <FallosRepetidos sesiones={puntos.map((p) => p.sesion)} armas={datos.armas} mano={datos.mano} />
+      <Records sesiones={filtradas} />
+      {filtradas.length > 1 && <Comparar sesiones={filtradas} />}
+
       <Analisis sesiones={puntos.map((p) => p.sesion)} armas={datos.armas} />
 
       <SectionTitle>Entrenamientos</SectionTitle>
-      {[...puntos].reverse().map((p) => {
-        const n = todosLosDisparos(p.sesion).length;
-        return (
-          <Card key={p.sesion.id} onPress={() => router.push(`/sesion/${p.sesion.id}`)} style={st.sesion}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.text}>{formatear(p.sesion.fecha.slice(0, 10))}</Text>
-              <Text style={s.muted}>{p.sesion.modalidad} · {p.sesion.distancia} m</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={st.total}>{totalSesion(p.sesion)} / {n * 10}</Text>
-              <Text style={s.muted}>{Math.round(p.agrupacion)} mm</Text>
-            </View>
-          </Card>
-        );
-      })}
+      {puntos.length === 0 && <Text style={s.muted}>No hay entrenamientos con estos filtros en este periodo.</Text>}
+      <ListaPorMes key={`${armaId}|${periodo}|${JSON.stringify(filtro)}`} sesiones={puntos.map((p) => p.sesion)} />
+      <ExportarCsv sesiones={puntos.map((p) => p.sesion)} armas={datos.armas} nombre={armaElegida ? `${armaElegida.marca}-${armaElegida.modelo}` : 'arma'} />
     </Screen>
   );
+}
+
+const MAX_PUNTOS = 20;
+
+/** Con muchos entrenamientos, un punto por mes (la media del mes en el día medio de sus entrenamientos). */
+function porMeses(pts: { x: number; y: number; mes: string }[]): { x: number; y: number }[] {
+  if (pts.length <= MAX_PUNTOS) return pts;
+  const meses = new Map<string, { x: number; y: number }[]>();
+  for (const p of pts) meses.set(p.mes, [...(meses.get(p.mes) ?? []), p]);
+  return [...meses.values()]
+    .map((l) => ({ x: l.reduce((t, p) => t + p.x, 0) / l.length, y: l.reduce((t, p) => t + p.y, 0) / l.length }))
+    .sort((a, b) => a.x - b.x);
 }
 
 function cambio(desde: number, hasta: number) {

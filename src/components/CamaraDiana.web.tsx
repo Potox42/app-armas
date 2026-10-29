@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { DIANAS } from '@/lib/diana';
 import { aMm, calibrar, Vigia, type Calibracion, type Gris } from '@/lib/impactos';
 import { colors, radius, space } from '@/theme';
@@ -45,6 +45,49 @@ function guardarCamara(id: string) {
   } catch {}
 }
 interface Camara { id: string; nombre: string; virtual: boolean }
+
+/** Aumento elegido (como en la cámara del iPhone: 0,5×, 1×, 2×, Tele…), guardado para la próxima vez. */
+const CLAVE_ZOOM = 'camaraZoom';
+function leerZoom(): number {
+  try {
+    return Number(localStorage.getItem(CLAVE_ZOOM)) || 1;
+  } catch {
+    return 1;
+  }
+}
+function guardarZoom(z: number) {
+  try {
+    localStorage.setItem(CLAVE_ZOOM, String(z));
+  } catch {}
+}
+
+/**
+ * Niveles de aumento, de menos a más. Por debajo de 1× solo se puede con la cámara ultra gran angular
+ * (la del 0,5× del iPhone); entre medias se amplía la imagen. La Tele es la cámara de 3× o 5×.
+ */
+interface Nivel { camara: string; zoom: number; texto: string }
+function nivelesDe(camaras: Camara[], abierta: string): Nivel[] {
+  const fisicas = camaras.filter((c) => !c.virtual);
+  const ultra = fisicas.find((c) => nombreCorto(c.nombre) === '0,5×');
+  const tele = fisicas.find((c) => nombreCorto(c.nombre) === 'Tele');
+  const normal = fisicas.find((c) => nombreCorto(c.nombre) === '1×');
+  const n: Nivel[] = [];
+  if (ultra) n.push({ camara: ultra.id, zoom: 1, texto: '0,5×' }, { camara: ultra.id, zoom: 1.4, texto: '0,7×' });
+  const id = normal?.id ?? (ultra || tele ? '' : abierta);
+  if (normal || !ultra || !tele) {
+    n.push({ camara: id, zoom: 1, texto: '1×' }, { camara: id, zoom: 1.5, texto: '1,5×' }, { camara: id, zoom: 2, texto: '2×' });
+    if (!tele) n.push({ camara: id, zoom: 3, texto: '3×' });
+  }
+  if (tele) n.push({ camara: tele.id, zoom: 1, texto: 'Tele' }, { camara: tele.id, zoom: 1.5, texto: 'Tele 1,5×' }, { camara: tele.id, zoom: 2, texto: 'Tele 2×' });
+  return n;
+}
+
+// Pantalla completa: si se ha usado, vuelve sola al empezar la serie siguiente (también en otra diana).
+const pantallaCompleta = { seguir: false };
+const leerGrande = () => pantallaCompleta.seguir;
+const recordarGrande = () => {
+  pantallaCompleta.seguir = true;
+};
 const esFrontal = (l: string) => /front|frontal|delantera|facetime/i.test(l);
 const esVirtual = (l: string) => /dual|triple|doble/i.test(l);
 /** Nombre corto para el botón, a partir del nombre que da Safari (en español o en inglés). */
@@ -72,20 +115,59 @@ const TEXTOS: Record<Estado, string> = {
   vigilando: 'Listo: dispara. Si se salta un disparo, tócalo en la imagen.',
 };
 
+/** Textos cortos para cuando van encima de la imagen (en horizontal), para que tapen poco. */
+const CORTOS: Partial<Record<Estado, string>> = {
+  buscando: 'Encaja la diana. Si no la encuentro, toca su centro.',
+  calibrando: 'Diana encontrada. Quieto…',
+  vigilando: 'Listo. Si falta un disparo, tócalo.',
+};
+
 /**
  * Vídeo de la cámara trasera (con el móvil en el catalejo) que vigila la diana y avisa de cada
  * impacto nuevo con su posición en mm. Todo se procesa en el móvil; no se guarda el vídeo.
  */
-export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto, disparos = [], onImpacto }: PropsCamaraDiana) {
+export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto, disparos = [], marcador, serie, onImpacto }: PropsCamaraDiana) {
   const { height: altoPantalla } = useWindowDimensions();
   const caja = useRef<unknown>(null); // en la web, el elemento del DOM de la vista
+  // Pantalla completa: el vídeo y sus marcas se pasan a una capa que tapa toda la pantalla (sin
+  // cerrar la cámara, así no hay que volver a buscar la diana).
+  const [quiereGrande, setQuiereGrande] = useState(leerGrande);
+  const [reducidaEn, setReducidaEn] = useState<number | undefined | null>(null); // serie en la que se ha reducido
+  // Al completar la serie se vuelve al tamaño normal para ver los resultados; en la siguiente, otra
+  // vez a pantalla completa.
+  const grande = quiereGrande && activo && !soloVer && reducidaEn !== serie;
+  const reducir = () => setReducidaEn(serie);
+  const contenedor = useRef<HTMLElement | null>(null); // donde está ahora el vídeo
+  const nodoGrande = useRef<HTMLElement | null>(null); // la caja de pantalla completa, si está abierta
+  const elementos = useRef<{ video: HTMLVideoElement; capa: HTMLCanvasElement } | null>(null);
+  const toqueRef = useRef<((e: MouseEvent) => void) | null>(null);
+  const pasarA = (destino: HTMLElement | null) => {
+    const el = elementos.current;
+    if (!destino || !el) return;
+    destino.appendChild(el.video);
+    destino.appendChild(el.capa);
+    contenedor.current = destino;
+    el.video.play().catch(() => {});
+  };
+  const enPantalla = useCallback((nodo: unknown) => {
+    const n = nodo as HTMLElement | null;
+    const pequena = caja.current as HTMLElement | null;
+    nodoGrande.current = n;
+    if (n) {
+      Object.assign(n.style, { clipPath: 'inset(0)' });
+      n.addEventListener('click', (e) => toqueRef.current?.(e));
+      pasarA(n);
+    } else {
+      pasarA(pequena);
+    }
+  }, []);
   const [estado, setEstado] = useState<Estado>('arrancando');
   const [ultimo, setUltimo] = useState<number | null>(null);
   const [intento, setIntento] = useState(0); // «Reintentar» vuelve a pedir la cámara
   // Giro que añade la persona con el botón «Girar», por si el automático no acierta.
   const giroManual = useRef(leerGiro(horizontal));
-  // Visor: aumento digital para ver mejor los agujeros pequeños.
-  const [zoom, setZoom] = useState(1);
+  // Aumento digital (sobre la cámara elegida) para ver mejor los agujeros pequeños.
+  const [zoom, setZoom] = useState(leerZoom);
   const aumento = useRef(1);
   // Cámaras traseras disponibles y la elegida.
   const [camaras, setCamaras] = useState<Camara[]>([]);
@@ -113,6 +195,12 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
   useEffect(() => {
     const raiz = caja.current as unknown as HTMLElement | null;
     if (!raiz) return;
+    contenedor.current = raiz;
+    // Otra cámara (al cambiar el aumento entre 0,5×, 1× y Tele) ve la diana de otro tamaño: se vuelve
+    // a buscar. Los disparos ya apuntados se guardan en mm y se pintan en su sitio al encontrarla.
+    vigia.current.reiniciar();
+    // La caja en la que está el vídeo ahora (la pequeña o la de pantalla completa).
+    const marco = () => contenedor.current ?? raiz;
     const video = document.createElement('video');
     video.playsInline = true;
     video.muted = true;
@@ -124,8 +212,11 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     Object.assign(raiz.style, { clipPath: 'inset(0)' });
     const capa = document.createElement('canvas');
     Object.assign(capa.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none' });
-    raiz.appendChild(video);
-    raiz.appendChild(capa);
+    const destino = nodoGrande.current ?? raiz;
+    destino.appendChild(video);
+    destino.appendChild(capa);
+    contenedor.current = destino;
+    elementos.current = { video, capa };
     const lienzo = document.createElement('canvas');
     const ctx = lienzo.getContext('2d', { willReadFrequently: true })!;
     let flujo: MediaStream | null = null;
@@ -159,11 +250,13 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         return;
       }
       if (!props.current.activo) return;
-      const mm = aMm(v.cal, x, y, modeloRef.current);
+      // Sobre la diana donde está ahora (si el móvil se ha movido un poco, no donde se fijó).
+      const mm = aMm(v.actual ?? v.cal, x, y, modeloRef.current);
       v.marcadoAMano();
       props.current.onImpacto(mm.x, mm.y);
     };
     raiz.addEventListener('click', toque);
+    toqueRef.current = toque;
 
     // Con el móvil en horizontal, el iPhone a veces sigue dando la imagen de la cámara en vertical
     // (sobre todo en la app de la pantalla de inicio): se gira aquí para que la diana se vea derecha.
@@ -178,7 +271,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     // El vídeo se gira con CSS dentro de la caja; si va de lado, su ancho es el alto de la caja.
     // Escala de la imagen girada a la caja (contain) y desplazamiento para centrar el foco al ampliar.
     const vista = (g: number) => {
-      const { width, height } = raiz.getBoundingClientRect();
+      const { width, height } = marco().getBoundingClientRect();
       const { W, H } = medidas(g);
       const k = W && H ? Math.min(width / W, height / H) : 1;
       const z = aumento.current;
@@ -194,7 +287,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     };
     // De un toque en pantalla al punto de la imagen girada (en fracción), con el aumento puesto.
     const fraccion = (cx: number, cy: number) => {
-      const r = raiz.getBoundingClientRect();
+      const r = marco().getBoundingClientRect();
       const { W, H, k, z, tx, ty } = vista(giro());
       if (!W || !H) return null;
       const fx = (cx - r.left - r.width / 2 - tx) / (z * k * W) + 0.5;
@@ -227,7 +320,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       if (!W) return;
       // La capa usa las mismas coordenadas que el vídeo; se encaja igual (contain). Su tamaño es el de
       // la caja (la capa ampliada mide más en pantalla).
-      const caja = raiz.getBoundingClientRect();
+      const caja = marco().getBoundingClientRect();
       capa.width = caja.width * devicePixelRatio;
       capa.height = caja.height * devicePixelRatio;
       const k = Math.min(capa.width / W, capa.height / H);
@@ -269,7 +362,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         c.stroke();
       }
       c.fillStyle = '#FF3B30';
-      const cal0 = vigia.current.cal, radio = (modeloRef.current ?? DIANAS.precision).negro / 2;
+      const cal0 = vigia.current.actual ?? vigia.current.cal, radio = (modeloRef.current ?? DIANAS.precision).negro / 2;
       for (const d of cal0 ? props.current.disparos.filter((d) => !d.sinPosicion) : []) {
         const p = { x: cal0!.cx + (d.x / radio) * cal0!.rx, y: cal0!.cy + (d.y / radio) * cal0!.ry };
         c.beginPath();
@@ -288,7 +381,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         return;
       }
       // Al ampliar, en medio queda la diana encontrada (salvo que el tirador haya tocado otro sitio).
-      const fija = vigia.current.cal;
+      const fija = vigia.current.actual ?? vigia.current.cal;
       if (fija && !foco.mano) foco = { fx: fija.cx / ANCHO, fy: fija.cy / Math.round((H / W) * ANCHO), mano: false };
       encajar(gr);
       // Si la imagen cambia de forma o de giro, la calibración anterior ya no vale.
@@ -316,13 +409,13 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         setUltimo(r.impacto.valor);
         props.current.onImpacto(r.impacto.x, r.impacto.y);
       }
-      dibujar(gr, r.cal ?? vigia.current.cal ?? undefined);
+      dibujar(gr, r.cal ?? vigia.current.actual ?? vigia.current.cal ?? undefined);
     };
 
     // Sin cámara en el navegador (o sin HTTPS), getUserMedia no existe: se trata como un permiso denegado.
     new Promise((ok) => setTimeout(ok, ESPERA_MS))
       .then(() => navigator.mediaDevices.getUserMedia({
-        video: { ...(camaraId ? { deviceId: { exact: camaraId } } : { facingMode: 'environment' }), width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: { ...(camaraId ? { deviceId: { exact: camaraId } } : { facingMode: 'environment' }), width: { ideal: 1920 }, height: { ideal: 1440 } },
         audio: false,
       }))
       .then(async (s) => {
@@ -373,83 +466,132 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       flujo?.getTracks().forEach((t) => t.stop());
       video.remove();
       capa.remove();
+      elementos.current = null;
+      toqueRef.current = null;
     };
   }, [intento, camaraId]);
 
   const ok = estado === 'vigilando';
   const fallo = estado === 'sin-permiso' || estado === 'sin-camara';
   const enMarcha = estado !== 'arrancando' && !fallo;
+  const encima = horizontal || !!alto || grande; // los mandos van sobre la imagen
+  const texto = soloVer
+    ? enMarcha ? 'Visor del catalejo' : TEXTOS[estado]
+    : !activo && ok ? 'Serie completa: pasa a la siguiente para seguir contando.' : (encima && CORTOS[estado]) || TEXTOS[estado];
+
+  // Aumento: se pasa de un nivel al siguiente con − y +; si cambia de cámara, se abre la otra.
+  const abierta = camaras.find((c) => c.id === camaraId)?.id ?? camaras.find((c) => c.nombre === enUso)?.id ?? camaraId;
+  const niveles = nivelesDe(camaras, abierta);
+  const actual = (() => {
+    const i = niveles.findIndex((n) => (n.camara === abierta || (!n.camara && !camaraId)) && n.zoom === zoom);
+    if (i >= 0) return i;
+    const j = niveles.findIndex((n) => n.camara === abierta || (!n.camara && !camaraId));
+    return j >= 0 ? j : 0;
+  })();
+  const irA = (i: number) => {
+    const n = niveles[Math.max(0, Math.min(niveles.length - 1, i))];
+    if (!n) return;
+    setZoom(n.zoom);
+    guardarZoom(n.zoom);
+    if (n.camara !== abierta && n.camara !== camaraId) {
+      guardarCamara(n.camara);
+      setEstado('arrancando');
+      setCamaraId(n.camara);
+    }
+  };
+
+  const mandos = (
+    <>
+      {enMarcha && niveles.length > 1 && (
+        <View style={st.zoom}>
+          <Pastilla titulo="−" onPress={() => irA(actual - 1)} etiqueta="Alejar la imagen" encima={encima} desactivado={actual <= 0} />
+          <Text style={st.zoomTexto}>{niveles[actual]?.texto ?? `${zoom}×`}</Text>
+          <Pastilla titulo="+" onPress={() => irA(actual + 1)} etiqueta="Acercar la imagen" encima={encima} desactivado={actual >= niveles.length - 1} />
+        </View>
+      )}
+      {!soloVer && (ok || estado === 'calibrando') && (
+        <Pastilla titulo="Recolocar" etiqueta="Volver a buscar la diana" encima={encima} onPress={() => {
+          vigia.current.reiniciar();
+          setEstado('buscando');
+        }} />
+      )}
+      {fallo && (
+        <Pastilla titulo="Reintentar" etiqueta="Volver a pedir la cámara" encima={encima} onPress={() => {
+          setEstado('arrancando');
+          setIntento((n) => n + 1);
+        }} />
+      )}
+      {enMarcha && (
+        <Pastilla titulo="Girar" etiqueta="Girar la imagen de la cámara" encima={encima} onPress={() => {
+          giroManual.current = (giroManual.current + 90) % 360;
+          guardarGiro(horizontal, giroManual.current);
+          setEstado('buscando');
+        }} />
+      )}
+      {!soloVer && !grande && activo && (
+        <Pastilla titulo="⤢ Pantalla completa" etiqueta="Ver la cámara a pantalla completa" encima={encima} onPress={() => {
+          recordarGrande();
+          setQuiereGrande(true);
+          setReducidaEn(null);
+        }} />
+      )}
+    </>
+  );
+  const estadoVista = (
+    <>
+      {(estado === 'arrancando' || estado === 'calibrando') && <ActivityIndicator color={colors.accent} />}
+      <Text style={[st.texto, encima && st.textoEncima, ok && { color: colors.green }]} numberOfLines={encima ? 2 : undefined}>
+        {texto}
+        {ultimo !== null && ok ? `  Último: ${ultimo}` : ''}
+      </Text>
+    </>
+  );
+
   return (
     <View style={st.marco}>
       <View ref={caja as never} style={alto ? [st.videoHorizontal, { height: alto }] : horizontal ? [st.videoHorizontal, { height: Math.max(160, altoPantalla - 110) }] : st.video} />
-      {/* En horizontal los botones van encima del vídeo (abajo), para que la diana se vea lo más grande posible. */}
-      <View style={[st.pie, (horizontal || !!alto) && st.pieEncima]}>
-        {(estado === 'arrancando' || estado === 'calibrando') && <ActivityIndicator color={colors.accent} />}
-        <Text style={[st.texto, ok && { color: colors.green }]}>
-          {soloVer
-            ? enMarcha ? 'Visor del catalejo' : TEXTOS[estado]
-            : !activo && ok ? 'Serie completa: pasa a la siguiente para seguir contando.' : TEXTOS[estado]}
-          {ultimo !== null && ok ? `  Último: ${ultimo}` : ''}
-        </Text>
-        {enMarcha && camaras.length > 1 && (
-          <Pressable
-            hitSlop={8}
-            onPress={() => {
-              const i = camaras.findIndex((c) => c.id === camaraId || (!camaraId && c.nombre === enUso));
-              const sig = camaras[(i + 1) % camaras.length];
-              guardarCamara(sig.id);
-              setEstado('arrancando');
-              setCamaraId(sig.id);
-            }}
-            accessibilityLabel="Cambiar de cámara"
-          >
-            <Text style={st.boton}>Cámara {nombreCorto(enUso)}</Text>
+      {encima ? (
+        // Encima de la imagen, arriba el estado y abajo a la derecha los mandos: tapan lo menos posible.
+        <>
+          <View style={st.estadoEncima} pointerEvents="none">{estadoVista}</View>
+          <View style={st.mandosEncima}>{mandos}</View>
+        </>
+      ) : (
+        <View style={st.pie}>
+          {estadoVista}
+          <View style={st.mandosPie}>{mandos}</View>
+        </View>
+      )}
+      <Modal visible={grande} animationType="none" transparent={false} onRequestClose={reducir}>
+        <View style={st.grande}>
+          <View ref={enPantalla as never} style={StyleSheet.absoluteFill} />
+          <View style={[st.estadoEncima, st.margenSeguro]} pointerEvents="none">
+            {estadoVista}
+            {!!marcador && <Text style={st.marcador}>{marcador}</Text>}
+          </View>
+          <Pressable onPress={reducir} hitSlop={16} accessibilityLabel="Salir de pantalla completa" style={[st.pastilla, st.reducir]}>
+            <Text style={[st.boton, st.reducirTexto]}>Reducir</Text>
           </Pressable>
-        )}
-        {enMarcha && (
-          <Pressable hitSlop={8} onPress={() => setZoom((z) => (z >= 3 ? 1 : z + 1))} accessibilityLabel="Ampliar la imagen">
-            <Text style={st.boton}>Ampliar {zoom}×</Text>
-          </Pressable>
-        )}
-        {!soloVer && (ok || estado === 'calibrando') && (
-          <Pressable
-            hitSlop={8}
-            onPress={() => {
-              vigia.current.reiniciar();
-              setEstado('buscando');
-            }}
-            accessibilityLabel="Volver a buscar la diana"
-          >
-            <Text style={st.boton}>Recolocar</Text>
-          </Pressable>
-        )}
-        {fallo && (
-          <Pressable
-            hitSlop={8}
-            onPress={() => {
-              setEstado('arrancando');
-              setIntento((n) => n + 1);
-            }}
-            accessibilityLabel="Volver a pedir la cámara"
-          >
-            <Text style={st.boton}>Reintentar</Text>
-          </Pressable>
-        )}
-        {enMarcha && (
-          <Pressable
-            hitSlop={8}
-            onPress={() => {
-              giroManual.current = (giroManual.current + 90) % 360;
-              guardarGiro(horizontal, giroManual.current);
-              setEstado('buscando');
-            }}
-            accessibilityLabel="Girar la imagen de la cámara"
-          >
-            <Text style={st.boton}>Girar</Text>
-          </Pressable>
-        )}
-      </View>
+          <View style={[st.mandosEncima, st.margenSeguro]}>{mandos}</View>
+        </View>
+      </Modal>
     </View>
+  );
+}
+
+function Pastilla({ titulo, etiqueta, onPress, encima, desactivado = false }: {
+  titulo: string; etiqueta: string; onPress: () => void; encima: boolean; desactivado?: boolean;
+}) {
+  return (
+    <Pressable
+      hitSlop={6}
+      disabled={desactivado}
+      onPress={onPress}
+      accessibilityLabel={etiqueta}
+      style={[encima ? st.pastilla : st.pastillaPie, desactivado && { opacity: 0.35 }]}
+    >
+      <Text style={st.boton}>{titulo}</Text>
+    </Pressable>
   );
 }
 
@@ -457,8 +599,30 @@ const st = StyleSheet.create({
   marco: { position: 'relative', borderRadius: radius.lg, overflow: 'hidden', backgroundColor: '#000', borderWidth: 1, borderColor: colors.border },
   video: { width: '100%', aspectRatio: 3 / 4, position: 'relative', overflow: 'hidden' },
   videoHorizontal: { width: '100%', position: 'relative', overflow: 'hidden' },
-  pieEncima: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingVertical: space.sm, backgroundColor: 'rgba(8, 16, 30, 0.72)' },
-  pie: { flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md, backgroundColor: colors.card },
-  texto: { flex: 1, color: colors.text, fontSize: 14 },
-  boton: { color: colors.accent, fontWeight: '700' },
+  pie: { gap: space.sm, padding: space.md, backgroundColor: colors.card },
+  mandosPie: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm },
+  estadoEncima: {
+    position: 'absolute', top: 6, left: 6, maxWidth: '70%', flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.md, backgroundColor: 'rgba(8, 16, 30, 0.6)', flexWrap: 'wrap',
+  },
+  mandosEncima: {
+    position: 'absolute', right: 6, bottom: 6, left: 6, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', gap: 6,
+  },
+  pastilla: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: 'rgba(8, 16, 30, 0.6)' },
+  pastillaPie: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.cardAlt },
+  zoom: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  zoomTexto: { color: '#fff', fontWeight: '700', fontSize: 13, minWidth: 44, textAlign: 'center' },
+  texto: { flexShrink: 1, color: colors.text, fontSize: 14 },
+  textoEncima: { fontSize: 12, color: '#fff' },
+  boton: { color: colors.accent, fontWeight: '700', fontSize: 13 },
+  grande: { flex: 1, backgroundColor: '#000' },
+  marcador: { color: '#fff', fontSize: 13, fontWeight: '700', width: '100%' },
+  // Grande y fácil de pulsar con el móvil en el catalejo.
+  reducir: {
+    position: 'absolute', top: 8, right: 'max(8px, env(safe-area-inset-right))' as never,
+    minWidth: 120, minHeight: 52, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(8, 16, 30, 0.8)', borderWidth: 2, borderColor: colors.accent,
+  },
+  reducirTexto: { fontSize: 18 },
+  margenSeguro: { left: 'max(6px, env(safe-area-inset-left))' as never, right: 'max(6px, env(safe-area-inset-right))' as never },
 });

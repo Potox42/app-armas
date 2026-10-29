@@ -15,6 +15,7 @@ export interface Desvio {
   centros: { x: number; y: number }[]; // centro de cada entrenamiento, en la misma escala
   constante: number; // entrenamientos con el centro hacia el mismo lado que la media (0 a 1)
   texto: string | null; // «abajo a la izquierda»; null si no hay un desvío claro
+  mm: { x: number; y: number; distancia: number; sesiones: number } | null; // centro medio en mm a la distancia más usada
 }
 
 const MIN_SESIONES_DESVIO = 3;
@@ -25,13 +26,13 @@ const UMBRAL_DESVIO = 0.12; // 12 % del radio del negro
  * negro = 1) para poder juntar dianas distintas.
  */
 export function desvio(sesiones: Sesion[]): Desvio | null {
-  const centros: { x: number; y: number; n: number }[] = [];
+  const centros: { x: number; y: number; n: number; mmx: number; mmy: number; distancia: number }[] = [];
   for (const s of terminadas(sesiones)) {
     const d = conPosicion(todosLosDisparos(s));
     if (d.length < 5) continue;
     const g = agrupacion(d);
     const r = geometria(s).diana.negro / 2;
-    centros.push({ x: g.cx / r, y: g.cy / r, n: d.length });
+    centros.push({ x: g.cx / r, y: g.cy / r, n: d.length, mmx: g.cx, mmy: g.cy, distancia: s.distancia });
   }
   if (centros.length < MIN_SESIONES_DESVIO) return null;
   const total = centros.reduce((t, c) => t + c.n, 0);
@@ -41,11 +42,20 @@ export function desvio(sesiones: Sesion[]): Desvio | null {
   // Mismo lado: el centro de la sesión apunta en la dirección del desvío medio.
   const constante = largo ? centros.filter((c) => c.x * x + c.y * y > 0).length / centros.length : 0;
   const claro = largo >= UMBRAL_DESVIO && constante >= 0.6;
+  // Para corregir miras hace falta la misma distancia: se usa la más repetida (con 3 entrenamientos o más).
+  const veces = new Map<number, number>();
+  for (const c of centros) veces.set(c.distancia, (veces.get(c.distancia) ?? 0) + 1);
+  const [distancia, cuantas] = [...veces].sort((a, b) => b[1] - a[1])[0];
+  const misma = centros.filter((c) => c.distancia === distancia);
+  const nm = misma.reduce((t, c) => t + c.n, 0);
   return {
     sesiones: centros.length, disparos: total, x, y,
     centros: centros.map(({ x, y }) => ({ x, y })),
     constante,
     texto: claro ? direccion(x, y) : null,
+    mm: claro && cuantas >= MIN_SESIONES_DESVIO
+      ? { x: misma.reduce((t, c) => t + c.mmx * c.n, 0) / nm, y: misma.reduce((t, c) => t + c.mmy * c.n, 0) / nm, distancia, sesiones: cuantas }
+      : null,
   };
 }
 
