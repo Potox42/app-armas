@@ -16,6 +16,7 @@ import type { Sesion } from '@/data/types';
 import { confirmar } from '@/lib/confirmar';
 import { geometria } from '@/lib/diana';
 import { centrosSeries, dosGrupos, medidas, sueltos } from '@/lib/grupo';
+import { recordsBatidos } from '@/lib/historial';
 import { formatear } from '@/lib/fechas';
 import { volver } from '@/lib/volver';
 import { decir, guardarVoz, leerVoz } from '@/lib/voz';
@@ -420,6 +421,7 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
   const conSeries = sesion.series.filter((x) => x.disparos.length);
   const centros = conSeries.length > 1 ? centrosSeries(conSeries).centros : [];
   const fuera = dosGrupos(disparos) ? [] : sueltos(conSeries).map((x) => x.disparo);
+  const nuevos = indice < 0 ? recordsBatidos(completa, store.datos.sesiones) : [];
   const lectura = indice < 0
     ? resumenSesion(media(disparos), previa ? media(todosLosDisparos(previa)) : undefined, ex.diferencia, porSerie)
     : resumenDiana(indice, media(disparos), indice > 0 ? media(dianas[indice - 1].disparos) : undefined, ex.diferencia, porSerie);
@@ -441,7 +443,7 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
         <Text style={st.heroArma}>{indice >= 0 ? `Diana ${indice + 1} de ${dianas.length}` : arma ? `${arma.marca} ${arma.modelo}` : 'Arma'}</Text>
         <Text style={[s.muted, { textAlign: 'center' }]}>
           {formatear(sesion.fecha.slice(0, 10))} · {sesion.fecha.slice(11, 16)} · {sesion.modalidad} · {sesion.distancia} m
-          {dianas.length > 1 && indice < 0 ? ` · ${dianas.length} dianas` : ''}
+          {dianas.length > 1 && indice < 0 ? ` · ${dianas.length} dianas` : ''}{completa.competicion ? ' · Competición' : ''}
           {sesion.municion ? `\n${sesion.municion}` : ''}
         </Text>
       </View>
@@ -453,6 +455,13 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
           ? <Cifra titulo="Agrupación" valor={`${Math.round(g.radio)} mm`} detalle="radio medio" />
           : <Cifra titulo="Series" valor={String(sumas.length)} detalle={sesion.disparosPorSerie ? `${sesion.disparosPorSerie} disparos c/u` : 'disparos libres'} />}
       </View>
+
+      {nuevos.length > 0 && (
+        <Card style={[st.lectura, { borderLeftColor: colors.green }]}>
+          <Text style={st.lecturaTitulo}>🏆 {nuevos.length === 1 ? '¡Nuevo récord!' : `¡${nuevos.length} récords nuevos!`}</Text>
+          {nuevos.map((r) => <Text key={r} style={s.muted}>{r}</Text>)}
+        </Card>
+      )}
 
       <Card style={st.lectura}>
         <Text style={st.lecturaTitulo}>{lectura.titulo}</Text>
@@ -514,6 +523,9 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
         </>
       )}
 
+      <Pressable onPress={() => store.marcarCompeticion(completa.id, !completa.competicion)} style={st.borrar} hitSlop={8}>
+        <Text style={st.enlace}>{completa.competicion ? 'Es una competición · cambiar a entreno' : 'Marcar como competición'}</Text>
+      </Pressable>
       <Button title="Volver a Entrenar" onPress={() => volver('/entrenar')} />
       <BotonBorrar sesion={completa} />
     </Screen>

@@ -109,6 +109,7 @@ export interface Sesion {
   series: Serie[];
   terminada: boolean;
   gasto?: 'casa' | 'no'; // al terminar: se restaron los cartuchos de casa o se dijo que no
+  competicion?: boolean; // tirada en competición (sin valor: entrenamiento)
 }
 
 /** Configuración de entrenamiento guardada para empezar con un toque. */

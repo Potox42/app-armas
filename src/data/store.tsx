@@ -30,6 +30,7 @@ interface Store {
   apuntarGasto: (sesionId: string, desdeCasa: boolean) => void;
   borrarSesion: (sesionId: string) => void;
   cambiarRegistro: (sesionId: string, registro: Registro) => void;
+  marcarCompeticion: (sesionId: string, competicion: boolean) => void;
   guardarArma: (arma: Arma) => void;
   borrarArma: (id: string) => void;
   guardarCompeticion: (c: Competicion) => void;
@@ -243,6 +244,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             }),
           };
         }),
+      marcarCompeticion: (sesionId, competicion) => actualizarSesion(sesionId, (s) => ({ ...s, competicion: competicion || undefined })),
       cambiarRegistro: (sesionId, registro) => actualizarSesion(sesionId, (s) => ({ ...s, registro })),
       borrarSesion: (sesionId) =>
         setDatos((d) => {

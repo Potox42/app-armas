@@ -31,6 +31,7 @@ export default function NuevaSesion() {
   const [porSerie, setPorSerie] = useState(String(ultima?.disparosPorSerie ?? 10) as '5' | '10' | '0');
   const [series, setSeries] = useState(String(ultima?.seriesPrevistas ?? 0));
   const [registro, setRegistro] = useState<Registro>(ultima?.registro ?? 'diana');
+  const [tipo, setTipo] = useState<'entreno' | 'competicion'>('entreno');
   const [nombrePlantilla, setNombrePlantilla] = useState<string | null>(null); // abierto: guardar como plantilla
   const plantillas = store.datos.plantillas ?? [];
 
@@ -63,6 +64,7 @@ export default function NuevaSesion() {
     const id = store.nuevaSesion({
       armaId, modalidad, distancia, municion: municion.trim(), disparosPorSerie: Number(porSerie),
       seriesPrevistas: Number(series) || undefined, registro, diana: diana.id, calibreMm,
+      competicion: tipo === 'competicion' || undefined,
     });
     router.replace(`/sesion/${id}`);
   };
@@ -157,6 +159,9 @@ export default function NuevaSesion() {
             ? 'Marcas dónde entró cada disparo: la app calcula la puntuación y tu agrupación.'
             : 'Más rápido: tocas la puntuación de cada disparo (10, 9, 8…). No guarda dónde entró.'}
       </Text>
+
+      <Text style={st.paso}>8. Tipo</Text>
+      <Segmented value={tipo} onChange={setTipo} options={[{ value: 'entreno', label: 'Entreno' }, { value: 'competicion', label: 'Competición' }]} />
 
       <Text style={[s.muted, { marginTop: space.sm }]}>
         En la sesión apuntas todas las dianas del día: cuando cambies la hoja, pulsa «Cambiar de diana».
