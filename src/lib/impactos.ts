@@ -76,7 +76,7 @@ function otsu(valores: number[]): number {
   return umbral;
 }
 
-interface Mancha { area: number; x0: number; y0: number; x1: number; y1: number; sx: number; sy: number }
+interface Mancha { area: number; x0: number; y0: number; x1: number; y1: number; sx: number; sy: number; p0: number }
 
 /** Manchas (componentes conexas, vecindad 4) de una máscara. */
 function manchas(m: Uint8Array, w: number, h: number): Mancha[] {
@@ -86,7 +86,7 @@ function manchas(m: Uint8Array, w: number, h: number): Mancha[] {
   for (let i = 0; i < w * h; i++) {
     if (!m[i] || visto[i]) continue;
     let n = 0, top = 0;
-    const k: Mancha = { area: 0, x0: w, y0: h, x1: 0, y1: 0, sx: 0, sy: 0 };
+    const k: Mancha = { area: 0, x0: w, y0: h, x1: 0, y1: 0, sx: 0, sy: 0, p0: i };
     pila[top++] = i;
     visto[i] = 1;
     while (top) {
@@ -112,7 +112,131 @@ function manchas(m: Uint8Array, w: number, h: number): Mancha[] {
  * y suaviza antes para que las rayas blancas de los anillos no lo partan en trozos.
  */
 export function calibrar(g: Gris, alcance = 0.48, centro?: { x: number; y: number }): Calibracion | null {
-  return buscarNegro(g, alcance, centro) ?? calibrarOtsu(g, alcance, centro);
+  return buscarNegro(g, alcance, centro) ?? negroCortado(g) ?? calibrarOtsu(g, alcance, centro);
+}
+
+/**
+ * El negro más grande que la imagen (catalejo con mucho aumento o cámara Tele): se sale por arriba y
+ * por abajo y no hay mancha entera que medir. Se ajusta un círculo al borde que sí se ve (lo que no
+ * toca el borde de la imagen). Prueba del campo de octubre de 2026: sin esto se tomaba el 10 por el
+ * negro y los disparos salían fuera de la diana.
+ */
+function negroCortado(g: Gris): Calibracion | null {
+  const w = g.w >> 1, h = g.h >> 1;
+  if (w < 40 || h < 40) return null;
+  const media = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = 2 * y * g.w + 2 * x;
+      media[y * w + x] = (g.d[i] + g.d[i + 1] + g.d[i + g.w] + g.d[i + g.w + 1]) / 4;
+    }
+  }
+  const lado = Math.min(w, h);
+  // Bien desenfocada: así las rayas de los anillos y los agujeros no parten el negro.
+  const s = desenfocar({ w, h, d: media }, Math.max(2, Math.round(lado / 50)));
+  const valores: number[] = [];
+  for (let i = 0; i < s.d.length; i += 3) valores.push(s.d[i]);
+  let t = otsu(valores);
+  let cal: { cx: number; cy: number; r: number } | null = null;
+  let bx: number[] = [], by: number[] = [];
+  for (let vuelta = 0; vuelta < 2; vuelta++) {
+    const m = new Uint8Array(w * h);
+    for (let i = 0; i < m.length; i++) if (s.d[i] < t) m[i] = 1;
+    const grande = manchas(m, w, h).reduce<Mancha | null>((a, k) => (!a || k.area > a.area ? k : a), null);
+    if (!grande || grande.area < 0.15 * w * h) return null;
+    // Solo la mancha grande.
+    const solo = new Uint8Array(w * h);
+    manchaDe(m, w, h, grande.p0, solo);
+    // Borde de la mancha que no es el de la imagen.
+    bx = []; by = [];
+    for (let y = 3; y < h - 3; y++) {
+      for (let x = 3; x < w - 3; x++) {
+        const i = y * w + x;
+        if (solo[i] && (!solo[i - 1] || !solo[i + 1] || !solo[i - w] || !solo[i + w])) { bx.push(x); by.push(y); }
+      }
+    }
+    if (bx.length < 30) return null;
+    let c = ajustarCirculo(bx, by, null);
+    // Se repite quitando lo que no cae en el círculo (rayas, números, agujeros, el tubo).
+    for (let k = 0; c && k < 3; k++) c = ajustarCirculo(bx, by, c);
+    if (!c) return null;
+    cal = c;
+    // Segunda vuelta con el corte a medio camino entre el negro y el papel: el radio sale exacto.
+    const dentro = corona(s, c, 0.3, 0.85), fuera = corona(s, c, 1.12, 1.4);
+    if (fuera.n < 20 || fuera.media - dentro.media < 12) return null;
+    t = (dentro.media + fuera.media) / 2;
+  }
+  if (!cal) return null;
+  const { cx, cy, r } = cal;
+  // Un negro razonable: grande (si fuera pequeño, cabría entero y lo habría encontrado buscarNegro),
+  // con el centro en la imagen.
+  if (r < 0.3 * lado || r > 2 * Math.max(w, h) || cx < 0 || cy < 0 || cx > w || cy > h) return null;
+  // Que se vea una buena parte del borde (al menos 9 de 36 trozos de 10°) y que sea redondo.
+  const trozos = new Set<number>();
+  for (let i = 0; i < bx.length; i++) {
+    if (Math.abs(Math.hypot(bx[i] - cx, by[i] - cy) - r) > 0.04 * r + 1.5) continue;
+    trozos.add(Math.floor(((Math.atan2(by[i] - cy, bx[i] - cx) + Math.PI) * 18) / Math.PI));
+  }
+  if (trozos.size < 9) return null;
+  // Dentro, negro casi todo; fuera, papel casi todo.
+  const dentro = corona(s, cal, 0, 0.9), fuera = corona(s, cal, 1.12, 1.4);
+  if (dentro.bajo(t) < 0.85 || fuera.bajo(t) > 0.15) return null;
+  return { cx: 2 * cx + 0.5, cy: 2 * cy + 0.5, rx: 2 * r, ry: 2 * r };
+}
+
+/** Marca en `o` la mancha de `m` que contiene el punto q; devuelve su área. */
+function manchaDe(m: Uint8Array, w: number, h: number, q: number, o: Uint8Array): number {
+  const pila = [q];
+  o[q] = 1;
+  let n = 0;
+  while (pila.length) {
+    const p = pila.pop()!;
+    n++;
+    const x = p % w, y = (p - x) / w;
+    const vecinos = [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1];
+    for (const v of vecinos) if (v >= 0 && m[v] && !o[v]) { o[v] = 1; pila.push(v); }
+  }
+  return n;
+}
+
+/**
+ * Círculo que mejor pasa por los puntos (mínimos cuadrados algebraico). Con un círculo previo, solo
+ * se usan los puntos que caen cerca de él.
+ */
+function ajustarCirculo(xs: number[], ys: number[], previo: { cx: number; cy: number; r: number } | null) {
+  let n = 0, sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0, sxz = 0, syz = 0, sz = 0;
+  for (let i = 0; i < xs.length; i++) {
+    const x = xs[i], y = ys[i];
+    if (previo && Math.abs(Math.hypot(x - previo.cx, y - previo.cy) - previo.r) > 0.06 * previo.r + 2) continue;
+    const z = x * x + y * y;
+    n++; sx += x; sy += y; sxx += x * x; syy += y * y; sxy += x * y; sxz += x * z; syz += y * z; sz += z;
+  }
+  if (n < 30) return null;
+  // x² + y² + D·x + E·y + F = 0 → sistema 3×3.
+  const A = [[sxx, sxy, sx], [sxy, syy, sy], [sx, sy, n]], b = [-sxz, -syz, -sz];
+  const det = (M: number[][]) => M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+  const d0 = det(A);
+  if (!d0) return null;
+  const col = (j: number) => det(A.map((fila, i) => fila.map((v, k) => (k === j ? b[i] : v))));
+  const D = col(0) / d0, E = col(1) / d0, F = col(2) / d0;
+  const cx = -D / 2, cy = -E / 2, r2 = cx * cx + cy * cy - F;
+  return r2 > 0 ? { cx, cy, r: Math.sqrt(r2) } : null;
+}
+
+/** Gris medio en una corona de un círculo (z0 a z1 radios) y qué parte queda por debajo de un corte. */
+function corona(s: Gris, c: { cx: number; cy: number; r: number }, z0: number, z1: number) {
+  let suma = 0, n = 0;
+  const v: number[] = [];
+  const paso = Math.max(1, Math.round(c.r / 60));
+  for (let y = Math.max(0, Math.floor(c.cy - z1 * c.r)); y <= Math.min(s.h - 1, c.cy + z1 * c.r); y += paso) {
+    for (let x = Math.max(0, Math.floor(c.cx - z1 * c.r)); x <= Math.min(s.w - 1, c.cx + z1 * c.r); x += paso) {
+      const z = Math.hypot(x - c.cx, y - c.cy) / c.r;
+      if (z < z0 || z > z1) continue;
+      const g = s.d[y * s.w + x];
+      suma += g; n++; v.push(g);
+    }
+  }
+  return { media: n ? suma / n : 0, n, bajo: (t: number) => (v.length ? v.filter((g) => g < t).length / v.length : 0) };
 }
 
 /**
@@ -141,6 +265,9 @@ function buscarNegro(g: Gris, alcance: number, centro?: { x: number; y: number }
   for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) if (dentro(x, y)) valores.push(s.d[y * w + x]);
   if (valores.length < 100) return null;
   valores.sort((a, b) => a - b);
+  // El papel es lo más claro. Alrededor del negro tiene que haber papel, no un negro algo más claro:
+  // si no, con un corte muy oscuro, el 10 (o un agujero) pasaba por el negro (campo, octubre de 2026).
+  const papel = valores[Math.floor(0.95 * (valores.length - 1))];
   // Media de gris en una corona de la elipse (z0 a z1 radios) y qué parte es más clara que t.
   const corona = (c: Calibracion, z0: number, z1: number, t: number) => {
     let suma = 0, n = 0, claros = 0;
@@ -174,7 +301,7 @@ function buscarNegro(g: Gris, alcance: number, centro?: { x: number; y: number }
       const negro = corona(cal, 0, 0.85, t);
       if (fuera.n < 20 || fuera.claros < 0.85) continue;
       const contraste = fuera.media - negro.media;
-      if (contraste < 12) continue;
+      if (contraste < 12 || contraste < 0.5 * (papel - negro.media)) continue;
       const nota = contraste * fuera.claros * (k.area / (bw * bh));
       if (!mejor || nota > mejor.nota) mejor = { cal, nota, corte: (fuera.media + negro.media) / 2 };
     }
@@ -449,7 +576,10 @@ export class Vigia {
     // Ya fijada, la diana se sigue buscando donde estaba; si no, donde la tocó el tirador o en medio.
     const cerca = this.cal ? { x: this.cal.cx, y: this.cal.cy } : this.centro ?? undefined;
     // Sin pista, si no aparece en medio se mira en casi toda la imagen.
-    const cal = calibrar(g, 0.48, cerca) ?? (!cerca ? calibrar(g, 0.7) : null);
+    let cal = calibrar(g, 0.48, cerca) ?? (!cerca ? calibrar(g, 0.7) : null);
+    // Ya fijada, una «diana» de otro tamaño es un error de búsqueda (un anillo, un agujero): se
+    // sigue con la fijada.
+    if (cal && this.cal && Math.abs(cal.rx / this.cal.rx - 1) > 0.15) cal = this.cal;
     if (!cal) {
       this.estables = 0;
       return { estado: this.cal ? 'vigilando' : 'buscando' };

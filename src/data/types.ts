@@ -100,7 +100,7 @@ export interface Sesion {
   modalidad: Modalidad;
   distancia: number; // metros
   municion: string;
-  disparosPorSerie: number;
+  disparosPorSerie: number; // 0 = libre (sin límite por serie)
   seriesPrevistas?: number; // sin valor: series libres
   registro?: Registro; // cómo se apuntan los disparos (por defecto, tocando la diana)
   diana?: IdDiana; // diana con la que se puntúa (sin valor: pistola precisión 25 m)
@@ -118,7 +118,7 @@ export interface Plantilla {
   modalidad: Modalidad;
   distancia: number;
   municion?: string;
-  disparosPorSerie: number;
+  disparosPorSerie: number; // 0 = libre (sin límite por serie)
   seriesPrevistas?: number;
   registro?: Registro;
 }
