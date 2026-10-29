@@ -28,7 +28,7 @@ export default function NuevaSesion() {
   const [modalidad, setModalidad] = useState<Modalidad>(ultima?.modalidad ?? 'Precisión');
   const [distancia, setDistancia] = useState(ultima?.distancia ?? 25);
   const [municion, setMunicion] = useState(ultima?.municion ?? '');
-  const [porSerie, setPorSerie] = useState(String(ultima?.disparosPorSerie ?? 10) as '5' | '10');
+  const [porSerie, setPorSerie] = useState(String(ultima?.disparosPorSerie ?? 10) as '5' | '10' | '0');
   const [series, setSeries] = useState(String(ultima?.seriesPrevistas ?? 0));
   const [registro, setRegistro] = useState<Registro>(ultima?.registro ?? 'diana');
   const [nombrePlantilla, setNombrePlantilla] = useState<string | null>(null); // abierto: guardar como plantilla
@@ -39,7 +39,7 @@ export default function NuevaSesion() {
     setModalidad(p.modalidad);
     setDistancia(p.distancia);
     if (p.municion !== undefined) setMunicion(p.municion);
-    setPorSerie(String(p.disparosPorSerie) as '5' | '10');
+    setPorSerie(String(p.disparosPorSerie) as '5' | '10' | '0');
     setSeries(String(p.seriesPrevistas ?? 0));
     if (p.registro) setRegistro(p.registro);
   };
@@ -127,7 +127,8 @@ export default function NuevaSesion() {
       />
 
       <Text style={st.paso}>5. Disparos por serie</Text>
-      <Segmented value={porSerie} onChange={setPorSerie} options={[{ value: '5', label: '5' }, { value: '10', label: '10' }]} />
+      <Segmented value={porSerie} onChange={setPorSerie} options={[{ value: '5', label: '5' }, { value: '10', label: '10' }, { value: '0', label: 'Libre' }]} />
+      {porSerie === '0' && <Text style={s.muted}>Sin límite: tiras los que quieras en la diana y pulsas «Finalizar serie» cuando acabes.</Text>}
 
       <Text style={st.paso}>6. Número de series</Text>
       <Segmented

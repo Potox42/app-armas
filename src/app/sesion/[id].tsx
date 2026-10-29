@@ -41,7 +41,9 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   const arma = store.arma(sesion.armaId);
   const nSerie = sesion.series.length;
   const serie = sesion.series[nSerie - 1];
-  const completa = serie.disparos.length >= sesion.disparosPorSerie;
+  // Disparos por serie «libre» (0): sin límite, para tirar 20 o 30 en la misma diana.
+  const libre = !sesion.disparosPorSerie;
+  const completa = !libre && serie.disparos.length >= sesion.disparosPorSerie;
   const ultimaSerie = !!sesion.seriesPrevistas && nSerie >= sesion.seriesPrevistas;
   const ultimo = serie.disparos[serie.disparos.length - 1];
   // Cada diana es una hoja nueva: solo se ven los disparos de las series anteriores de esta diana.
@@ -103,8 +105,12 @@ function Asistente({ sesion }: { sesion: Sesion }) {
     else store.nuevaSerie(sesion.id);
   };
 
-  const titulo = `Serie ${nSerie}${sesion.seriesPrevistas ? `/${sesion.seriesPrevistas}` : ''} · Disparo ${Math.min(serie.disparos.length + 1, sesion.disparosPorSerie)}/${sesion.disparosPorSerie}`;
+  const titulo = `Serie ${nSerie}${sesion.seriesPrevistas ? `/${sesion.seriesPrevistas}` : ''} · Disparo ${
+    libre ? serie.disparos.length + 1 : `${Math.min(serie.disparos.length + 1, sesion.disparosPorSerie)}/${sesion.disparosPorSerie}`}`;
   const kicker = `Diana ${nDiana + 1} · ${sesion.modalidad} · ${sesion.distancia} m${arma ? ` · ${arma.marca} ${arma.modelo}` : ''}`;
+
+  // A pantalla completa, la cuenta de la serie va encima de la imagen.
+  const marcador = `${titulo}${ultimo ? ` · Último ${ultimo.valor}` : ''} · Serie ${sumaSerie(serie)}`;
 
   const cifras = (
     <>
@@ -128,7 +134,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   const grafica = (valores.length > 0 || teclado) && (
     <Card style={{ alignItems: 'center', gap: space.xs }}>
       <Text style={[s.muted, { alignSelf: 'flex-start' }]}>Puntuación por disparo · media en verde</Text>
-      <GraficaDisparos valores={valores} previstos={sesion.disparosPorSerie} alto={horizontal ? 110 : 150} />
+      <GraficaDisparos valores={valores} previstos={libre ? 10 : sesion.disparosPorSerie} alto={horizontal ? 110 : 150} />
     </Card>
   );
 
@@ -148,7 +154,9 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         ))}
       </View>
       <View style={st.linea}>
-        {Array.from({ length: sesion.disparosPorSerie }, (_, i) => {
+        {/* En libre se ven los 10 últimos huecos. */}
+        {Array.from({ length: libre ? 10 : sesion.disparosPorSerie }, (_, j) => {
+          const i = libre ? Math.max(0, valores.length - 9) + j : j;
           const v = valores[i];
           return (
             <View key={i} style={[st.hueco, v !== undefined && st.huecoLleno, i === valores.length - 1 && st.huecoUltimo]}>
@@ -169,6 +177,8 @@ function Asistente({ sesion }: { sesion: Sesion }) {
       modelo={modelo}
       calibre={calibre}
       disparos={disparosDiana}
+      marcador={marcador}
+      serie={nSerie}
       onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)}
     />
   );
@@ -186,6 +196,8 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         modelo={modelo}
         calibre={calibre}
         disparos={disparosDiana}
+        marcador={marcador}
+        serie={nSerie}
         onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)}
       />
       <Pressable onPress={() => setConVisor(false)} hitSlop={8}>
@@ -205,7 +217,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
       key={`foto-${nDiana}`}
       modelo={modelo}
       calibre={calibre}
-      faltan={Math.max(0, sesion.disparosPorSerie - serie.disparos.length)}
+      faltan={libre ? 0 : Math.max(0, sesion.disparosPorSerie - serie.disparos.length)}
       onApuntar={(puntos) => store.anadirDisparos(sesion.id, puntos)}
     />
   );
@@ -400,9 +412,11 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
   const ex = extremos(sesion);
   // Sesión entera: se compara con la sesión anterior con la misma arma. Una diana: con la diana anterior.
   const previa = store.datos.sesiones.find((x) => x.terminada && x.id !== completa.id && x.armaId === completa.armaId && x.fecha < completa.fecha);
+  // En series libres (sin número fijo de disparos), los disparos que ha tenido de media cada serie.
+  const porSerie = sesion.disparosPorSerie || Math.max(1, Math.round(disparos.length / Math.max(1, sumas.length)));
   const lectura = indice < 0
-    ? resumenSesion(media(disparos), previa ? media(todosLosDisparos(previa)) : undefined, ex.diferencia, sesion.disparosPorSerie)
-    : resumenDiana(indice, media(disparos), indice > 0 ? media(dianas[indice - 1].disparos) : undefined, ex.diferencia, sesion.disparosPorSerie);
+    ? resumenSesion(media(disparos), previa ? media(todosLosDisparos(previa)) : undefined, ex.diferencia, porSerie)
+    : resumenDiana(indice, media(disparos), indice > 0 ? media(dianas[indice - 1].disparos) : undefined, ex.diferencia, porSerie);
 
   return (
     <Screen title="Resultado" back="/entrenar" scrollRef={scroll}>
@@ -431,7 +445,7 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
         <Cifra titulo="Dieces" valor={String(reparto[0].n)} detalle={`de ${disparos.length}`} />
         {conSitio
           ? <Cifra titulo="Agrupación" valor={`${Math.round(g.radio)} mm`} detalle="radio medio" />
-          : <Cifra titulo="Series" valor={String(sumas.length)} detalle={`${sesion.disparosPorSerie} disparos c/u`} />}
+          : <Cifra titulo="Series" valor={String(sumas.length)} detalle={sesion.disparosPorSerie ? `${sesion.disparosPorSerie} disparos c/u` : 'disparos libres'} />}
       </View>
 
       <Card style={st.lectura}>
@@ -464,7 +478,7 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
           );
         })}
       </View>
-      {sumas.length > 1 && <Card><GraficaSeries valores={sumas} maximo={sesion.disparosPorSerie * 10} /></Card>}
+      {sumas.length > 1 && <Card><GraficaSeries valores={sumas} maximo={sesion.disparosPorSerie ? sesion.disparosPorSerie * 10 : Math.ceil(Math.max(...sumas) / 10) * 10} /></Card>}
 
       <SectionTitle>Reparto de impactos</SectionTitle>
       <Card style={{ gap: space.sm }}>
