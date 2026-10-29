@@ -1,6 +1,6 @@
 import { useRef, type ComponentRef } from 'react';
 import { Pressable } from 'react-native';
-import Svg, { Circle, G, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, G, Line, Text as SvgText } from 'react-native-svg';
 import type { Disparo } from '@/data/types';
 import { DIANAS, type ModeloDiana } from '@/lib/diana';
 import { colors } from '@/theme';
@@ -13,16 +13,19 @@ interface Props {
   visibleMm?: number; // diámetro de diana que se ve
   anteriores?: Disparo[]; // disparos de series anteriores, en gris
   grupo?: { cx: number; cy: number; radio: number }; // centro y radio medio del grupo
+  centros?: { x: number; y: number; etiqueta: string }[]; // centro de cada serie
+  sueltos?: Disparo[]; // impactos lejos del grupo: se rodean en naranja
   onToque?: (x: number, y: number) => void;
 }
 
 const PAPEL = '#EDE6D6';
 const NEGRO = '#151515';
+const NARANJA = '#E8590C'; // fijo: va sobre el papel de la diana, que no cambia con el tema
 
 /** Diana ISSF dibujada a escala real, en milímetros. */
 export function Diana({
   disparos: todos, tamano, modelo = DIANAS.precision, calibre = modelo.calibre, visibleMm = modelo.visible,
-  anteriores: previos = [], grupo, onToque,
+  anteriores: previos = [], grupo, centros = [], sueltos = [], onToque,
 }: Props) {
   // Los disparos apuntados con el teclado no tienen posición: no se dibujan.
   const disparos = todos.filter((d) => !d.sinPosicion);
@@ -103,9 +106,22 @@ export function Diana({
         {grupo && grupo.radio > 0 && (
           <G>
             <Circle cx={grupo.cx} cy={grupo.cy} r={grupo.radio} fill={colors.accent} fillOpacity={0.12} stroke={colors.accent} strokeWidth={1.5 * u} strokeDasharray={`${4 * u} ${3 * u}`} />
-            <Circle cx={grupo.cx} cy={grupo.cy} r={3 * u} fill={colors.accent} stroke="#fff" strokeWidth={u} />
+            {/* Cruz en el centro de impactos */}
+            <Line x1={grupo.cx - 9 * u} x2={grupo.cx + 9 * u} y1={grupo.cy} y2={grupo.cy} stroke="#fff" strokeWidth={3.5 * u} />
+            <Line x1={grupo.cx} x2={grupo.cx} y1={grupo.cy - 9 * u} y2={grupo.cy + 9 * u} stroke="#fff" strokeWidth={3.5 * u} />
+            <Line x1={grupo.cx - 8 * u} x2={grupo.cx + 8 * u} y1={grupo.cy} y2={grupo.cy} stroke={colors.accent} strokeWidth={2 * u} />
+            <Line x1={grupo.cx} x2={grupo.cx} y1={grupo.cy - 8 * u} y2={grupo.cy + 8 * u} stroke={colors.accent} strokeWidth={2 * u} />
           </G>
         )}
+        {sueltos.map((d, i) => (
+          <Circle key={`s${i}`} cx={d.x} cy={d.y} r={bala + 4 * u} fill="none" stroke={NARANJA} strokeWidth={2 * u} />
+        ))}
+        {centros.map((c) => (
+          <G key={`c${c.etiqueta}`}>
+            <Circle cx={c.x} cy={c.y} r={6 * u} fill={NARANJA} stroke="#fff" strokeWidth={u} />
+            <SvgText x={c.x} y={c.y + 3 * u} fontSize={8 * u} fontWeight="700" fill="#fff" textAnchor="middle">{c.etiqueta}</SvgText>
+          </G>
+        ))}
         {disparos.map((d, i) => {
           const ultimo = i === disparos.length - 1;
           return (

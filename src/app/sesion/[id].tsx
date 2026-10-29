@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View, type ScrollViewInstance } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
+import { Conclusion, MedidasGrupo } from '@/components/AnalisisDiana';
 import { Anillo, Cifra } from '@/components/Cifra';
 import { CamaraDiana } from '@/components/CamaraDiana';
 import { Diana, MiniDiana } from '@/components/Diana';
@@ -14,6 +15,7 @@ import { useStore } from '@/data/store';
 import type { Sesion } from '@/data/types';
 import { confirmar } from '@/lib/confirmar';
 import { geometria } from '@/lib/diana';
+import { centrosSeries, dosGrupos, medidas, sueltos } from '@/lib/grupo';
 import { formatear } from '@/lib/fechas';
 import { volver } from '@/lib/volver';
 import { decir, guardarVoz, leerVoz } from '@/lib/voz';
@@ -414,6 +416,10 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
   const previa = store.datos.sesiones.find((x) => x.terminada && x.id !== completa.id && x.armaId === completa.armaId && x.fecha < completa.fecha);
   // En series libres (sin número fijo de disparos), los disparos que ha tenido de media cada serie.
   const porSerie = sesion.disparosPorSerie || Math.max(1, Math.round(disparos.length / Math.max(1, sumas.length)));
+  const m = medidas(disparos);
+  const conSeries = sesion.series.filter((x) => x.disparos.length);
+  const centros = conSeries.length > 1 ? centrosSeries(conSeries).centros : [];
+  const fuera = dosGrupos(disparos) ? [] : sueltos(conSeries).map((x) => x.disparo);
   const lectura = indice < 0
     ? resumenSesion(media(disparos), previa ? media(todosLosDisparos(previa)) : undefined, ex.diferencia, porSerie)
     : resumenDiana(indice, media(disparos), indice > 0 ? media(dianas[indice - 1].disparos) : undefined, ex.diferencia, porSerie);
@@ -452,6 +458,8 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
         <Text style={st.lecturaTitulo}>{lectura.titulo}</Text>
         <Text style={s.muted}>{lectura.texto}</Text>
       </Card>
+
+      <Conclusion sesion={sesion} arma={arma} mano={store.datos.mano} />
 
       {indice < 0 && arma && disparos.length > 0 && <GastoMunicion sesion={completa} n={disparos.length} />}
 
@@ -497,15 +505,12 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
         <>
           <SectionTitle>{indice < 0 ? 'Todos los impactos' : `Impactos de la diana ${indice + 1}`}</SectionTitle>
           <View style={{ alignItems: 'center' }}>
-            <Diana tamano={tamano} modelo={geometria(sesion).diana} calibre={geometria(sesion).calibre} disparos={[]} anteriores={disparos} grupo={g} />
+            <Diana
+              tamano={tamano} modelo={geometria(sesion).diana} calibre={geometria(sesion).calibre} disparos={[]} anteriores={disparos} grupo={g}
+              centros={centros.map((c) => ({ x: c.x, y: c.y, etiqueta: String(c.serie + 1) }))} sueltos={fuera}
+            />
           </View>
-          <Card style={st.centro}>
-            <Icon name="target" color={colors.accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={s.text}>Centro de impactos</Text>
-              <Text style={s.muted}>{consejo(g.cx, g.cy)}</Text>
-            </View>
-          </Card>
+          {m && <MedidasGrupo sesion={sesion} m={m} arma={arma} />}
         </>
       )}
 
@@ -636,15 +641,6 @@ function resumenDiana(i: number, mediaHoy: number, mediaAntes: number | undefine
     : { titulo: `${formatoMedia(-cambio)} puntos de media menos que la diana ${i}`, texto };
 }
 
-/** Dónde queda el centro del grupo respecto al centro de la diana. */
-function consejo(cx: number, cy: number): string {
-  if (Math.hypot(cx, cy) < 8) return 'Grupo centrado: no hace falta corregir miras.';
-  return `El grupo queda ${horizontal(cx)} y ${vertical(cy)} del centro.`;
-}
-
-const horizontal = (x: number) => (Math.abs(x) < 1 ? 'centrado en horizontal' : `${Math.round(Math.abs(x))} mm a la ${x > 0 ? 'derecha' : 'izquierda'}`);
-const vertical = (y: number) => (Math.abs(y) < 1 ? 'centrado en vertical' : `${Math.round(Math.abs(y))} mm ${y > 0 ? 'abajo' : 'arriba'}`);
-
 function Dato({ titulo, valor, grande, ancho = 1 }: { titulo: string; valor: string; grande?: boolean; ancho?: number }) {
   return (
     <Card style={{ flex: ancho, paddingVertical: space.md, paddingHorizontal: space.md }}>
@@ -738,7 +734,6 @@ const st = StyleSheet.create({
   barraFondo: { flex: 1, height: 12, borderRadius: 6, backgroundColor: colors.cardAlt, overflow: 'hidden' },
   barra: { height: '100%', borderRadius: 6, backgroundColor: colors.accent },
   barraN: { width: 28, color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  centro: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   gasto: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   lectura: { gap: 4, borderLeftWidth: 4, borderLeftColor: colors.accent },
   lecturaTitulo: { color: colors.text, fontSize: 16, fontWeight: '800' },

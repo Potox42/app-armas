@@ -5,7 +5,7 @@ import { colors, space } from '@/theme';
 import { hoyISO } from '@/lib/fechas';
 import { cargarDatos, guardarAnteriores, guardarDatos } from './db';
 import { datosDeEjemplo } from './ejemplo';
-import type { Ajustes, Anteriores, Arma, Competicion, Datos, Documento, Plantilla, MovimientoMunicion, Disparo, Federacion, Licencia, Limpieza, PermisoArmas, Registro, Sesion } from './types';
+import type { Ajustes, Anteriores, Arma, Competicion, Datos, Documento, Plantilla, MovimientoMunicion, Disparo, Federacion, Licencia, Limpieza, Mano, PermisoArmas, Registro, Sesion } from './types';
 
 // Los datos se cargan de la base de datos cifrada al arrancar y se guardan en cada cambio.
 // Mientras no existan las pantallas de alta, el primer arranque parte del ejemplo.
@@ -46,6 +46,7 @@ interface Store {
   empezarDeCero: () => Promise<void>;
   restaurar: (d: Datos) => Promise<void>;
   guardarNombre: (nombre: string) => void;
+  guardarMano: (mano: Mano) => void;
   ajustes: Ajustes;
   guardarAjustes: (cambios: Partial<Ajustes>) => void;
   esEjemplo: boolean;
@@ -321,6 +322,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         apartar(datos, 'restaurado').then(() =>
           setDatos((d) => d && { ...completar(nuevos), esEjemplo: false, ajustes: d.ajustes })),
       guardarNombre: (nombre) => setDatos((d) => d && { ...d, nombre }),
+      guardarMano: (mano) => setDatos((d) => d && { ...d, mano }),
       ajustes: datos.ajustes ?? AJUSTES_INICIALES,
       guardarAjustes: (cambios) => setDatos((d) => d && { ...d, ajustes: { ...(d.ajustes ?? AJUSTES_INICIALES), ...cambios } }),
       esEjemplo: datos.esEjemplo !== false,

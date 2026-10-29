@@ -8,7 +8,8 @@ import { Card, Screen, Segmented, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import type { Sesion } from '@/data/types';
 import { diasHasta, formatear } from '@/lib/fechas';
-import { agrupacion, formatoMedia, media, todosLosDisparos, totalSesion } from '@/lib/sesiones';
+import { MIN_IMPACTOS } from '@/lib/grupo';
+import { agrupacion, conPosicion, formatoMedia, media, todosLosDisparos, totalSesion } from '@/lib/sesiones';
 import { colors, space } from '@/theme';
 
 type Periodo = '30' | '182' | '365' | 'todo';
@@ -17,7 +18,7 @@ interface Punto {
   sesion: Sesion;
   dia: number; // días desde hoy (negativo)
   media: number;
-  agrupacion: number;
+  agrupacion: number | null; // radio medio en mm; null si no hay bastantes impactos marcados en la diana
 }
 
 export default function Evolucion() {
@@ -40,7 +41,7 @@ export default function Evolucion() {
         sesion: x,
         dia: diasHasta(x.fecha.slice(0, 10), hoy),
         media: media(disparos),
-        agrupacion: agrupacion(disparos).radio,
+        agrupacion: conPosicion(disparos).length >= MIN_IMPACTOS ? agrupacion(disparos).radio : null,
       };
     })
     .filter((p) => periodo === 'todo' || -p.dia <= Number(periodo))
@@ -51,7 +52,10 @@ export default function Evolucion() {
   const primero = puntos[0];
   const ultimo = puntos[puntos.length - 1];
   const tendencia = regresion(puntos.map((p) => [p.dia, p.media]));
-  const tendenciaAgrup = regresion(puntos.map((p) => [p.dia, p.agrupacion]));
+  const conGrupo = puntos.filter((p): p is Punto & { agrupacion: number } => p.agrupacion !== null);
+  const tendenciaAgrup = regresion(conGrupo.map((p) => [p.dia, p.agrupacion]));
+  const mejorGrupo = conGrupo.length ? conGrupo.reduce((a, b) => (b.agrupacion < a.agrupacion ? b : a)) : undefined;
+  const grupoMedio = conGrupo.length ? conGrupo.reduce((t, p) => t + p.agrupacion, 0) / conGrupo.length : 0;
   const disparos = puntos.reduce((t, p) => t + todosLosDisparos(p.sesion).length, 0);
 
   return (
@@ -88,15 +92,31 @@ export default function Evolucion() {
               cambio={cambio(tendencia.en(primero.dia), tendencia.en(ultimo.dia))}
               mejorSiSube
             />
-            <Kpi
-              titulo="Agrupación media"
-              valor={`${Math.round(tendenciaAgrup.en(primero.dia))} → ${Math.round(tendenciaAgrup.en(ultimo.dia))} mm`}
-              cambio={cambio(tendenciaAgrup.en(primero.dia), tendenciaAgrup.en(ultimo.dia))}
-            />
+            {conGrupo.length >= 2 && (
+              <Kpi
+                titulo="Agrupación media"
+                valor={`${Math.round(tendenciaAgrup.en(conGrupo[0].dia))} → ${Math.round(tendenciaAgrup.en(conGrupo[conGrupo.length - 1].dia))} mm`}
+                cambio={cambio(tendenciaAgrup.en(conGrupo[0].dia), tendenciaAgrup.en(conGrupo[conGrupo.length - 1].dia))}
+              />
+            )}
           </View>
           <Text style={[s.muted, { fontSize: 12 }]}>
             Valores de la línea de tendencia al principio y al final del periodo. {puntos.length} entrenamientos, {disparos} disparos.
           </Text>
+          {mejorGrupo && (
+            <View style={st.fila}>
+              <Card style={{ flex: 1, gap: 4 }} onPress={() => router.push(`/sesion/${mejorGrupo.sesion.id}`)}>
+                <Text style={[s.muted, { fontSize: 12 }]}>Tu mejor grupo</Text>
+                <Text style={{ color: colors.green, fontSize: 18, fontWeight: '700' }}>{Math.round(mejorGrupo.agrupacion)} mm</Text>
+                <Text style={[s.muted, { fontSize: 12 }]}>{formatear(mejorGrupo.sesion.fecha.slice(0, 10))}</Text>
+              </Card>
+              <Card style={{ flex: 1, gap: 4 }}>
+                <Text style={[s.muted, { fontSize: 12 }]}>Tu grupo medio</Text>
+                <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>{Math.round(grupoMedio)} mm</Text>
+                <Text style={[s.muted, { fontSize: 12 }]}>en {conGrupo.length} entrenamientos</Text>
+              </Card>
+            </View>
+          )}
 
           <SectionTitle>Media por disparo</SectionTitle>
           <Card>
@@ -104,8 +124,11 @@ export default function Evolucion() {
           </Card>
 
           <SectionTitle>Agrupación (mm, menos es mejor)</SectionTitle>
-          <Card>
-            <Grafica puntos={puntos.map((p) => ({ x: p.dia, y: p.agrupacion }))} tendencia={tendenciaAgrup} decimales={0} />
+          <Card style={{ gap: space.sm }}>
+            {conGrupo.length >= 2
+              ? <Grafica puntos={conGrupo.map((p) => ({ x: p.dia, y: p.agrupacion }))} tendencia={tendenciaAgrup} decimales={0} />
+              : <Text style={s.muted}>Hacen falta 2 entrenamientos con los impactos marcados en la diana.</Text>}
+            <Text style={[s.muted, { fontSize: 12 }]}>Distancia media de cada impacto al centro del grupo. Si baja, tus disparos se juntan más.</Text>
           </Card>
         </>
       )}
@@ -123,7 +146,7 @@ export default function Evolucion() {
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={st.total}>{totalSesion(p.sesion)} / {n * 10}</Text>
-              <Text style={s.muted}>{Math.round(p.agrupacion)} mm</Text>
+              {p.agrupacion !== null && <Text style={s.muted}>{Math.round(p.agrupacion)} mm</Text>}
             </View>
           </Card>
         );
