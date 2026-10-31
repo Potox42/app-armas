@@ -10,7 +10,7 @@ import { compartirArchivo } from '@/lib/archivo';
 import { geometria } from '@/lib/diana';
 import { formatear } from '@/lib/fechas';
 import {
-  aCsv, comparar, fallosRepetidos, nombreMes, opcionesFiltro, porMes, records, type Filtro, type Periodo,
+  aCsv, comparar, fallosRepetidos, horaDe, nombreDia, nombreMes, opcionesFiltro, porDia, porMes, records, type Filtro, type Periodo,
 } from '@/lib/historial';
 import { dianasDe, formatoMedia, media, todosLosDisparos, totalSesion } from '@/lib/sesiones';
 import { colors, space } from '@/theme';
@@ -166,7 +166,7 @@ export function Comparar({ sesiones }: { sesiones: Sesion[] }) {
   );
 }
 
-/** Lista de entrenamientos en carpetas por mes. La más reciente, abierta. */
+/** Lista de entrenamientos agrupados por día y, si hay muchos, en carpetas por mes. La más reciente, abierta. */
 export function ListaPorMes({ sesiones, abrirPrimero = true }: { sesiones: Sesion[]; abrirPrimero?: boolean }) {
   const meses = porMes(sesiones);
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set(abrirPrimero && meses[0] ? [meses[0].mes] : []));
@@ -176,8 +176,8 @@ export function ListaPorMes({ sesiones, abrirPrimero = true }: { sesiones: Sesio
     else n.add(mes);
     return n;
   });
-  // Pocos entrenamientos: sin carpetas.
-  if (sesiones.length <= 8) return <>{meses.flatMap((m) => m.sesiones).map((x) => <FilaSesion key={x.id} sesion={x} />)}</>;
+  // Pocos entrenamientos: sin carpetas, solo por días.
+  if (sesiones.length <= 8) return <ListaPorDia sesiones={sesiones} />;
   return (
     <>
       {meses.map((m) => (
@@ -195,21 +195,41 @@ export function ListaPorMes({ sesiones, abrirPrimero = true }: { sesiones: Sesio
             </View>
             <View style={{ transform: [{ rotate: abiertos.has(m.mes) ? '90deg' : '0deg' }] }}><Icon name="chevron" color={colors.textMuted} /></View>
           </Card>
-          {abiertos.has(m.mes) && m.sesiones.map((x) => <FilaSesion key={x.id} sesion={x} dentro />)}
+          {abiertos.has(m.mes) && <ListaPorDia sesiones={m.sesiones} dentro />}
         </View>
       ))}
     </>
   );
 }
 
-function FilaSesion({ sesion: x, dentro }: { sesion: Sesion; dentro?: boolean }) {
+/** Entrenamientos bajo el nombre de su día («Sábado 31 de octubre · 3 entrenos · media 9,1»). */
+function ListaPorDia({ sesiones, dentro }: { sesiones: Sesion[]; dentro?: boolean }) {
+  return (
+    <>
+      {porDia(sesiones).map((d) => (
+        <View key={d.dia} style={[{ gap: space.sm }, dentro && st.dentro]}>
+          <View style={st.dia}>
+            <Text style={st.diaNombre} numberOfLines={1}>{nombreDia(d.dia)}</Text>
+            <Text style={s.muted} numberOfLines={1}>
+              {d.sesiones.length > 1 ? `${d.sesiones.length} entrenos · ` : ''}media {formatoMedia(d.media)}
+            </Text>
+          </View>
+          {d.sesiones.map((x) => <FilaSesion key={x.id} sesion={x} />)}
+        </View>
+      ))}
+    </>
+  );
+}
+
+function FilaSesion({ sesion: x }: { sesion: Sesion }) {
   const d = todosLosDisparos(x);
   const nDianas = dianasDe(x).length;
+  const hora = horaDe(x.fecha);
   return (
-    <Card onPress={() => router.push(`/sesion/${x.id}`)} style={[st.fila, dentro && st.dentro]}>
+    <Card onPress={() => router.push(`/sesion/${x.id}`)} style={st.fila}>
       <View style={st.mini}><MiniDiana disparos={d} tamano={52} modelo={geometria(x).diana} /></View>
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={st.nombre} numberOfLines={1}>{formatear(x.fecha.slice(0, 10))} · {x.distancia} m{x.competicion ? ' · 🏆' : ''}</Text>
+        <Text style={st.nombre} numberOfLines={1}>{hora ? `${hora} · ` : ''}{x.distancia} m{x.competicion ? ' · 🏆' : ''}</Text>
         <Text style={s.muted} numberOfLines={1}>{nDianas > 1 ? `${nDianas} dianas · ` : ''}{d.length} disparos</Text>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
@@ -260,6 +280,8 @@ const st = StyleSheet.create({
   mes: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
   fila: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
   dentro: { marginLeft: space.lg },
+  dia: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space.sm, marginTop: space.sm, paddingHorizontal: 2 },
+  diaNombre: { flex: 1, color: colors.text, fontSize: 14, fontWeight: '800' },
   mini: { borderRadius: 26, overflow: 'hidden' },
   nombre: { color: colors.text, fontSize: 16, fontWeight: '700' },
   media: { color: colors.green, fontSize: 18, fontWeight: '800' },

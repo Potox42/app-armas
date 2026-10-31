@@ -2,6 +2,7 @@ import type { Arma, Mano, Modalidad, Sesion } from '@/data/types';
 import { conclusion, NOMBRE_FALLO, type TipoFallo } from './conclusion';
 import { MIN_IMPACTOS } from './grupo';
 import { agrupacion, conPosicion, media, sumaSerie, todosLosDisparos, totalSesion } from './sesiones';
+import { aISO, deISO } from './fechas';
 
 // Herramientas para cuando hay muchos entrenamientos: filtros, resumen por meses, récords,
 // fallos que se repiten, comparar periodos y exportar a Excel.
@@ -64,7 +65,7 @@ export interface Mes {
 export function porMes(sesiones: Sesion[]): Mes[] {
   const grupos = new Map<string, Sesion[]>();
   for (const s of sesiones) {
-    const k = s.fecha.slice(0, 7);
+    const k = diaDe(s.fecha).slice(0, 7);
     grupos.set(k, [...(grupos.get(k) ?? []), s]);
   }
   return [...grupos].sort((a, b) => b[0].localeCompare(a[0])).map(([mes, lista]) => {
@@ -75,6 +76,50 @@ export function porMes(sesiones: Sesion[]): Mes[] {
       mes, sesiones: ordenadas, disparos: disparos.length, media: media(disparos),
       grupo: grupos.length ? grupos.reduce((t, g) => t + g, 0) / grupos.length : null,
     };
+  });
+}
+
+// ---------- Resumen por días ----------
+
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+/** Día (aaaa-mm-dd) del entrenamiento en la hora del móvil: la fecha se guarda en UTC y un entreno a las 00:30 sería del día anterior. */
+export function diaDe(fecha: string): string {
+  const d = new Date(fecha);
+  return Number.isNaN(d.getTime()) ? fecha.slice(0, 10) : aISO(d);
+}
+
+/** Hora del entrenamiento («10:14»), en la hora del móvil. */
+export function horaDe(fecha: string): string {
+  const d = new Date(fecha);
+  return Number.isNaN(d.getTime()) || fecha.length <= 10 ? '' : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** «Sábado 31 de octubre» (con el año si no es el actual). */
+export function nombreDia(dia: string): string {
+  const d = deISO(dia);
+  const texto = `${DIAS_SEMANA[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ` de ${d.getFullYear()}` : ''}`;
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+export interface Dia {
+  dia: string; // aaaa-mm-dd
+  sesiones: Sesion[]; // la más reciente primero
+  disparos: number;
+  media: number;
+}
+
+/** Entrenamientos agrupados por día, el más reciente primero. */
+export function porDia(sesiones: Sesion[]): Dia[] {
+  const grupos = new Map<string, Sesion[]>();
+  for (const s of sesiones) {
+    const k = diaDe(s.fecha);
+    grupos.set(k, [...(grupos.get(k) ?? []), s]);
+  }
+  return [...grupos].sort((a, b) => b[0].localeCompare(a[0])).map(([dia, lista]) => {
+    const ordenadas = [...lista].sort((a, b) => b.fecha.localeCompare(a.fecha));
+    const disparos = ordenadas.flatMap(todosLosDisparos);
+    return { dia, sesiones: ordenadas, disparos: disparos.length, media: media(disparos) };
   });
 }
 
