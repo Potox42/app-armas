@@ -115,14 +115,14 @@ const TEXTOS: Record<Estado, string> = {
   'sin-camara': 'No se ha podido abrir la cámara (puede que otra app la esté usando). Toca Reintentar.',
   buscando: 'Encaja el negro de la diana dentro del círculo blanco, entero y lo más grande posible. Si no la encuentro, toca su centro en la imagen.',
   calibrando: 'Diana encontrada. Mantén el móvil quieto…',
-  vigilando: 'Listo: dispara. Si se salta un disparo, tócalo en la imagen; si un punto está mal, tócalo y se borra.',
+  vigilando: 'Listo: dispara. Si se salta un disparo, tócalo en la imagen; si un punto está mal, mantenlo pulsado y se borra.',
 };
 
 /** Textos cortos para cuando van encima de la imagen (en horizontal), para que tapen poco. */
 const CORTOS: Partial<Record<Estado, string>> = {
   buscando: 'Encaja la diana. Si no la encuentro, toca su centro.',
   calibrando: 'Diana encontrada. Quieto…',
-  vigilando: 'Listo. Toca para marcar o borrar un punto.',
+  vigilando: 'Listo. Toca para marcar; mantén pulsado un punto para borrarlo.',
 };
 
 /**
@@ -143,7 +143,8 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
   const contenedor = useRef<HTMLElement | null>(null); // donde está ahora el vídeo
   const nodoGrande = useRef<HTMLElement | null>(null); // la caja de pantalla completa, si está abierta
   const elementos = useRef<{ video: HTMLVideoElement; capa: HTMLCanvasElement } | null>(null);
-  const toqueRef = useRef<((e: MouseEvent) => void) | null>(null);
+  // Toque (marca un disparo) y pulsación larga (borra el punto que hay debajo).
+  const toqueRef = useRef<{ toque: (e: MouseEvent) => void; pulsar: (e: PointerEvent) => void; soltar: (e: PointerEvent) => void } | null>(null);
   const pasarA = (destino: HTMLElement | null) => {
     const el = elementos.current;
     if (!destino || !el) return;
@@ -158,7 +159,9 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     nodoGrande.current = n;
     if (n) {
       Object.assign(n.style, { clipPath: 'inset(0)' });
-      n.addEventListener('click', (e) => toqueRef.current?.(e));
+      n.addEventListener('click', (e) => toqueRef.current?.toque(e));
+      n.addEventListener('pointerdown', (e) => toqueRef.current?.pulsar(e));
+      for (const ev of ['pointerup', 'pointercancel', 'pointermove'] as const) n.addEventListener(ev, (e) => toqueRef.current?.soltar(e));
       pasarA(n);
     } else {
       pasarA(pequena);
@@ -236,6 +239,56 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
 
     // Un toque en la imagen: antes de encontrar la diana, dice dónde está; después, marca a mano un
     // disparo que la cámara no ha visto.
+    // De un toque en pantalla a la imagen analizada.
+    const enImagen = (e: MouseEvent) => {
+      if (!mapa) return null;
+      // La capa puede estar ampliada (Ampliar): se pasa del toque a sus píxeles en proporción.
+      const caja = capa.getBoundingClientRect();
+      return {
+        x: (((e.clientX - caja.left) / caja.width) * capa.width - mapa.ox) / mapa.k,
+        y: (((e.clientY - caja.top) / caja.height) * capa.height - mapa.oy) / mapa.k,
+        porPunto: capa.width / caja.width / mapa.k, // píxeles de la imagen por punto de pantalla
+      };
+    };
+    // Mantener pulsado un punto ya marcado lo borra (por si la cámara o el dedo lo puso donde no
+    // era). Un toque normal siempre marca, aunque haya otro disparo pegado (campo, 31-10-2026).
+    let borrado = false;
+    let pulsacion: { t: ReturnType<typeof setTimeout>; x: number; y: number } | null = null;
+    const soltar = (e: PointerEvent) => {
+      if (!pulsacion) return;
+      if (e.type === 'pointermove' && Math.hypot(e.clientX - pulsacion.x, e.clientY - pulsacion.y) < 12) return;
+      clearTimeout(pulsacion.t);
+      pulsacion = null;
+    };
+    const pulsar = (e: PointerEvent) => {
+      if (pulsacion) clearTimeout(pulsacion.t);
+      borrado = false;
+      if (props.current.soloVer || !props.current.onBorrar) return;
+      pulsacion = {
+        x: e.clientX, y: e.clientY,
+        t: setTimeout(() => {
+          pulsacion = null;
+          const p = enImagen(e), v = vigia.current, donde = v.actual ?? v.cal;
+          if (!p || !donde) return;
+          const radio = (modeloRef.current ?? DIANAS.precision).negro / 2;
+          const bala = ((calibreRef.current ?? (modeloRef.current ?? DIANAS.precision).calibre) / 2 / radio) * donde.rx;
+          const margen = Math.max(1.4 * bala, 16 * p.porPunto); // al menos 16 puntos de pantalla
+          let cerca = -1, dist = Infinity;
+          props.current.disparos.forEach((d, i) => {
+            if (d.sinPosicion) return;
+            const dd = Math.hypot(donde.cx + (d.x / radio) * donde.rx - p.x, donde.cy + (d.y / radio) * donde.ry - p.y);
+            if (dd < margen && dd < dist) { cerca = i; dist = dd; }
+          });
+          if (cerca < 0) return;
+          borrado = true;
+          // Si no llega el toque (el iPhone a veces no lo manda tras una pulsación larga), se olvida.
+          setTimeout(() => { borrado = false; }, 1500);
+          v.marcadoAMano();
+          props.current.onBorrar?.(cerca);
+          navigator.vibrate?.(30);
+        }, 550),
+      };
+    };
     const toque = (e: MouseEvent) => {
       if (props.current.soloVer) {
         // En el visor, el toque dice qué se quiere ver en medio al ampliar.
@@ -254,22 +307,8 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         setEstado('buscando');
         return;
       }
-      // Tocar un punto ya marcado lo borra (por si la cámara o el dedo lo puso donde no era).
-      const donde = v.actual ?? v.cal;
-      const radio = (modeloRef.current ?? DIANAS.precision).negro / 2;
-      const bala = ((calibreRef.current ?? (modeloRef.current ?? DIANAS.precision).calibre) / 2 / radio) * donde.rx;
-      const margen = Math.max(1.4 * bala, (14 * (capa.width / caja.width)) / mapa.k); // al menos 14 puntos de pantalla
-      let cerca = -1, dist = Infinity;
-      props.current.disparos.forEach((d, i) => {
-        if (d.sinPosicion) return;
-        const dd = Math.hypot(donde.cx + (d.x / radio) * donde.rx - x, donde.cy + (d.y / radio) * donde.ry - y);
-        if (dd < margen && dd < dist) { cerca = i; dist = dd; }
-      });
-      if (cerca >= 0 && props.current.onBorrar) {
-        v.marcadoAMano();
-        props.current.onBorrar(cerca);
-        return;
-      }
+      // Si se acaba de borrar un punto con una pulsación larga, ese mismo toque no marca nada.
+      if (borrado) { borrado = false; return; }
       if (!props.current.activo) return;
       // Sobre la diana donde está ahora (si el móvil se ha movido un poco, no donde se fijó).
       const mm = aMm(v.actual ?? v.cal, x, y, modeloRef.current);
@@ -277,7 +316,11 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       props.current.onImpacto(mm.x, mm.y);
     };
     raiz.addEventListener('click', toque);
-    toqueRef.current = toque;
+    raiz.addEventListener('pointerdown', pulsar);
+    for (const ev of ['pointerup', 'pointercancel', 'pointermove'] as const) raiz.addEventListener(ev, soltar);
+    // Sin el menú de «copiar» ni la lupa del iPhone al mantener pulsada la imagen.
+    Object.assign(raiz.style, { webkitTouchCallout: 'none', webkitUserSelect: 'none', userSelect: 'none' });
+    toqueRef.current = { toque, pulsar, soltar };
 
     // Con el móvil en horizontal, el iPhone a veces sigue dando la imagen de la cámara en vertical
     // (sobre todo en la app de la pantalla de inicio): se gira aquí para que la diana se vea derecha.
@@ -509,6 +552,9 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     return () => {
       vivo = false;
       raiz.removeEventListener('click', toque);
+      raiz.removeEventListener('pointerdown', pulsar);
+      for (const ev of ['pointerup', 'pointercancel', 'pointermove'] as const) raiz.removeEventListener(ev, soltar);
+      if (pulsacion) clearTimeout(pulsacion.t);
       clearInterval(reloj);
       flujo?.getTracks().forEach((t) => t.stop());
       video.remove();
