@@ -126,7 +126,7 @@ const CORTOS: Partial<Record<Estado, string>> = {
  * Vídeo de la cámara trasera (con el móvil en el catalejo) que vigila la diana y avisa de cada
  * impacto nuevo con su posición en mm. Todo se procesa en el móvil; no se guarda el vídeo.
  */
-export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto, disparos = [], marcador, serie, onImpacto }: PropsCamaraDiana) {
+export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto, disparos = [], nuevos = 0, marcador, serie, onImpacto }: PropsCamaraDiana) {
   const { height: altoPantalla } = useWindowDimensions();
   const caja = useRef<unknown>(null); // en la web, el elemento del DOM de la vista
   // Pantalla completa: el vídeo y sus marcas se pasan a una capa que tapa toda la pantalla (sin
@@ -179,9 +179,9 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
   const vigia = useRef(new Vigia(modelo, calibre));
   const modeloRef = useRef(modelo);
   // Siempre la última versión de las props, sin reiniciar la cámara.
-  const props = useRef({ activo, onImpacto, horizontal, soloVer, disparos });
+  const props = useRef({ activo, onImpacto, horizontal, soloVer, disparos, nuevos });
   useEffect(() => {
-    props.current = { activo, onImpacto, horizontal, soloVer, disparos };
+    props.current = { activo, onImpacto, horizontal, soloVer, disparos, nuevos };
   });
   // Se pintan los disparos apuntados en la sesión (no los que ha visto la cámara): así, al pulsar
   // Deshacer, la marca desaparece también de la imagen. Lo que se ve ahora pasa a ser la referencia,
@@ -361,14 +361,32 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         c.ellipse(ox + cal.cx * a * k, oy + cal.cy * a * k, cal.rx * a * k, cal.ry * a * k, 0, 0, Math.PI * 2);
         c.stroke();
       }
-      c.fillStyle = '#FF3B30';
+      // Los impactos nuevos (de la serie en curso) en verde y los anteriores de esta diana en rojo;
+      // el último, además, con un aro para verlo de un vistazo.
       const cal0 = vigia.current.actual ?? vigia.current.cal, radio = (modeloRef.current ?? DIANAS.precision).negro / 2;
-      for (const d of cal0 ? props.current.disparos.filter((d) => !d.sinPosicion) : []) {
+      const todos = props.current.disparos;
+      const desde = todos.length - Math.min(props.current.nuevos, todos.length);
+      const dpr = devicePixelRatio;
+      c.save();
+      c.shadowColor = 'rgba(0,0,0,0.8)';
+      c.shadowBlur = 3 * dpr;
+      for (const [i, d] of cal0 ? todos.entries() : []) {
+        if (d.sinPosicion) continue;
         const p = { x: cal0!.cx + (d.x / radio) * cal0!.rx, y: cal0!.cy + (d.y / radio) * cal0!.ry };
+        const px = ox + p.x * a * k, py = oy + p.y * a * k;
+        c.fillStyle = i >= desde ? '#2ECC71' : '#FF3B30';
         c.beginPath();
-        c.arc(ox + p.x * a * k, oy + p.y * a * k, 6 * devicePixelRatio, 0, Math.PI * 2);
+        c.arc(px, py, 6 * dpr, 0, Math.PI * 2);
         c.fill();
+        if (i === todos.length - 1 && i >= desde) {
+          c.strokeStyle = '#2ECC71';
+          c.lineWidth = 2.5 * dpr;
+          c.beginPath();
+          c.arc(px, py, 11 * dpr, 0, Math.PI * 2);
+          c.stroke();
+        }
       }
+      c.restore();
     };
 
     const mirar = () => {
