@@ -118,7 +118,10 @@ export function calibrar(g: Gris, alcance = 0.48, centro?: { x: number; y: numbe
   // el catalejo.
   const otsu = () => {
     const c = calibrarOtsu(g, alcance, centro);
-    return c && (alcance >= 0.7 || Math.max(c.rx, c.ry) <= 1.06 * Math.min(c.rx, c.ry)) ? c : null;
+    if (!c || alcance >= 0.7) return c;
+    // Redondo y dentro de la imagen: un círculo más grande que la imagen es la luz del catalejo.
+    const dentro = c.cx - c.rx >= 0 && c.cy - c.ry >= 0 && c.cx + c.rx <= g.w && c.cy + c.ry <= g.h;
+    return dentro && Math.max(c.rx, c.ry) <= 1.06 * Math.min(c.rx, c.ry) ? c : null;
   };
   return buscarNegro(g, alcance, centro) ?? (alcance < 0.7 ? buscarNegro(g, 0.7, centro) : null) ?? negroCortado(g) ?? otsu();
 }
@@ -535,17 +538,33 @@ export function comparar(
   const rZona = Math.max(1.1, 0.96 * (diametroExterior(diana) / diana.negro)) * Math.max(cal.rx, cal.ry);
   const borde = 4;
   const m = new Uint8Array(w * h);
+  const dentroZona = (x: number, y: number, i: number) =>
+    (x - cal.cx) ** 2 + (y - cal.cy) ** 2 <= rZona * rZona && actual.d[i] !== 0 && ref.d[i] !== 0;
+  // Umbral según el ruido de la imagen: con el catalejo la diana se ve con poco contraste y, si el
+  // negro sale pequeño en la imagen, un agujero de .22 son 3 o 4 píxeles que apenas cambian. Con un
+  // umbral fijo de 28 no se veía ninguno (campo, 31-10-2026). Se mira el ruido típico de la
+  // diferencia (mediana) y se exige bastante más que eso, sin bajar de 10 ni pasar de 28.
+  const muestras: number[] = [];
+  for (let y = borde; y < h - borde; y += 3) {
+    for (let x = borde; x < w - borde; x += 3) {
+      const i = y * w + x;
+      if (dentroZona(x, y, i)) muestras.push(Math.abs(actual.d[i] - ref.d[i]));
+    }
+  }
+  muestras.sort((p, q) => p - q);
+  const ruido = muestras.length ? 1.4826 * muestras[Math.floor(muestras.length / 2)] : 10;
+  const umbral = Math.max(10, Math.min(28, 6 * ruido));
   let zona = 0, cambiados = 0;
   for (let y = borde; y < h - borde; y++) {
     for (let x = borde; x < w - borde; x++) {
-      if ((x - cal.cx) ** 2 + (y - cal.cy) ** 2 > rZona * rZona) continue;
       const i = y * w + x;
       // Fuera de la imagen (al alinear, lo que entra por el borde vale 0): no se compara.
-      if (actual.d[i] === 0 || ref.d[i] === 0) continue;
+      if (!dentroZona(x, y, i)) continue;
       zona++;
       const dif = actual.d[i] - ref.d[i];
-      if (Math.abs(dif) <= 28) continue;
-      cambiados++;
+      if (Math.abs(dif) <= umbral) continue;
+      // Lo que cambia mucho (movimiento o luz) se cuenta aparte, con el corte de siempre.
+      if (Math.abs(dif) > 28) cambiados++;
       // Un agujero nuevo se ve más claro en el negro (pasa la luz) y más oscuro en el blanco.
       // El cambio contrario (un agujero que desaparece: un parche) no cuenta como impacto.
       const enNegro = ((x - cal.cx) / cal.rx) ** 2 + ((y - cal.cy) / cal.ry) ** 2 < 1;
