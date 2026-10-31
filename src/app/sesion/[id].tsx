@@ -192,6 +192,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
       disparos={disparosDiana}
       marcador={marcador}
       serie={nSerie}
+      onBorrar={(n) => store.borrarDisparo(sesion.id, n)}
       onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)}
     />
   );
@@ -211,6 +212,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         disparos={disparosDiana}
         marcador={marcador}
         serie={nSerie}
+        onBorrar={(n) => store.borrarDisparo(sesion.id, n)}
         onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)}
       />
       <Pressable onPress={() => setConVisor(false)} hitSlop={8}>
@@ -253,7 +255,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         {completa
           ? 'Serie completa'
           : camara
-            ? 'Si la cámara se salta un disparo, tócalo en la diana; si apunta uno de más, pulsa Deshacer.'
+            ? 'Si la cámara se salta un disparo, tócalo en la imagen; si un punto está mal, tócalo y se borra.'
             : foto
               ? 'Los disparos de la foto salen aquí. Si falta alguno, tócalo en la diana; si sobra, pulsa Deshacer.'
               : 'Toca la diana donde ha entrado el disparo'}

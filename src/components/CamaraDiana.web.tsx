@@ -112,21 +112,21 @@ const TEXTOS: Record<Estado, string> = {
   'sin-camara': 'No se ha podido abrir la cámara (puede que otra app la esté usando). Toca Reintentar.',
   buscando: 'Encaja el negro de la diana dentro del círculo blanco, entero y lo más grande posible. Si no la encuentro, toca su centro en la imagen.',
   calibrando: 'Diana encontrada. Mantén el móvil quieto…',
-  vigilando: 'Listo: dispara. Si se salta un disparo, tócalo en la imagen.',
+  vigilando: 'Listo: dispara. Si se salta un disparo, tócalo en la imagen; si un punto está mal, tócalo y se borra.',
 };
 
 /** Textos cortos para cuando van encima de la imagen (en horizontal), para que tapen poco. */
 const CORTOS: Partial<Record<Estado, string>> = {
   buscando: 'Encaja la diana. Si no la encuentro, toca su centro.',
   calibrando: 'Diana encontrada. Quieto…',
-  vigilando: 'Listo. Si falta un disparo, tócalo.',
+  vigilando: 'Listo. Toca para marcar o borrar un punto.',
 };
 
 /**
  * Vídeo de la cámara trasera (con el móvil en el catalejo) que vigila la diana y avisa de cada
  * impacto nuevo con su posición en mm. Todo se procesa en el móvil; no se guarda el vídeo.
  */
-export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto, disparos = [], marcador, serie, onImpacto }: PropsCamaraDiana) {
+export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto, disparos = [], marcador, onBorrar, serie, onImpacto }: PropsCamaraDiana) {
   const { height: altoPantalla } = useWindowDimensions();
   const caja = useRef<unknown>(null); // en la web, el elemento del DOM de la vista
   // Pantalla completa: el vídeo y sus marcas se pasan a una capa que tapa toda la pantalla (sin
@@ -180,9 +180,9 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
   const modeloRef = useRef(modelo);
   const calibreRef = useRef(calibre);
   // Siempre la última versión de las props, sin reiniciar la cámara.
-  const props = useRef({ activo, onImpacto, horizontal, soloVer, disparos });
+  const props = useRef({ activo, onImpacto, onBorrar, horizontal, soloVer, disparos });
   useEffect(() => {
-    props.current = { activo, onImpacto, horizontal, soloVer, disparos };
+    props.current = { activo, onImpacto, onBorrar, horizontal, soloVer, disparos };
   });
   // Se pintan los disparos apuntados en la sesión (no los que ha visto la cámara): así, al pulsar
   // Deshacer, la marca desaparece también de la imagen. Lo que se ve ahora pasa a ser la referencia,
@@ -248,6 +248,22 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       if (!v.cal) {
         v.centro = { x, y };
         setEstado('buscando');
+        return;
+      }
+      // Tocar un punto ya marcado lo borra (por si la cámara o el dedo lo puso donde no era).
+      const donde = v.actual ?? v.cal;
+      const radio = (modeloRef.current ?? DIANAS.precision).negro / 2;
+      const bala = ((calibreRef.current ?? (modeloRef.current ?? DIANAS.precision).calibre) / 2 / radio) * donde.rx;
+      const margen = Math.max(1.4 * bala, (14 * (capa.width / caja.width)) / mapa.k); // al menos 14 puntos de pantalla
+      let cerca = -1, dist = Infinity;
+      props.current.disparos.forEach((d, i) => {
+        if (d.sinPosicion) return;
+        const dd = Math.hypot(donde.cx + (d.x / radio) * donde.rx - x, donde.cy + (d.y / radio) * donde.ry - y);
+        if (dd < margen && dd < dist) { cerca = i; dist = dd; }
+      });
+      if (cerca >= 0 && props.current.onBorrar) {
+        v.marcadoAMano();
+        props.current.onBorrar(cerca);
         return;
       }
       if (!props.current.activo) return;

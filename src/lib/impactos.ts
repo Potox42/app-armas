@@ -112,7 +112,15 @@ function manchas(m: Uint8Array, w: number, h: number): Mancha[] {
  * y suaviza antes para que las rayas blancas de los anillos no lo partan en trozos.
  */
 export function calibrar(g: Gris, alcance = 0.48, centro?: { x: number; y: number }): Calibracion | null {
-  return buscarNegro(g, alcance, centro) ?? negroCortado(g) ?? calibrarOtsu(g, alcance, centro);
+  // Con el negro grande en la imagen (Tele o mucho aumento), puede salirse del alcance: se mira más
+  // lejos antes que usar el método de reserva, que lo daba recortado (desplazado y ovalado; campo,
+  // 31-10-2026). Con la cámara (alcance corto), el de reserva solo vale si sale redondo, como se ve la diana desde
+  // el catalejo.
+  const otsu = () => {
+    const c = calibrarOtsu(g, alcance, centro);
+    return c && (alcance >= 0.7 || Math.max(c.rx, c.ry) <= 1.06 * Math.min(c.rx, c.ry)) ? c : null;
+  };
+  return buscarNegro(g, alcance, centro) ?? (alcance < 0.7 ? buscarNegro(g, 0.7, centro) : null) ?? negroCortado(g) ?? otsu();
 }
 
 /**
