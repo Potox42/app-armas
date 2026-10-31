@@ -9,7 +9,6 @@ export interface PropsCamaraDiana {
   soloVer?: boolean; // visor del catalejo: se ve la diana pero no se buscan impactos
   alto?: number; // alto del vídeo en puntos (por defecto, 3:4 del ancho)
   disparos?: Disparo[]; // disparos ya apuntados en esta diana (se pintan sobre la imagen)
-  nuevos?: number; // cuántos de los últimos disparos son de la serie en curso: van en verde, el resto en rojo
   marcador?: string; // a pantalla completa, la cuenta de la serie (disparo, último, total)
   serie?: number; // nº de la serie en curso: al empezar otra se vuelve a pantalla completa si se usaba
   onImpacto: (x: number, y: number) => void; // mm desde el centro (x a la derecha, y hacia abajo)

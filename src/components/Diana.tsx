@@ -12,7 +12,7 @@ interface Props {
   calibre?: number; // diámetro de los impactos dibujados, mm
   visibleMm?: number; // diámetro de diana que se ve
   anteriores?: Disparo[]; // disparos de series anteriores, en gris (o en rojo con anterioresEnRojo)
-  anterioresEnRojo?: boolean; // durante la sesión: los de la serie en curso en verde y los anteriores en rojo
+  anterioresEnRojo?: boolean; // durante la sesión: el último en verde y todos los demás en rojo
   grupo?: { cx: number; cy: number; radio: number }; // centro y radio medio del grupo
   centros?: { x: number; y: number; etiqueta: string }[]; // centro de cada serie
   sueltos?: Disparo[]; // impactos lejos del grupo: se rodean en naranja
@@ -129,7 +129,7 @@ export function Diana({
           const ultimo = i === disparos.length - 1;
           return (
             <G key={i}>
-              <Circle cx={d.x} cy={d.y} r={bala} fill={anterioresEnRojo || ultimo ? colors.green : colors.red} />
+              <Circle cx={d.x} cy={d.y} r={bala} fill={ultimo ? colors.green : colors.red} />
               {ultimo && (
                 <Circle cx={d.x} cy={d.y} r={bala + 3 * u} fill="none" stroke={colors.green} strokeWidth={1.5 * u} />
               )}

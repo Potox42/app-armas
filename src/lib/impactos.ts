@@ -285,7 +285,9 @@ function buscarNegro(g: Gris, alcance: number, centro?: { x: number; y: number }
   };
   let mejor: { cal: Calibracion; nota: number; corte: number } | null = null;
   const m = new Uint8Array(w * h);
-  for (let p = 0.04; p <= 0.8; p += 0.03) {
+  // Hasta casi el papel: con el catalejo, lo oscuro de alrededor (el tubo) ocupa mucha imagen y,
+  // con cortes más bajos, el negro de la diana (gris con luz) no llegaba a salir entero.
+  for (let p = 0.04; p <= 0.98; p += 0.03) {
     const t = valores[Math.floor(p * (valores.length - 1))];
     m.fill(0);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (dentro(x, y) && s.d[y * w + x] < t) m[y * w + x] = 1;
@@ -590,6 +592,9 @@ export class Vigia {
     // Ya fijada, una «diana» de otro tamaño es un error de búsqueda (un anillo, un agujero): se
     // sigue con la fijada.
     if (cal && this.cal && Math.abs(cal.rx / this.cal.rx - 1) > 0.15) cal = null;
+    // El catalejo se mira de frente: una «diana» muy ovalada es el borde de la imagen o del tubo,
+    // no el negro (campo, 31-10-2026: se tomaba el círculo de luz del catalejo y todo salía 10).
+    if (cal && Math.max(cal.rx, cal.ry) > 1.3 * Math.min(cal.rx, cal.ry)) cal = null;
     if (!cal) {
       this.estables = 0;
       return { estado: this.cal ? 'vigilando' : 'buscando', cal: this.actual ?? this.cal ?? undefined };

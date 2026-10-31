@@ -190,7 +190,6 @@ function Asistente({ sesion }: { sesion: Sesion }) {
       modelo={modelo}
       calibre={calibre}
       disparos={disparosDiana}
-      nuevos={serie.disparos.length}
       marcador={marcador}
       serie={nSerie}
       onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)}
@@ -210,7 +209,6 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         modelo={modelo}
         calibre={calibre}
         disparos={disparosDiana}
-        nuevos={serie.disparos.length}
         marcador={marcador}
         serie={nSerie}
         onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)}
