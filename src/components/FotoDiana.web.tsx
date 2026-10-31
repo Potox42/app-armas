@@ -21,7 +21,7 @@ type Estado = 'inicio' | 'leyendo' | 'sin-diana' | 'revisar';
  * una diana ya usada). La foto de después de una serie es la de antes de la siguiente.
  * Todo se procesa en el móvil; las fotos no se guardan.
  */
-export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana) {
+export function FotoDiana({ modelo, calibre, faltan, anteriores = [], onApuntar }: PropsFotoDiana) {
   const [estado, setEstado] = useState<Estado>('inicio');
   const [foto, setFoto] = useState<Foto | null>(null);
   const [marcas, setMarcas] = useState<Marca[]>([]);
@@ -148,12 +148,22 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
     c.setLineDash([]);
     // Cada marca mide lo que una bala, para poder marcar disparos pegados.
     const r = Math.max(rBala * k, 4 * devicePixelRatio);
+    // Los disparos ya apuntados en esta diana, en rojo; los agujeros nuevos que propone la foto, en verde.
+    const radioNegro = modelo.negro / 2;
+    c.fillStyle = 'rgba(255,59,48,0.85)';
+    for (const d of anteriores) {
+      if (d.sinPosicion) continue;
+      const [x, y] = aPantalla(cal.cx + (d.x / radioNegro) * cal.rx, cal.cy + (d.y / radioNegro) * cal.ry);
+      c.beginPath();
+      c.arc(x, y, Math.max(r * 0.6, 3 * devicePixelRatio), 0, Math.PI * 2);
+      c.fill();
+    }
     c.font = `bold ${12 * devicePixelRatio}px -apple-system, sans-serif`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     marcas.forEach((m, j) => {
       const [x, y] = aPantalla(m.xPx, m.yPx);
-      c.strokeStyle = j === elegida ? '#FFD60A' : '#FF3B30';
+      c.strokeStyle = j === elegida ? '#FFD60A' : '#2ECC71';
       c.lineWidth = (cerca ? 2 : 1.5) * devicePixelRatio;
       c.beginPath();
       c.arc(x, y, r, 0, Math.PI * 2);
@@ -163,7 +173,7 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
       c.arc(x, y, 1.5 * devicePixelRatio, 0, Math.PI * 2);
       c.fill();
       if (m.veces > 1) {
-        c.fillStyle = '#FF3B30';
+        c.fillStyle = '#1E9E57';
         c.beginPath();
         c.arc(x + r, y - r, 8 * devicePixelRatio, 0, Math.PI * 2);
         c.fill();
@@ -187,7 +197,7 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
         setElegida(marcas.length);
       }
     };
-  }, [estado, foto, marcas, elegida, rBala, cerca]);
+  }, [estado, foto, marcas, elegida, rBala, cerca, anteriores, modelo.negro]);
 
   // El <input type="file"> abre en el iPhone «Hacer foto» o «Fototeca».
   const elegir = (esAntes = false) => {
@@ -262,8 +272,10 @@ export function FotoDiana({ modelo, calibre, faltan, onApuntar }: PropsFotoDiana
         {n} {n === 1 ? 'disparo' : 'disparos'} · {total} puntos
       </Text>
       <Text style={s.muted}>
-        Revisa la foto: toca un agujero sin marcar para añadirlo y toca un círculo rojo para quitarlo o decir que
-        entraron varios disparos juntos. El círculo verde es el negro de la diana: si no encaja, repite la foto.
+        Revisa la foto: los agujeros nuevos van en verde. Toca un agujero sin marcar para añadirlo y toca un
+        círculo verde pequeño para quitarlo o decir que entraron varios disparos juntos.
+        {anteriores.some((d) => !d.sinPosicion) ? ' Los puntos rojos son los disparos que ya tenías apuntados en esta diana: no los vuelvas a marcar.' : ''}
+        {' '}El círculo grande es el negro de la diana: si no encaja, repite la foto.
       </Text>
       {foto?.comparada && (
         <Text style={{ color: colors.green, fontSize: 13 }}>
