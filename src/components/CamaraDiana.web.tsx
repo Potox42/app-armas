@@ -6,6 +6,9 @@ import { colors, radius, space } from '@/theme';
 import type { PropsCamaraDiana } from './CamaraDiana.types';
 
 const ANCHO = 640; // ancho de la imagen que se analiza (más, para ver los agujeros de .22 por el catalejo)
+// Si la diana sale pequeña, se analiza con más detalle (hasta este ancho): un .22 son 3 píxeles si no.
+const ANCHO_DETALLE = 960;
+const NEGRO_PEQUENO = 75; // radio del negro (en la imagen analizada) por debajo del cual se amplía
 const CADA_MS = 450; // cada cuánto se mira la diana
 const ESPERA_MS = 400; // al girar el móvil, el iPhone tarda un poco en girar también la cámara
 
@@ -229,6 +232,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     // si se encuentra, o donde toque el tirador. Así al ampliar no se pierde la diana.
     let foco: { fx: number; fy: number; mano: boolean } = { fx: 0.5, fy: 0.5, mano: false };
     let ultimoFoco = 0;
+    let ancho = ANCHO; // ancho de la imagen analizada ahora (ANCHO o ANCHO_DETALLE)
 
     // Un toque en la imagen: antes de encontrar la diana, dice dónde está; después, marca a mano un
     // disparo que la cámara no ha visto.
@@ -342,16 +346,16 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       capa.height = caja.height * devicePixelRatio;
       const k = Math.min(capa.width / W, capa.height / H);
       const ox = (capa.width - W * k) / 2, oy = (capa.height - H * k) / 2;
-      const a = W / ANCHO; // de la imagen analizada al vídeo
+      const a = W / ancho; // de la imagen analizada al vídeo
       mapa = { ox, oy, k: a * k };
       const c = capa.getContext('2d')!;
       c.clearRect(0, 0, capa.width, capa.height);
       if (!cal && !props.current.soloVer) {
         // Guía mientras busca: el negro tiene que quedar entero dentro de este círculo (es la zona en
         // la que se busca). Si el tirador ha tocado el centro de la diana, el círculo va ahí.
-        const h = Math.round((H / W) * ANCHO);
-        const centro = vigia.current.centro ?? { x: ANCHO / 2, y: h / 2 };
-        const r = 0.46 * Math.min(ANCHO, h) * a * k;
+        const h = Math.round((H / W) * ancho);
+        const centro = vigia.current.centro ?? { x: ancho / 2, y: h / 2 };
+        const r = 0.46 * Math.min(ancho, h) * a * k;
         const x = ox + centro.x * a * k, y = oy + centro.y * a * k;
         const dpr = devicePixelRatio;
         c.save();
@@ -415,7 +419,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       }
       // Al ampliar, en medio queda la diana encontrada (salvo que el tirador haya tocado otro sitio).
       const fija = vigia.current.actual ?? vigia.current.cal;
-      if (fija && !foco.mano) foco = { fx: fija.cx / ANCHO, fy: fija.cy / Math.round((H / W) * ANCHO), mano: false };
+      if (fija && !foco.mano) foco = { fx: fija.cx / ancho, fy: fija.cy / Math.round((H / W) * ancho), mano: false };
       encajar(gr);
       // Si la imagen cambia de forma o de giro, la calibración anterior ya no vale.
       const ahora = `${W}x${H}@${gr}`;
@@ -423,19 +427,19 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         vigia.current.reiniciar();
       }
       forma = ahora;
-      const h = Math.round((H / W) * ANCHO);
-      lienzo.width = ANCHO;
+      const h = Math.round((H / W) * ancho);
+      lienzo.width = ancho;
       lienzo.height = h;
-      const e = ANCHO / W; // de la imagen girada a la analizada
+      const e = ancho / W; // de la imagen girada a la analizada
       ctx.save();
-      ctx.translate(ANCHO / 2, h / 2);
+      ctx.translate(ancho / 2, h / 2);
       ctx.rotate((gr * Math.PI) / 180);
       ctx.drawImage(video, (-video.videoWidth * e) / 2, (-video.videoHeight * e) / 2, video.videoWidth * e, video.videoHeight * e);
       ctx.restore();
-      const px = ctx.getImageData(0, 0, ANCHO, h).data;
-      const d = new Float32Array(ANCHO * h);
+      const px = ctx.getImageData(0, 0, ancho, h).data;
+      const d = new Float32Array(ancho * h);
       for (let i = 0; i < d.length; i++) d[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
-      const g: Gris = { w: ANCHO, h, d };
+      const g: Gris = { w: ancho, h, d };
       const r = vigia.current.procesar(g);
       setEstado(r.estado);
       if (r.impacto && props.current.activo) {
@@ -443,6 +447,16 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         props.current.onImpacto(r.impacto.x, r.impacto.y);
       }
       dibujar(gr, r.cal ?? vigia.current.actual ?? vigia.current.cal ?? undefined);
+      // Diana pequeña en la imagen: se pasa a analizar con más detalle y se vuelve a fijar la diana
+      // (unos segundos) donde estaba. Solo una vez por cámara abierta.
+      const fijada = vigia.current.cal;
+      if (fijada && ancho === ANCHO && fijada.rx < NEGRO_PEQUENO && W >= ANCHO_DETALLE) {
+        const f = ANCHO_DETALLE / ancho;
+        ancho = ANCHO_DETALLE;
+        vigia.current.reiniciar();
+        vigia.current.centro = { x: fijada.cx * f, y: fijada.cy * f };
+        setEstado('calibrando');
+      }
     };
 
     // Sin cámara en el navegador (o sin HTTPS), getUserMedia no existe: se trata como un permiso denegado.
