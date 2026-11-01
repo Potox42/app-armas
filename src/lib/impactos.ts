@@ -929,13 +929,35 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
     }
     return null;
   };
+  // La diana puede estar girada en la foto (campo, 1-11-2026: unos 7°, y las cifras salían como
+  // agujeros). El giro se mide con los propios candidatos: las cifras quedan en cuatro rayas en
+  // cruz, a la distancia de cada anillo; se prueba de -20° a 20° y se queda el giro con más de
+  // ellos en su sitio. Todo lo de las cifras se mira en la diana «derecha» (sin el giro).
+  const enAnillo = (r: number) => Object.entries(diana.anillos).some(([v, dm]) => Number(v) <= 9 && Math.abs(r - (dm / 2 - paso / 2)) <= 0.35 * paso);
+  const candidatos = picos.map((k) => aMm(cal, k.x, k.y, diana)).filter((p) => enAnillo(Math.hypot(p.x, p.y)));
+  let giro = 0, enRaya = -1;
+  for (let gr = -20; gr <= 20; gr += 0.5) {
+    const a = (gr * Math.PI) / 180, c = Math.cos(a), sn = Math.sin(a);
+    let n = 0;
+    for (const p of candidatos) {
+      const u = c * p.x + sn * p.y, v = -sn * p.x + c * p.y;
+      if (Math.min(Math.abs(u), Math.abs(v)) < 0.2 * paso) n++;
+    }
+    if (n > enRaya || (n === enRaya && Math.abs(gr) < Math.abs(giro))) { enRaya = n; giro = gr; }
+  }
+  // Con pocos candidatos en cruz no se sabe: se deja derecha.
+  if (enRaya < 3) giro = 0;
+  const cg = Math.cos((giro * Math.PI) / 180), sg = Math.sin((giro * Math.PI) / 180);
+  const aDerecha = (x: number, y: number) => ({ x: cg * x + sg * y, y: -sg * x + cg * y });
+  const aFoto = (x: number, y: number) => ({ x: cg * x - sg * y, y: sg * x + cg * y });
   const N = 16, lado = 0.7 * paso;
   const parche = (xm: number, ym: number): Float32Array | null => {
     const o = new Float32Array(N * N);
     for (let j = 0; j < N; j++) {
       for (let i = 0; i < N; i++) {
-        const px = cal.cx + ((xm + (i / (N - 1) - 0.5) * lado) / (diana.negro / 2)) * cal.rx;
-        const py = cal.cy + ((ym + (j / (N - 1) - 0.5) * lado) / (diana.negro / 2)) * cal.ry;
+        const f = aFoto(xm + (i / (N - 1) - 0.5) * lado, ym + (j / (N - 1) - 0.5) * lado);
+        const px = cal.cx + (f.x / (diana.negro / 2)) * cal.rx;
+        const py = cal.cy + (f.y / (diana.negro / 2)) * cal.ry;
         if (px < 1 || py < 1 || px > w - 2 || py > h - 2) return null;
         o[j * N + i] = muestra(fino, px, py);
       }
@@ -1030,11 +1052,12 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
   for (const k of picos) {
     if (k.v < 0.33 * tipico) continue;
     const mm = aMm(cal, k.x, k.y, diana);
-    if (esCifra(mm.x, mm.y)) continue;
+    const der = aDerecha(mm.x, mm.y);
+    if (esCifra(der.x, der.y)) continue;
     // En el blanco, en el sitio de una cifra (que a veces no se puede comparar con la de otra raya
     // porque queda fuera de la foto) solo vale una mancha gris rellena; los trazos de una cifra
     // son finos y muy oscuros.
-    if (zonaDe(k.x, k.y) > 1 && numeroEn(mm.x, mm.y) && relleno(k.x, k.y) < 0.33) continue;
+    if (zonaDe(k.x, k.y) > 1 && numeroEn(der.x, der.y) && relleno(k.x, k.y) < 0.33) continue;
     res.push({ xPx: k.x, yPx: k.y, x: mm.x, y: mm.y, valor: puntuar(mm.x, mm.y, calibreMm, diana), veces: 1, tam: k.v / contraste });
   }
   return res;
