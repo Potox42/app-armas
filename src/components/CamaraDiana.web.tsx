@@ -6,6 +6,9 @@ import { colors, radius, space } from '@/theme';
 import type { PropsCamaraDiana } from './CamaraDiana.types';
 
 const ANCHO = 640; // ancho de la imagen que se analiza (más, para ver los agujeros de .22 por el catalejo)
+// Si la diana sale pequeña, se analiza con más detalle (hasta este ancho): un .22 son 3 píxeles si no.
+const ANCHO_DETALLE = 960;
+const NEGRO_PEQUENO = 75; // radio del negro (en la imagen analizada) por debajo del cual se amplía
 const CADA_MS = 450; // cada cuánto se mira la diana
 const ESPERA_MS = 400; // al girar el móvil, el iPhone tarda un poco en girar también la cámara
 
@@ -112,21 +115,21 @@ const TEXTOS: Record<Estado, string> = {
   'sin-camara': 'No se ha podido abrir la cámara (puede que otra app la esté usando). Toca Reintentar.',
   buscando: 'Encaja el negro de la diana dentro del círculo blanco, entero y lo más grande posible. Si no la encuentro, toca su centro en la imagen.',
   calibrando: 'Diana encontrada. Mantén el móvil quieto…',
-  vigilando: 'Listo: dispara. Si se salta un disparo, tócalo en la imagen.',
+  vigilando: 'Listo: dispara. Si se salta un disparo, tócalo en la imagen; si un punto está mal, mantenlo pulsado y se borra.',
 };
 
 /** Textos cortos para cuando van encima de la imagen (en horizontal), para que tapen poco. */
 const CORTOS: Partial<Record<Estado, string>> = {
   buscando: 'Encaja la diana. Si no la encuentro, toca su centro.',
   calibrando: 'Diana encontrada. Quieto…',
-  vigilando: 'Listo. Si falta un disparo, tócalo.',
+  vigilando: 'Listo. Toca para marcar; mantén pulsado un punto para borrarlo.',
 };
 
 /**
  * Vídeo de la cámara trasera (con el móvil en el catalejo) que vigila la diana y avisa de cada
  * impacto nuevo con su posición en mm. Todo se procesa en el móvil; no se guarda el vídeo.
  */
-export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto, disparos = [], marcador, serie, onImpacto }: PropsCamaraDiana) {
+export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto, disparos = [], marcador, onBorrar, serie, onImpacto }: PropsCamaraDiana) {
   const { height: altoPantalla } = useWindowDimensions();
   const caja = useRef<unknown>(null); // en la web, el elemento del DOM de la vista
   // Pantalla completa: el vídeo y sus marcas se pasan a una capa que tapa toda la pantalla (sin
@@ -140,7 +143,8 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
   const contenedor = useRef<HTMLElement | null>(null); // donde está ahora el vídeo
   const nodoGrande = useRef<HTMLElement | null>(null); // la caja de pantalla completa, si está abierta
   const elementos = useRef<{ video: HTMLVideoElement; capa: HTMLCanvasElement } | null>(null);
-  const toqueRef = useRef<((e: MouseEvent) => void) | null>(null);
+  // Toque (marca un disparo) y pulsación larga (borra el punto que hay debajo).
+  const toqueRef = useRef<{ toque: (e: MouseEvent) => void; pulsar: (e: PointerEvent) => void; soltar: (e: PointerEvent) => void } | null>(null);
   const pasarA = (destino: HTMLElement | null) => {
     const el = elementos.current;
     if (!destino || !el) return;
@@ -155,7 +159,9 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     nodoGrande.current = n;
     if (n) {
       Object.assign(n.style, { clipPath: 'inset(0)' });
-      n.addEventListener('click', (e) => toqueRef.current?.(e));
+      n.addEventListener('click', (e) => toqueRef.current?.toque(e));
+      n.addEventListener('pointerdown', (e) => toqueRef.current?.pulsar(e));
+      for (const ev of ['pointerup', 'pointercancel', 'pointermove'] as const) n.addEventListener(ev, (e) => toqueRef.current?.soltar(e));
       pasarA(n);
     } else {
       pasarA(pequena);
@@ -178,10 +184,11 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
   }, [zoom]);
   const vigia = useRef(new Vigia(modelo, calibre));
   const modeloRef = useRef(modelo);
+  const calibreRef = useRef(calibre);
   // Siempre la última versión de las props, sin reiniciar la cámara.
-  const props = useRef({ activo, onImpacto, horizontal, soloVer, disparos });
+  const props = useRef({ activo, onImpacto, onBorrar, horizontal, soloVer, disparos });
   useEffect(() => {
-    props.current = { activo, onImpacto, horizontal, soloVer, disparos };
+    props.current = { activo, onImpacto, onBorrar, horizontal, soloVer, disparos };
   });
   // Se pintan los disparos apuntados en la sesión (no los que ha visto la cámara): así, al pulsar
   // Deshacer, la marca desaparece también de la imagen. Lo que se ve ahora pasa a ser la referencia,
@@ -228,9 +235,60 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     // si se encuentra, o donde toque el tirador. Así al ampliar no se pierde la diana.
     let foco: { fx: number; fy: number; mano: boolean } = { fx: 0.5, fy: 0.5, mano: false };
     let ultimoFoco = 0;
+    let ancho = ANCHO; // ancho de la imagen analizada ahora (ANCHO o ANCHO_DETALLE)
 
     // Un toque en la imagen: antes de encontrar la diana, dice dónde está; después, marca a mano un
     // disparo que la cámara no ha visto.
+    // De un toque en pantalla a la imagen analizada.
+    const enImagen = (e: MouseEvent) => {
+      if (!mapa) return null;
+      // La capa puede estar ampliada (Ampliar): se pasa del toque a sus píxeles en proporción.
+      const caja = capa.getBoundingClientRect();
+      return {
+        x: (((e.clientX - caja.left) / caja.width) * capa.width - mapa.ox) / mapa.k,
+        y: (((e.clientY - caja.top) / caja.height) * capa.height - mapa.oy) / mapa.k,
+        porPunto: capa.width / caja.width / mapa.k, // píxeles de la imagen por punto de pantalla
+      };
+    };
+    // Mantener pulsado un punto ya marcado lo borra (por si la cámara o el dedo lo puso donde no
+    // era). Un toque normal siempre marca, aunque haya otro disparo pegado (campo, 31-10-2026).
+    let borrado = false;
+    let pulsacion: { t: ReturnType<typeof setTimeout>; x: number; y: number } | null = null;
+    const soltar = (e: PointerEvent) => {
+      if (!pulsacion) return;
+      if (e.type === 'pointermove' && Math.hypot(e.clientX - pulsacion.x, e.clientY - pulsacion.y) < 12) return;
+      clearTimeout(pulsacion.t);
+      pulsacion = null;
+    };
+    const pulsar = (e: PointerEvent) => {
+      if (pulsacion) clearTimeout(pulsacion.t);
+      borrado = false;
+      if (props.current.soloVer || !props.current.onBorrar) return;
+      pulsacion = {
+        x: e.clientX, y: e.clientY,
+        t: setTimeout(() => {
+          pulsacion = null;
+          const p = enImagen(e), v = vigia.current, donde = v.actual ?? v.cal;
+          if (!p || !donde) return;
+          const radio = (modeloRef.current ?? DIANAS.precision).negro / 2;
+          const bala = ((calibreRef.current ?? (modeloRef.current ?? DIANAS.precision).calibre) / 2 / radio) * donde.rx;
+          const margen = Math.max(1.4 * bala, 16 * p.porPunto); // al menos 16 puntos de pantalla
+          let cerca = -1, dist = Infinity;
+          props.current.disparos.forEach((d, i) => {
+            if (d.sinPosicion) return;
+            const dd = Math.hypot(donde.cx + (d.x / radio) * donde.rx - p.x, donde.cy + (d.y / radio) * donde.ry - p.y);
+            if (dd < margen && dd < dist) { cerca = i; dist = dd; }
+          });
+          if (cerca < 0) return;
+          borrado = true;
+          // Si no llega el toque (el iPhone a veces no lo manda tras una pulsación larga), se olvida.
+          setTimeout(() => { borrado = false; }, 1500);
+          v.marcadoAMano();
+          props.current.onBorrar?.(cerca);
+          navigator.vibrate?.(30);
+        }, 550),
+      };
+    };
     const toque = (e: MouseEvent) => {
       if (props.current.soloVer) {
         // En el visor, el toque dice qué se quiere ver en medio al ampliar.
@@ -249,6 +307,8 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         setEstado('buscando');
         return;
       }
+      // Si se acaba de borrar un punto con una pulsación larga, ese mismo toque no marca nada.
+      if (borrado) { borrado = false; return; }
       if (!props.current.activo) return;
       // Sobre la diana donde está ahora (si el móvil se ha movido un poco, no donde se fijó).
       const mm = aMm(v.actual ?? v.cal, x, y, modeloRef.current);
@@ -256,7 +316,11 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       props.current.onImpacto(mm.x, mm.y);
     };
     raiz.addEventListener('click', toque);
-    toqueRef.current = toque;
+    raiz.addEventListener('pointerdown', pulsar);
+    for (const ev of ['pointerup', 'pointercancel', 'pointermove'] as const) raiz.addEventListener(ev, soltar);
+    // Sin el menú de «copiar» ni la lupa del iPhone al mantener pulsada la imagen.
+    Object.assign(raiz.style, { webkitTouchCallout: 'none', webkitUserSelect: 'none', userSelect: 'none' });
+    toqueRef.current = { toque, pulsar, soltar };
 
     // Con el móvil en horizontal, el iPhone a veces sigue dando la imagen de la cámara en vertical
     // (sobre todo en la app de la pantalla de inicio): se gira aquí para que la diana se vea derecha.
@@ -325,16 +389,16 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       capa.height = caja.height * devicePixelRatio;
       const k = Math.min(capa.width / W, capa.height / H);
       const ox = (capa.width - W * k) / 2, oy = (capa.height - H * k) / 2;
-      const a = W / ANCHO; // de la imagen analizada al vídeo
+      const a = W / ancho; // de la imagen analizada al vídeo
       mapa = { ox, oy, k: a * k };
       const c = capa.getContext('2d')!;
       c.clearRect(0, 0, capa.width, capa.height);
       if (!cal && !props.current.soloVer) {
         // Guía mientras busca: el negro tiene que quedar entero dentro de este círculo (es la zona en
         // la que se busca). Si el tirador ha tocado el centro de la diana, el círculo va ahí.
-        const h = Math.round((H / W) * ANCHO);
-        const centro = vigia.current.centro ?? { x: ANCHO / 2, y: h / 2 };
-        const r = 0.46 * Math.min(ANCHO, h) * a * k;
+        const h = Math.round((H / W) * ancho);
+        const centro = vigia.current.centro ?? { x: ancho / 2, y: h / 2 };
+        const r = 0.46 * Math.min(ancho, h) * a * k;
         const x = ox + centro.x * a * k, y = oy + centro.y * a * k;
         const dpr = devicePixelRatio;
         c.save();
@@ -361,13 +425,29 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         c.ellipse(ox + cal.cx * a * k, oy + cal.cy * a * k, cal.rx * a * k, cal.ry * a * k, 0, 0, Math.PI * 2);
         c.stroke();
       }
-      c.fillStyle = '#FF3B30';
+      // Cada impacto, del tamaño de la bala sobre la diana (para no tapar la diana): el último en
+      // verde con un aro fino y los demás en rojo. Si la imagen está ampliada, la capa también.
       const cal0 = vigia.current.actual ?? vigia.current.cal, radio = (modeloRef.current ?? DIANAS.precision).negro / 2;
-      for (const d of cal0 ? props.current.disparos.filter((d) => !d.sinPosicion) : []) {
+      const todos = props.current.disparos;
+      const dpr = devicePixelRatio, z = Math.max(1, aumento.current);
+      const bala = cal0 ? ((calibreRef.current ?? (modeloRef.current ?? DIANAS.precision).calibre) / 2 / radio) * cal0.rx * a * k : 0;
+      const r = Math.max(bala, (2.5 * dpr) / z);
+      for (const [i, d] of cal0 ? todos.entries() : []) {
+        if (d.sinPosicion) continue;
         const p = { x: cal0!.cx + (d.x / radio) * cal0!.rx, y: cal0!.cy + (d.y / radio) * cal0!.ry };
+        const px = ox + p.x * a * k, py = oy + p.y * a * k;
+        const ultimo = i === todos.length - 1;
+        c.fillStyle = ultimo ? '#2ECC71' : '#FF3B30';
         c.beginPath();
-        c.arc(ox + p.x * a * k, oy + p.y * a * k, 6 * devicePixelRatio, 0, Math.PI * 2);
+        c.arc(px, py, r, 0, Math.PI * 2);
         c.fill();
+        if (ultimo) {
+          c.strokeStyle = '#2ECC71';
+          c.lineWidth = (1.5 * dpr) / z;
+          c.beginPath();
+          c.arc(px, py, r + (4 * dpr) / z, 0, Math.PI * 2);
+          c.stroke();
+        }
       }
     };
 
@@ -382,7 +462,7 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
       }
       // Al ampliar, en medio queda la diana encontrada (salvo que el tirador haya tocado otro sitio).
       const fija = vigia.current.actual ?? vigia.current.cal;
-      if (fija && !foco.mano) foco = { fx: fija.cx / ANCHO, fy: fija.cy / Math.round((H / W) * ANCHO), mano: false };
+      if (fija && !foco.mano) foco = { fx: fija.cx / ancho, fy: fija.cy / Math.round((H / W) * ancho), mano: false };
       encajar(gr);
       // Si la imagen cambia de forma o de giro, la calibración anterior ya no vale.
       const ahora = `${W}x${H}@${gr}`;
@@ -390,19 +470,19 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         vigia.current.reiniciar();
       }
       forma = ahora;
-      const h = Math.round((H / W) * ANCHO);
-      lienzo.width = ANCHO;
+      const h = Math.round((H / W) * ancho);
+      lienzo.width = ancho;
       lienzo.height = h;
-      const e = ANCHO / W; // de la imagen girada a la analizada
+      const e = ancho / W; // de la imagen girada a la analizada
       ctx.save();
-      ctx.translate(ANCHO / 2, h / 2);
+      ctx.translate(ancho / 2, h / 2);
       ctx.rotate((gr * Math.PI) / 180);
       ctx.drawImage(video, (-video.videoWidth * e) / 2, (-video.videoHeight * e) / 2, video.videoWidth * e, video.videoHeight * e);
       ctx.restore();
-      const px = ctx.getImageData(0, 0, ANCHO, h).data;
-      const d = new Float32Array(ANCHO * h);
+      const px = ctx.getImageData(0, 0, ancho, h).data;
+      const d = new Float32Array(ancho * h);
       for (let i = 0; i < d.length; i++) d[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
-      const g: Gris = { w: ANCHO, h, d };
+      const g: Gris = { w: ancho, h, d };
       const r = vigia.current.procesar(g);
       setEstado(r.estado);
       if (r.impacto && props.current.activo) {
@@ -410,6 +490,16 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
         props.current.onImpacto(r.impacto.x, r.impacto.y);
       }
       dibujar(gr, r.cal ?? vigia.current.actual ?? vigia.current.cal ?? undefined);
+      // Diana pequeña en la imagen: se pasa a analizar con más detalle y se vuelve a fijar la diana
+      // (unos segundos) donde estaba. Solo una vez por cámara abierta.
+      const fijada = vigia.current.cal;
+      if (fijada && ancho === ANCHO && fijada.rx < NEGRO_PEQUENO && W >= ANCHO_DETALLE) {
+        const f = ANCHO_DETALLE / ancho;
+        ancho = ANCHO_DETALLE;
+        vigia.current.reiniciar();
+        vigia.current.centro = { x: fijada.cx * f, y: fijada.cy * f };
+        setEstado('calibrando');
+      }
     };
 
     // Sin cámara en el navegador (o sin HTTPS), getUserMedia no existe: se trata como un permiso denegado.
@@ -462,6 +552,9 @@ export function CamaraDiana({ activo, horizontal, modelo, calibre, soloVer, alto
     return () => {
       vivo = false;
       raiz.removeEventListener('click', toque);
+      raiz.removeEventListener('pointerdown', pulsar);
+      for (const ev of ['pointerup', 'pointercancel', 'pointermove'] as const) raiz.removeEventListener(ev, soltar);
+      if (pulsacion) clearTimeout(pulsacion.t);
       clearInterval(reloj);
       flujo?.getTracks().forEach((t) => t.stop());
       video.remove();

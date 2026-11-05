@@ -102,7 +102,8 @@ export interface Sesion {
   distancia: number; // metros
   municion: string;
   disparosPorSerie: number; // 0 = libre (sin límite por serie)
-  seriesPrevistas?: number; // sin valor: series libres
+  seriesPrevistas?: number; // sin valor: series libres (con dianasPrevistas: series de cada diana)
+  dianasPrevistas?: number; // hojas de papel del entreno (sin valor: libre)
   registro?: Registro; // cómo se apuntan los disparos (por defecto, tocando la diana)
   diana?: IdDiana; // diana con la que se puntúa (sin valor: pistola precisión 25 m)
   calibreMm?: number; // diámetro de la bala para la regla de «toca la línea» (sin valor: el de la diana)
@@ -122,6 +123,7 @@ export interface Plantilla {
   municion?: string;
   disparosPorSerie: number; // 0 = libre (sin límite por serie)
   seriesPrevistas?: number;
+  dianasPrevistas?: number;
   registro?: Registro;
 }
 
