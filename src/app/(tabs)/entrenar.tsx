@@ -3,8 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Degradado } from '@/components/Degradado';
 import { ListaPorMes } from '@/components/Historial';
+import { FotoArma } from '@/components/FotoArma';
 import { Icon } from '@/components/Icon';
-import { Card, Screen, SectionTitle, s } from '@/components/ui';
+import { Card, Kicker, Screen, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { formatear } from '@/lib/fechas';
 import { formatoMedia, media, todosLosDisparos } from '@/lib/sesiones';
@@ -63,31 +64,44 @@ export default function Entrenar() {
         const a = arma(armaId);
         const disparos = sesiones.flatMap(todosLosDisparos);
         return (
-          <View key={armaId} style={{ gap: space.sm }}>
-            <Card onPress={() => setAbierta(abierta === armaId ? null : armaId)} style={st.fila}>
-              <Icon name="gun" color={colors.accent} />
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={st.nombre} numberOfLines={1}>{a ? `${a.marca} ${a.modelo}` : 'Arma borrada'}</Text>
-                <Text style={s.muted} numberOfLines={1}>
-                  {a ? `${a.tipo} · ` : ''}{sesiones.length === 1 ? '1 sesión' : `${sesiones.length} sesiones`} · última {formatear(sesiones[0].fecha.slice(0, 10))}
+          <View key={armaId} style={st.grupo}>
+            {/* Cabecera del arma: más grande y con su foto o silueta, para que no se confunda con las filas de debajo. */}
+            <Pressable
+              onPress={() => setAbierta(abierta === armaId ? null : armaId)}
+              style={({ pressed }) => [st.arma, pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] }]}
+              accessibilityLabel={a ? `${a.marca} ${a.modelo}` : 'Arma borrada'}
+            >
+              <Degradado desde={colors.heroDesde} hasta={colors.heroHasta} brillo={colors.heroBrillo} brilloEn={[0.9, 0.1]} />
+              <View style={st.franja} />
+              {a ? <FotoArma arma={a} ancho={76} /> : <Icon name="gun" size={34} color={colors.accent} />}
+              <View style={{ flex: 1, gap: 3 }}>
+                <Kicker>{a ? `${a.tipo} · ${a.calibre}` : 'Arma'}</Kicker>
+                <Text style={st.armaNombre} numberOfLines={2}>{a ? `${a.marca} ${a.modelo}` : 'Arma borrada'}</Text>
+                <Text style={s.muted} numberOfLines={2}>
+                  {sesiones.length === 1 ? '1 sesión' : `${sesiones.length} sesiones`}{'\n'}última {formatear(sesiones[0].fecha.slice(0, 10))}
                 </Text>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={st.media}>{formatoMedia(media(disparos))}</Text>
+                <Text style={st.armaMedia}>{formatoMedia(media(disparos))}</Text>
                 <Text style={s.muted}>media</Text>
               </View>
               <View style={{ transform: [{ rotate: abierta === armaId ? '90deg' : '0deg' }] }}>
-                <Icon name="chevron" color={colors.textMuted} />
+                <Icon name="chevron" color={colors.text} />
               </View>
-            </Card>
-            {abierta === armaId && sesiones.length > 1 && (
-              <Card onPress={() => router.push(`/evolucion?arma=${armaId}`)} style={[st.fila, st.dentro]}>
-                <Icon name="chart" color={colors.accent} />
-                <Text style={[st.nombre, { flex: 1 }]}>Evolución con esta arma</Text>
-                <Icon name="chevron" color={colors.textMuted} />
-              </Card>
+            </Pressable>
+            {abierta === armaId && (
+              // Lo de dentro va colgado de una raya azul: así se ve que son los datos de esa arma.
+              <View style={st.contenido}>
+                {sesiones.length > 1 && (
+                  <Card onPress={() => router.push(`/evolucion?arma=${armaId}`)} style={st.fila}>
+                    <Icon name="chart" color={colors.accent} />
+                    <Text style={[st.nombre, { flex: 1 }]}>Evolución con esta arma</Text>
+                    <Icon name="chevron" color={colors.textMuted} />
+                  </Card>
+                )}
+                <ListaPorMes sesiones={sesiones} />
+              </View>
             )}
-            {abierta === armaId && <ListaPorMes sesiones={sesiones} />}
           </View>
         );
       })}
@@ -107,7 +121,16 @@ const st = StyleSheet.create({
   nuevaTitulo: { color: '#fff', fontSize: 19, fontWeight: '900' },
   nuevaSub: { color: 'rgba(255,255,255,0.8)', fontSize: 13 },
   fila: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
-  dentro: { marginLeft: space.lg },
-  media: { color: colors.green, fontSize: 20, fontWeight: '800' },
+  grupo: { gap: space.sm, marginTop: space.sm },
+  arma: {
+    borderRadius: radius.xl, padding: space.lg, paddingLeft: space.lg + 6, overflow: 'hidden', zIndex: 0,
+    flexDirection: 'row', alignItems: 'center', gap: space.md,
+    borderWidth: 1.5, borderColor: colors.accent,
+    shadowColor: colors.accentDark, shadowOpacity: 0.35, shadowRadius: 18, shadowOffset: { width: 0, height: 8 },
+  },
+  franja: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 6, backgroundColor: colors.accent },
+  armaNombre: { color: colors.text, fontSize: 21, lineHeight: 24, fontWeight: '900', letterSpacing: -0.5 },
+  armaMedia: { color: colors.green, fontSize: 26, fontWeight: '900' },
+  contenido: { gap: space.sm, marginLeft: space.sm, paddingLeft: space.md, borderLeftWidth: 3, borderLeftColor: colors.accent },
   nombre: { color: colors.text, fontSize: 16, fontWeight: '700' },
 });
