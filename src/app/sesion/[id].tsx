@@ -6,6 +6,7 @@ import { Conclusion, MedidasGrupo } from '@/components/AnalisisDiana';
 import { Anillo, Cifra } from '@/components/Cifra';
 import { CamaraDiana } from '@/components/CamaraDiana';
 import { Diana, MiniDiana } from '@/components/Diana';
+import { EnviarPdf } from '@/components/EnviarPdf';
 import { FotoDiana } from '@/components/FotoDiana';
 import { GraficaDisparos } from '@/components/GraficaDisparos';
 import { Icon } from '@/components/Icon';
@@ -539,6 +540,9 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
           {m && <MedidasGrupo sesion={sesion} m={m} arma={arma} />}
         </>
       )}
+
+      {/* Lo que se está viendo: la sesión entera o la diana elegida. */}
+      <EnviarPdf datos={store.datos} sesiones={[sesion]} titulo={indice < 0 ? 'Enviar en PDF' : `Enviar la diana ${indice + 1} en PDF`} />
 
       <Pressable onPress={() => store.marcarCompeticion(completa.id, !completa.competicion)} style={st.borrar} hitSlop={8}>
         <Text style={st.enlace}>{completa.competicion ? 'Es una competición · cambiar a entreno' : 'Marcar como competición'}</Text>
