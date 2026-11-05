@@ -135,11 +135,7 @@ export default function NuevaSesion() {
         style={st.input}
       />
 
-      <Text style={st.paso}>5. Disparos por serie</Text>
-      <Segmented value={porSerie} onChange={setPorSerie} options={[{ value: '0', label: 'Libre' }, { value: '5', label: '5' }, { value: '10', label: '10' }]} />
-      {porSerie === '0' && <Text style={s.muted}>Sin límite: tiras los que quieras en la diana y pulsas «Finalizar serie» cuando acabes.</Text>}
-
-      <Text style={st.paso}>6. Número de dianas</Text>
+      <Text style={st.paso}>5. Número de dianas</Text>
       <Segmented
         value={dianas}
         onChange={(v) => {
@@ -155,7 +151,7 @@ export default function NuevaSesion() {
           : `Tiras ${dianas} dianas (hojas) y todas quedan juntas en este entrenamiento, cada una con sus resultados.`}
       </Text>
 
-      <Text style={st.paso}>7. {dianas === '0' ? 'Número de series' : 'Series en cada diana'}</Text>
+      <Text style={st.paso}>6. {dianas === '0' ? 'Número de series' : 'Series en cada diana'}</Text>
       <Segmented
         value={series}
         onChange={setSeries}
@@ -166,6 +162,10 @@ export default function NuevaSesion() {
           {`${series === '1' ? '1 serie' : `${series} series`} en cada diana: al acabar${series === '1' ? 'la' : 'las'}, la app pasa sola a la diana siguiente (${Number(series) * Number(dianas)} series en total).`}
         </Text>
       )}
+
+      <Text style={st.paso}>7. Disparos por serie</Text>
+      <Segmented value={porSerie} onChange={setPorSerie} options={[{ value: '0', label: 'Libre' }, { value: '5', label: '5' }, { value: '10', label: '10' }]} />
+      {porSerie === '0' && <Text style={s.muted}>Sin límite: tiras los que quieras en la diana y pulsas «Finalizar serie» cuando acabes.</Text>}
 
       <Text style={st.paso}>8. Cómo apuntas los disparos</Text>
       <Segmented
