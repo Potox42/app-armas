@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import { Analisis } from '@/components/Analisis';
 import { Chips } from '@/components/Chips';
+import { EnviarPdf } from '@/components/EnviarPdf';
 import { Comparar, ExportarCsv, FallosRepetidos, Filtros, ListaPorMes, Records } from '@/components/Historial';
 import { Card, Screen, Segmented, SectionTitle, s } from '@/components/ui';
 import { useStore } from '@/data/store';
@@ -149,6 +150,7 @@ export default function Evolucion() {
       {puntos.length === 0 && <Text style={s.muted}>No hay entrenamientos con estos filtros en este periodo.</Text>}
       <ListaPorMes key={`${armaId}|${periodo}|${JSON.stringify(filtro)}`} sesiones={puntos.map((p) => p.sesion)} />
       <ExportarCsv sesiones={puntos.map((p) => p.sesion)} armas={datos.armas} nombre={armaElegida ? `${armaElegida.marca}-${armaElegida.modelo}` : 'arma'} />
+      <EnviarPdf datos={datos} sesiones={puntos.map((p) => p.sesion)} />
     </Screen>
   );
 }
