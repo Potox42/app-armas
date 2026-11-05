@@ -7,6 +7,7 @@ import { Conclusion, MedidasGrupo } from '@/components/AnalisisDiana';
 import { Anillo, Cifra } from '@/components/Cifra';
 import { CamaraDiana } from '@/components/CamaraDiana';
 import { Diana, MiniDiana } from '@/components/Diana';
+import { EnviarPdf } from '@/components/EnviarPdf';
 import { FotoDiana } from '@/components/FotoDiana';
 import { GraficaDisparos } from '@/components/GraficaDisparos';
 import { Icon } from '@/components/Icon';
@@ -48,11 +49,20 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   // Disparos por serie «libre» (0): sin límite, para tirar 20 o 30 en la misma diana.
   const libre = !sesion.disparosPorSerie;
   const completa = !libre && serie.disparos.length >= sesion.disparosPorSerie;
-  const ultimaSerie = !!sesion.seriesPrevistas && nSerie >= sesion.seriesPrevistas;
   const ultimo = serie.disparos[serie.disparos.length - 1];
   // Cada diana es una hoja nueva: solo se ven los disparos de las series anteriores de esta diana.
   const nDiana = numDiana(serie);
   const deEstaDiana = sesion.series.filter((x) => numDiana(x) === nDiana);
+  // Con un número de dianas elegido, las series se cuentan dentro de cada diana y, al acabar las
+  // de una diana, se pasa a la siguiente. Sin él, las series son de toda la sesión (como antes).
+  const dianasPrevistas = sesion.dianasPrevistas;
+  const ultimaDiana = !!dianasPrevistas && nDiana + 1 >= dianasPrevistas;
+  const serieEnDiana = deEstaDiana.length;
+  const finDeDiana = !!dianasPrevistas && !!sesion.seriesPrevistas && serieEnDiana >= sesion.seriesPrevistas;
+  const ultimaSerie = dianasPrevistas
+    ? finDeDiana && ultimaDiana
+    : !!sesion.seriesPrevistas && nSerie >= sesion.seriesPrevistas;
+  const pasaDiana = finDeDiana && !ultimaDiana;
   const anteriores = deEstaDiana.slice(0, -1).flatMap((x) => x.disparos);
   const disparosDiana = deEstaDiana.flatMap((x) => x.disparos);
   const dianaVacia = disparosDiana.length === 0;
@@ -106,12 +116,13 @@ function Asistente({ sesion }: { sesion: Sesion }) {
   const siguiente = () => {
     if (serie.disparos.length === 0) return;
     if (ultimaSerie) terminar();
+    else if (pasaDiana) store.nuevaDiana(sesion.id);
     else store.nuevaSerie(sesion.id);
   };
 
-  const titulo = `Serie ${nSerie}${sesion.seriesPrevistas ? `/${sesion.seriesPrevistas}` : ''} · Disparo ${
+  const titulo = `Serie ${dianasPrevistas ? serieEnDiana : nSerie}${sesion.seriesPrevistas ? `/${sesion.seriesPrevistas}` : ''} · Disparo ${
     libre ? serie.disparos.length + 1 : `${Math.min(serie.disparos.length + 1, sesion.disparosPorSerie)}/${sesion.disparosPorSerie}`}`;
-  const kicker = `Diana ${nDiana + 1} · ${sesion.modalidad} · ${sesion.distancia} m${arma ? ` · ${arma.marca} ${arma.modelo}` : ''}`;
+  const kicker = `Diana ${nDiana + 1}${dianasPrevistas ? `/${dianasPrevistas}` : ''} · ${sesion.modalidad} · ${sesion.distancia} m${arma ? ` · ${arma.marca} ${arma.modelo}` : ''}`;
 
   // A pantalla completa, la cuenta de la serie va encima de la imagen.
   const marcador = `${titulo}${ultimo ? ` · Último ${ultimo.valor}` : ''} · Serie ${sumaSerie(serie)}`;
@@ -127,11 +138,11 @@ function Asistente({ sesion }: { sesion: Sesion }) {
     </>
   );
 
-  const resumenDiana = (variasDianas || sesion.series.length > 1) && (
+  const resumenDiana = (variasDianas || !!dianasPrevistas || sesion.series.length > 1) && (
     <Text style={[s.muted, { textAlign: 'center' }]}>
       {dianaVacia
-        ? `Diana ${nDiana + 1}: pon la hoja nueva y empieza a tirar.`
-        : `Diana ${nDiana + 1}: ${disparosDiana.length} ${disparosDiana.length === 1 ? 'disparo' : 'disparos'} · ${disparosDiana.reduce((t, d) => t + d.valor, 0)} puntos · media ${formatoMedia(media(disparosDiana))}`}
+        ? `Diana ${nDiana + 1}${dianasPrevistas ? ` de ${dianasPrevistas}` : ''}: pon la hoja nueva y empieza a tirar.`
+        : `Diana ${nDiana + 1}${dianasPrevistas ? ` de ${dianasPrevistas}` : ''}: ${disparosDiana.length} ${disparosDiana.length === 1 ? 'disparo' : 'disparos'} · ${disparosDiana.reduce((t, d) => t + d.valor, 0)} puntos · media ${formatoMedia(media(disparosDiana))}`}
     </Text>
   );
 
@@ -183,6 +194,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
       disparos={disparosDiana}
       marcador={marcador}
       serie={nSerie}
+      onBorrar={(n) => store.borrarDisparo(sesion.id, n)}
       onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)}
     />
   );
@@ -202,6 +214,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         disparos={disparosDiana}
         marcador={marcador}
         serie={nSerie}
+        onBorrar={(n) => store.borrarDisparo(sesion.id, n)}
         onImpacto={(x, y) => store.anadirDisparo(sesion.id, x, y)}
       />
       <Pressable onPress={() => setConVisor(false)} hitSlop={8}>
@@ -222,6 +235,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
       modelo={modelo}
       calibre={calibre}
       faltan={libre ? 0 : Math.max(0, sesion.disparosPorSerie - serie.disparos.length)}
+      anteriores={disparosDiana}
       onApuntar={(puntos) => store.anadirDisparos(sesion.id, puntos)}
     />
   );
@@ -235,6 +249,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
           calibre={calibre}
           disparos={serie.disparos}
           anteriores={anteriores}
+          anterioresEnRojo
           onToque={completa ? undefined : (x, y) => store.anadirDisparo(sesion.id, x, y)}
         />
       </View>
@@ -242,7 +257,7 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         {completa
           ? 'Serie completa'
           : camara
-            ? 'Si la cámara se salta un disparo, tócalo en la diana; si apunta uno de más, pulsa Deshacer.'
+            ? 'Si la cámara se salta un disparo, tócalo en la imagen; si un punto está mal, mantenlo pulsado y se borra.'
             : foto
               ? 'Los disparos de la foto salen aquí. Si falta alguno, tócalo en la diana; si sobra, pulsa Deshacer.'
               : 'Toca la diana donde ha entrado el disparo'}
@@ -258,13 +273,16 @@ function Asistente({ sesion }: { sesion: Sesion }) {
         </View>
         <View style={{ flex: 1 }}>
           <Button
-            title={ultimaSerie ? 'Terminar' : completa ? 'Siguiente serie' : 'Finalizar serie'}
+            title={ultimaSerie ? 'Terminar' : pasaDiana ? `Siguiente diana (${nDiana + 2}ª)` : completa ? 'Siguiente serie' : 'Finalizar serie'}
             onPress={siguiente}
           />
         </View>
       </View>
-      {!ultimaSerie && !dianaVacia && (
+      {!ultimaSerie && !dianaVacia && !ultimaDiana && !pasaDiana && (
         <Button title={`Cambiar de diana (empezar la ${nDiana + 2}ª)`} variant="secondary" onPress={() => store.nuevaDiana(sesion.id)} />
+      )}
+      {ultimaDiana && !ultimaSerie && (
+        <Text style={[s.muted, { textAlign: 'center' }]}>Es la última diana: al acabar, pulsa «Terminar sesión».</Text>
       )}
       {!ultimaSerie && <Button title="Terminar sesión" variant="secondary" onPress={terminar} />}
     </>
@@ -524,6 +542,11 @@ function Resumen({ sesion: completa }: { sesion: Sesion }) {
           {m && (esPro ? <MedidasGrupo sesion={sesion} m={m} arma={arma} /> : <SoloPro que="El análisis del grupo y la corrección de miras" />)}
         </>
       )}
+
+      {/* Lo que se está viendo: la sesión entera o la diana elegida. */}
+      {esPro
+        ? <EnviarPdf datos={store.datos} sesiones={[sesion]} titulo={indice < 0 ? 'Enviar en PDF' : `Enviar la diana ${indice + 1} en PDF`} />
+        : <SoloPro que="Enviar el entreno en PDF" />}
 
       <Pressable onPress={() => store.marcarCompeticion(completa.id, !completa.competicion)} style={st.borrar} hitSlop={8}>
         <Text style={st.enlace}>{completa.competicion ? 'Es una competición · cambiar a entreno' : 'Marcar como competición'}</Text>

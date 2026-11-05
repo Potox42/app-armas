@@ -112,7 +112,18 @@ function manchas(m: Uint8Array, w: number, h: number): Mancha[] {
  * y suaviza antes para que las rayas blancas de los anillos no lo partan en trozos.
  */
 export function calibrar(g: Gris, alcance = 0.48, centro?: { x: number; y: number }): Calibracion | null {
-  return buscarNegro(g, alcance, centro) ?? negroCortado(g) ?? calibrarOtsu(g, alcance, centro);
+  // Con el negro grande en la imagen (Tele o mucho aumento), puede salirse del alcance: se mira más
+  // lejos antes que usar el método de reserva, que lo daba recortado (desplazado y ovalado; campo,
+  // 31-10-2026). Con la cámara (alcance corto), el de reserva solo vale si sale redondo, como se ve la diana desde
+  // el catalejo.
+  const otsu = () => {
+    const c = calibrarOtsu(g, alcance, centro);
+    if (!c || alcance >= 0.7) return c;
+    // Redondo y dentro de la imagen: un círculo más grande que la imagen es la luz del catalejo.
+    const dentro = c.cx - c.rx >= 0 && c.cy - c.ry >= 0 && c.cx + c.rx <= g.w && c.cy + c.ry <= g.h;
+    return dentro && Math.max(c.rx, c.ry) <= 1.06 * Math.min(c.rx, c.ry) ? c : null;
+  };
+  return buscarNegro(g, alcance, centro) ?? (alcance < 0.7 ? buscarNegro(g, 0.7, centro) : null) ?? negroCortado(g) ?? otsu();
 }
 
 /**
@@ -285,7 +296,9 @@ function buscarNegro(g: Gris, alcance: number, centro?: { x: number; y: number }
   };
   let mejor: { cal: Calibracion; nota: number; corte: number } | null = null;
   const m = new Uint8Array(w * h);
-  for (let p = 0.04; p <= 0.8; p += 0.03) {
+  // Hasta casi el papel: con el catalejo, lo oscuro de alrededor (el tubo) ocupa mucha imagen y,
+  // con cortes más bajos, el negro de la diana (gris con luz) no llegaba a salir entero.
+  for (let p = 0.04; p <= 0.98; p += 0.03) {
     const t = valores[Math.floor(p * (valores.length - 1))];
     m.fill(0);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (dentro(x, y) && s.d[y * w + x] < t) m[y * w + x] = 1;
@@ -442,6 +455,11 @@ export function detalle(g: Gris, cal: Calibracion, diana: ModeloDiana = DIANAS.p
   return { w: g.w, h: g.h, d: o };
 }
 
+/** La luz que llega a cada punto: la imagen muy suavizada (sin agujeros, rayas ni cifras). */
+export function suavizarLuz(g: Gris, cal: Calibracion): Gris {
+  return desenfocar(g, Math.max(3, Math.round(0.12 * (cal.rx + cal.ry) / 2)));
+}
+
 /** Desplaza la imagen (dx, dy) píxeles, con interpolación; lo que queda fuera vale 0. */
 export function desplazar(g: Gris, dx: number, dy: number): Gris {
   const { w, h, d } = g;
@@ -508,7 +526,8 @@ export function aMm(cal: Calibracion, x: number, y: number, diana: ModeloDiana =
 }
 
 export interface Comparacion {
-  impacto: Impacto | null;
+  impacto: Impacto | null; // la mancha más grande
+  candidatos: Impacto[]; // todas, de mayor a menor
   cambio: number; // fracción de la zona vigilada que ha cambiado (mucho = movimiento o luz)
 }
 
@@ -518,6 +537,7 @@ export interface Comparacion {
  */
 export function comparar(
   ref: Gris, actual: Gris, cal: Calibracion, calibreMm = DIANAS.precision.calibre, diana: ModeloDiana = DIANAS.precision,
+  luz?: { ref: Gris; actual: Gris },
 ): Comparacion {
   const { w, h } = ref;
   const pxMm = (cal.rx + cal.ry) / diana.negro;
@@ -525,17 +545,39 @@ export function comparar(
   const rZona = Math.max(1.1, 0.96 * (diametroExterior(diana) / diana.negro)) * Math.max(cal.rx, cal.ry);
   const borde = 4;
   const m = new Uint8Array(w * h);
+  // Solo la parte bien iluminada (campo, 5-11-2026: salían disparos «de la nada» en los anillos 1 a 3,
+  // justo en el borde del círculo de luz del catalejo y fuera de él). Ese borde se mueve con la
+  // vibración por su cuenta (el móvil respecto al ocular, no la diana), así que al alinear la diana
+  // el borde cambia y parecía un agujero. Fuera del negro solo se mira donde el papel tiene luz de
+  // sobra en las dos imágenes y la luz no ha cambiado.
+  const iluminado = luz ? zonaIluminada(luz.ref, luz.actual, cal) : null;
+  const dentroZona = (x: number, y: number, i: number) =>
+    (x - cal.cx) ** 2 + (y - cal.cy) ** 2 <= rZona * rZona && actual.d[i] !== 0 && ref.d[i] !== 0 && (!iluminado || iluminado[i] === 1);
+  // Umbral según el ruido de la imagen: con el catalejo la diana se ve con poco contraste y, si el
+  // negro sale pequeño en la imagen, un agujero de .22 son 3 o 4 píxeles que apenas cambian. Con un
+  // umbral fijo de 28 no se veía ninguno (campo, 31-10-2026). Se mira el ruido típico de la
+  // diferencia (mediana) y se exige bastante más que eso, sin bajar de 10 ni pasar de 28.
+  const muestras: number[] = [];
+  for (let y = borde; y < h - borde; y += 3) {
+    for (let x = borde; x < w - borde; x += 3) {
+      const i = y * w + x;
+      if (dentroZona(x, y, i)) muestras.push(Math.abs(actual.d[i] - ref.d[i]));
+    }
+  }
+  muestras.sort((p, q) => p - q);
+  const ruido = muestras.length ? 1.4826 * muestras[Math.floor(muestras.length / 2)] : 10;
+  const umbral = Math.max(10, Math.min(28, 6 * ruido));
   let zona = 0, cambiados = 0;
   for (let y = borde; y < h - borde; y++) {
     for (let x = borde; x < w - borde; x++) {
-      if ((x - cal.cx) ** 2 + (y - cal.cy) ** 2 > rZona * rZona) continue;
       const i = y * w + x;
       // Fuera de la imagen (al alinear, lo que entra por el borde vale 0): no se compara.
-      if (actual.d[i] === 0 || ref.d[i] === 0) continue;
+      if (!dentroZona(x, y, i)) continue;
       zona++;
       const dif = actual.d[i] - ref.d[i];
-      if (Math.abs(dif) <= 28) continue;
-      cambiados++;
+      if (Math.abs(dif) <= umbral) continue;
+      // Lo que cambia mucho (movimiento o luz) se cuenta aparte, con el corte de siempre.
+      if (Math.abs(dif) > 28) cambiados++;
       // Un agujero nuevo se ve más claro en el negro (pasa la luz) y más oscuro en el blanco.
       // El cambio contrario (un agujero que desaparece: un parche) no cuenta como impacto.
       const enNegro = ((x - cal.cx) / cal.rx) ** 2 + ((y - cal.cy) / cal.ry) ** 2 < 1;
@@ -547,13 +589,100 @@ export function comparar(
   const esperada = Math.PI * rAgujero * rAgujero;
   const candidatas = manchas(m, w, h).filter((k) => {
     const bw = k.x1 - k.x0 + 1, bh = k.y1 - k.y0 + 1;
-    return k.area > 0.3 * esperada && k.area < 3 * esperada && bw < 4 * rAgujero + 3 && bh < 4 * rAgujero + 3;
+    return k.area > Math.max(2.5, 0.3 * esperada) && k.area < 3 * esperada && bw < 4 * rAgujero + 3 && bh < 4 * rAgujero + 3
+      && fuerte(ref, actual, k, umbral) && !esDesplazamiento(ref, actual, k.sx / k.area, k.sy / k.area, rAgujero, ruido);
   });
-  if (!candidatas.length) return { impacto: null, cambio };
-  const k = candidatas.reduce((a, b) => (b.area > a.area ? b : a));
-  const xPx = k.sx / k.area, yPx = k.sy / k.area;
-  const mm = aMm(cal, xPx, yPx, diana);
-  return { impacto: { xPx, yPx, x: mm.x, y: mm.y, valor: puntuar(mm.x, mm.y, calibreMm, diana) }, cambio };
+  const candidatos = candidatas.sort((a, b) => b.area - a.area).map((k): Impacto => {
+    const xPx = k.sx / k.area, yPx = k.sy / k.area;
+    const mm = aMm(cal, xPx, yPx, diana);
+    return { xPx, yPx, x: mm.x, y: mm.y, valor: puntuar(mm.x, mm.y, calibreMm, diana) };
+  });
+  return { impacto: candidatos[0] ?? null, candidatos, cambio };
+}
+
+/**
+ * Píxeles (1) fuera del negro donde el papel está bien iluminado en las dos imágenes y la luz no ha
+ * cambiado; el negro y una franja alrededor siempre valen (están en medio del catalejo).
+ * `luzRef` y `luzActual` son la imagen muy suavizada (ya alineada).
+ */
+function zonaIluminada(luzRef: Gris, luzActual: Gris, cal: Calibracion): Uint8Array {
+  const { w, h } = luzRef;
+  const o = new Uint8Array(w * h);
+  // Nivel del papel: de lo más claro fuera del negro.
+  const papel: number[] = [];
+  for (let y = 0; y < h; y += 4) {
+    for (let x = 0; x < w; x += 4) {
+      const n = ((x - cal.cx) / cal.rx) ** 2 + ((y - cal.cy) / cal.ry) ** 2;
+      if (n > 1.3 * 1.3 && n < 3 * 3) papel.push(luzRef.d[y * w + x]);
+    }
+  }
+  papel.sort((a, b) => a - b);
+  const p = papel.length ? papel[Math.floor(papel.length * 0.9)] : 255;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const n = ((x - cal.cx) / cal.rx) ** 2 + ((y - cal.cy) / cal.ry) ** 2;
+      if (n < 1.2 * 1.2) { o[i] = 1; continue; }
+      const a = luzRef.d[i], b = luzActual.d[i];
+      if (a >= 0.62 * p && b >= 0.62 * p && Math.abs(a - b) < 0.15 * p) o[i] = 1; // (un agujero de 9 mm ya cambia un 7 %)
+    }
+  }
+  return o;
+}
+
+/** La mancha cambia con fuerza en algún punto (no es solo ruido que pasa justo del umbral). */
+function fuerte(ref: Gris, actual: Gris, k: { x0: number; y0: number; x1: number; y1: number }, umbral: number): boolean {
+  let mayor = 0;
+  for (let y = k.y0; y <= k.y1; y++) {
+    for (let x = k.x0; x <= k.x1; x++) {
+      const i = y * ref.w + x;
+      mayor = Math.max(mayor, Math.abs(actual.d[i] - ref.d[i]));
+    }
+  }
+  return mayor >= 1.35 * umbral;
+}
+
+/**
+ * ¿Lo que ha cambiado en (x, y) se explica moviendo un poco la imagen de referencia? Entonces es
+ * una raya, una cifra o el borde del negro que se ha movido (calima, un temblor que la alineación
+ * no ha quitado del todo, un leve giro), no un agujero: un agujero nuevo no está en la referencia
+ * y no aparece por mucho que se mueva.
+ */
+function esDesplazamiento(ref: Gris, actual: Gris, x: number, y: number, rAgujero: number, ruido: number): boolean {
+  const r = Math.round(2.5 * rAgujero) + 3, mov = 3;
+  const x0 = Math.round(x) - r, y0 = Math.round(y) - r, x1 = Math.round(x) + r, y1 = Math.round(y) + r;
+  if (x0 - mov < 0 || y0 - mov < 0 || x1 + mov >= ref.w || y1 + mov >= ref.h) return false;
+  const piso = 2 * ruido;
+  const error = (ox: number, oy: number) => {
+    let e = 0;
+    for (let yy = y0; yy <= y1; yy++) {
+      for (let xx = x0; xx <= x1; xx++) {
+        const a = actual.d[yy * ref.w + xx];
+        if (a === 0) continue;
+        e += Math.max(0, Math.abs(a - muestra(ref, xx - ox, yy - oy)) - piso);
+      }
+    }
+    return e;
+  };
+  const quieto = error(0, 0);
+  if (quieto <= 0) return true;
+  // A medio píxel y luego afinando a un octavo: la alineación de la imagen ya deja el error en
+  // menos de medio píxel, y en el borde del negro (mucho contraste) eso basta para «ver» algo.
+  let menor = Infinity, bx = 0, by = 0;
+  for (let oy = -mov; oy <= mov; oy += 0.5) {
+    for (let ox = -mov; ox <= mov; ox += 0.5) {
+      if (!ox && !oy) continue;
+      const e = error(ox, oy);
+      if (e < menor) { menor = e; bx = ox; by = oy; }
+    }
+  }
+  const cx = bx, cy = by;
+  for (let oy = cy - 0.375; oy <= cy + 0.375; oy += 0.125) {
+    for (let ox = cx - 0.375; ox <= cx + 0.375; ox += 0.125) {
+      if (Math.abs(ox) + Math.abs(oy) > 0.01) menor = Math.min(menor, error(ox, oy));
+    }
+  }
+  return menor < 0.5 * quieto;
 }
 
 /**
@@ -575,8 +704,11 @@ export class Vigia {
   /** Dónde ha dicho el tirador que está la diana (en píxeles de la imagen), si no está en medio. */
   centro: { x: number; y: number } | null = null;
   private ref: Gris | null = null;
+  private luzRef: Gris | null = null; // la referencia muy suavizada: dónde llega la luz del catalejo
   private ultima: Gris | null = null; // última imagen alineada, para tomarla de referencia
-  private pendiente: Impacto | null = null;
+  private ultimaLuz: Gris | null = null;
+  private sinNada = 0; // imágenes seguidas sin nada que se parezca a un agujero
+  private pendientes: Impacto[] = []; // manchas de la imagen anterior, por confirmar
   private estables = 0;
   private quietas = 2; // imágenes seguidas sin moverse el móvil
 
@@ -590,6 +722,9 @@ export class Vigia {
     // Ya fijada, una «diana» de otro tamaño es un error de búsqueda (un anillo, un agujero): se
     // sigue con la fijada.
     if (cal && this.cal && Math.abs(cal.rx / this.cal.rx - 1) > 0.15) cal = null;
+    // El catalejo se mira de frente: una «diana» muy ovalada es el borde de la imagen o del tubo,
+    // no el negro (campo, 31-10-2026: se tomaba el círculo de luz del catalejo y todo salía 10).
+    if (cal && Math.max(cal.rx, cal.ry) > 1.3 * Math.min(cal.rx, cal.ry)) cal = null;
     if (!cal) {
       this.estables = 0;
       return { estado: this.cal ? 'vigilando' : 'buscando', cal: this.actual ?? this.cal ?? undefined };
@@ -604,12 +739,15 @@ export class Vigia {
       this.cal = cal;
       this.actual = cal;
       this.ref = detalle(g, cal, this.diana);
+      this.luzRef = suavizarLuz(g, cal);
       return { estado: 'vigilando', cal };
     }
     const det = detalle(g, this.cal, this.diana);
     const { dx, dy } = afinar(this.ref!, det, this.cal.cx - cal.cx, this.cal.cy - cal.cy, this.cal);
     const alineada = desplazar(det, dx, dy);
+    const luz = desplazar(suavizarLuz(g, this.cal), dx, dy);
     this.ultima = alineada;
+    this.ultimaLuz = luz;
     // Dónde está ahora la diana en la imagen: si el móvil se ha movido un poco en el soporte, el
     // círculo, las marcas y los toques la siguen (los impactos se miden siempre sobre la fijada).
     const ahora = { ...this.cal, cx: this.cal.cx - dx, cy: this.cal.cy - dy };
@@ -621,27 +759,34 @@ export class Vigia {
     if (salto >= 3) this.quietas = 0;
     else this.quietas++;
     if (this.quietas < 2) {
-      this.pendiente = null;
+      this.pendientes = [];
       return { estado: 'vigilando', cal: this.actual };
     }
-    const { impacto, cambio } = comparar(this.ref!, alineada, this.cal, this.calibreMm, this.diana);
+    const { candidatos, cambio } = comparar(this.ref!, alineada, this.cal, this.calibreMm, this.diana,
+      this.luzRef ? { ref: this.luzRef, actual: luz } : undefined);
     if (cambio > 0.05) {
       // Ha cambiado demasiado (se ha movido el móvil o la luz): nueva referencia sin contar nada.
-      this.ref = alineada;
-      this.pendiente = null;
+      this.nuevaReferencia(alineada, luz);
+      this.pendientes = [];
       return { estado: 'vigilando', cal: this.actual };
     }
-    if (!impacto) {
-      this.pendiente = null;
+    if (!candidatos.length) {
+      this.pendientes = [];
+      // Un rato largo sin nada (unos 9 s): se renueva la referencia para que la luz que cambia
+      // poco a poco (el sol, una nube) no se vaya sumando hasta parecer un agujero.
+      if (++this.sinNada >= 20) this.nuevaReferencia(alineada, luz);
       return { estado: 'vigilando', cal: this.actual };
     }
+    this.sinNada = 0;
+    // Vale la mancha más grande si ya estaba en el mismo sitio en la imagen anterior.
+    const impacto = candidatos[0];
     const r = 2 * (this.calibreMm / 2) * ((this.cal.rx + this.cal.ry) / this.diana.negro) + 2;
-    if (this.pendiente && Math.hypot(impacto.xPx - this.pendiente.xPx, impacto.yPx - this.pendiente.yPx) < r) {
-      this.pendiente = null;
-      this.ref = alineada;
+    if (this.pendientes.some((p) => Math.hypot(impacto.xPx - p.xPx, impacto.yPx - p.yPx) < r)) {
+      this.pendientes = [];
+      this.nuevaReferencia(alineada, luz);
       return { estado: 'vigilando', cal: this.actual, impacto };
     }
-    this.pendiente = impacto;
+    this.pendientes = [impacto];
     return { estado: 'vigilando', cal: this.actual };
   }
 
@@ -654,18 +799,27 @@ export class Vigia {
    * contar luego ese mismo agujero otra vez.
    */
   marcadoAMano() {
-    this.pendiente = null;
-    if (this.ultima) this.ref = this.ultima;
+    this.pendientes = [];
+    if (this.ultima) this.nuevaReferencia(this.ultima, this.ultimaLuz);
+  }
+
+  private nuevaReferencia(det: Gris, luz: Gris | null) {
+    this.ref = det;
+    if (luz) this.luzRef = luz;
+    this.sinNada = 0;
   }
 
   /** Vuelve a empezar (otra diana o se ha movido el soporte). */
   reiniciar() {
     this.ultima = null;
+    this.ultimaLuz = null;
+    this.luzRef = null;
+    this.sinNada = 0;
     this.cal = null;
     this.actual = null;
     this.quietas = 2;
     this.ref = null;
-    this.pendiente = null;
+    this.pendientes = [];
     this.previa = null;
     this.estables = 0;
   }
@@ -897,13 +1051,35 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
     }
     return null;
   };
+  // La diana puede estar girada en la foto (campo, 1-11-2026: unos 7°, y las cifras salían como
+  // agujeros). El giro se mide con los propios candidatos: las cifras quedan en cuatro rayas en
+  // cruz, a la distancia de cada anillo; se prueba de -20° a 20° y se queda el giro con más de
+  // ellos en su sitio. Todo lo de las cifras se mira en la diana «derecha» (sin el giro).
+  const enAnillo = (r: number) => Object.entries(diana.anillos).some(([v, dm]) => Number(v) <= 9 && Math.abs(r - (dm / 2 - paso / 2)) <= 0.35 * paso);
+  const candidatos = picos.map((k) => aMm(cal, k.x, k.y, diana)).filter((p) => enAnillo(Math.hypot(p.x, p.y)));
+  let giro = 0, enRaya = -1;
+  for (let gr = -20; gr <= 20; gr += 0.5) {
+    const a = (gr * Math.PI) / 180, c = Math.cos(a), sn = Math.sin(a);
+    let n = 0;
+    for (const p of candidatos) {
+      const u = c * p.x + sn * p.y, v = -sn * p.x + c * p.y;
+      if (Math.min(Math.abs(u), Math.abs(v)) < 0.2 * paso) n++;
+    }
+    if (n > enRaya || (n === enRaya && Math.abs(gr) < Math.abs(giro))) { enRaya = n; giro = gr; }
+  }
+  // Con pocos candidatos en cruz no se sabe: se deja derecha.
+  if (enRaya < 3) giro = 0;
+  const cg = Math.cos((giro * Math.PI) / 180), sg = Math.sin((giro * Math.PI) / 180);
+  const aDerecha = (x: number, y: number) => ({ x: cg * x + sg * y, y: -sg * x + cg * y });
+  const aFoto = (x: number, y: number) => ({ x: cg * x - sg * y, y: sg * x + cg * y });
   const N = 16, lado = 0.7 * paso;
   const parche = (xm: number, ym: number): Float32Array | null => {
     const o = new Float32Array(N * N);
     for (let j = 0; j < N; j++) {
       for (let i = 0; i < N; i++) {
-        const px = cal.cx + ((xm + (i / (N - 1) - 0.5) * lado) / (diana.negro / 2)) * cal.rx;
-        const py = cal.cy + ((ym + (j / (N - 1) - 0.5) * lado) / (diana.negro / 2)) * cal.ry;
+        const f = aFoto(xm + (i / (N - 1) - 0.5) * lado, ym + (j / (N - 1) - 0.5) * lado);
+        const px = cal.cx + (f.x / (diana.negro / 2)) * cal.rx;
+        const py = cal.cy + (f.y / (diana.negro / 2)) * cal.ry;
         if (px < 1 || py < 1 || px > w - 2 || py > h - 2) return null;
         o[j * N + i] = muestra(fino, px, py);
       }
@@ -998,11 +1174,12 @@ export function buscarAgujeros(g: Gris, cal: Calibracion, diana: ModeloDiana, ca
   for (const k of picos) {
     if (k.v < 0.33 * tipico) continue;
     const mm = aMm(cal, k.x, k.y, diana);
-    if (esCifra(mm.x, mm.y)) continue;
+    const der = aDerecha(mm.x, mm.y);
+    if (esCifra(der.x, der.y)) continue;
     // En el blanco, en el sitio de una cifra (que a veces no se puede comparar con la de otra raya
     // porque queda fuera de la foto) solo vale una mancha gris rellena; los trazos de una cifra
     // son finos y muy oscuros.
-    if (zonaDe(k.x, k.y) > 1 && numeroEn(mm.x, mm.y) && relleno(k.x, k.y) < 0.33) continue;
+    if (zonaDe(k.x, k.y) > 1 && numeroEn(der.x, der.y) && relleno(k.x, k.y) < 0.33) continue;
     res.push({ xPx: k.x, yPx: k.y, x: mm.x, y: mm.y, valor: puntuar(mm.x, mm.y, calibreMm, diana), veces: 1, tam: k.v / contraste });
   }
   return res;

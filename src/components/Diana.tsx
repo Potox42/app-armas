@@ -11,7 +11,8 @@ interface Props {
   modelo?: ModeloDiana; // qué diana (por defecto, pistola precisión 25 m)
   calibre?: number; // diámetro de los impactos dibujados, mm
   visibleMm?: number; // diámetro de diana que se ve
-  anteriores?: Disparo[]; // disparos de series anteriores, en gris
+  anteriores?: Disparo[]; // disparos de series anteriores, en gris (o en rojo con anterioresEnRojo)
+  anterioresEnRojo?: boolean; // durante la sesión: el último en verde y todos los demás en rojo
   grupo?: { cx: number; cy: number; radio: number }; // centro y radio medio del grupo
   centros?: { x: number; y: number; etiqueta: string }[]; // centro de cada serie
   sueltos?: Disparo[]; // impactos lejos del grupo: se rodean en naranja
@@ -25,7 +26,7 @@ const NARANJA = '#E8590C'; // fijo: va sobre el papel de la diana, que no cambia
 /** Diana ISSF dibujada a escala real, en milímetros. */
 export function Diana({
   disparos: todos, tamano, modelo = DIANAS.precision, calibre = modelo.calibre, visibleMm = modelo.visible,
-  anteriores: previos = [], grupo, centros = [], sueltos = [], onToque,
+  anteriores: previos = [], anterioresEnRojo, grupo, centros = [], sueltos = [], onToque,
 }: Props) {
   // Los disparos apuntados con el teclado no tienen posición: no se dibujan.
   const disparos = todos.filter((d) => !d.sinPosicion);
@@ -101,7 +102,9 @@ export function Diana({
             );
           })}
         {anteriores.map((d, i) => (
-          <Circle key={`a${i}`} cx={d.x} cy={d.y} r={bala} fill="#8A8F99" opacity={0.6} />
+          anterioresEnRojo
+            ? <Circle key={`a${i}`} cx={d.x} cy={d.y} r={bala} fill={colors.red} opacity={0.85} />
+            : <Circle key={`a${i}`} cx={d.x} cy={d.y} r={bala} fill="#8A8F99" opacity={0.6} />
         ))}
         {grupo && grupo.radio > 0 && (
           <G>

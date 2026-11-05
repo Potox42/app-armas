@@ -24,6 +24,7 @@ interface Store {
   anadirDisparos: (sesionId: string, puntos: { x: number; y: number }[]) => void;
   anadirValor: (sesionId: string, valor: number) => void;
   deshacerDisparo: (sesionId: string) => void;
+  borrarDisparo: (sesionId: string, n: number) => void; // n: posición entre los disparos de la diana en curso
   nuevaSerie: (sesionId: string) => void;
   nuevaDiana: (sesionId: string) => void;
   terminarSesion: (sesionId: string) => void;
@@ -196,6 +197,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         actualizarSesion(sesionId, (s) => (s.series.length > 1 && s.series[s.series.length - 1].disparos.length === 0
           ? { ...s, series: s.series.slice(0, -1) }
           : conUltimaSerie(s, (ds) => ds.slice(0, -1)))),
+      // Quita un disparo concreto de la diana en curso (al tocarlo en la imagen de la cámara).
+      borrarDisparo: (sesionId, n) =>
+        actualizarSesion(sesionId, (s) => {
+          const actual = s.series[s.series.length - 1]?.diana ?? 0;
+          let i = 0;
+          return {
+            ...s,
+            series: s.series.map((x) => {
+              if ((x.diana ?? 0) !== actual) return x;
+              const desde = i;
+              i += x.disparos.length;
+              return n >= desde && n < i ? { ...x, disparos: x.disparos.filter((_, j) => j !== n - desde) } : x;
+            }),
+          };
+        }),
       nuevaSerie: (sesionId) =>
         actualizarSesion(sesionId, (s) => {
           const ultima = s.series[s.series.length - 1];

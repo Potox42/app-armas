@@ -12,6 +12,9 @@ import { colors, radius, space } from '@/theme';
 
 const DISTANCIAS = [25, 50, 10];
 
+/** Opciones de «Número de series» (además de Libre): con dianas, son las series de cada diana. */
+const seriesPosibles = (dianas: string) => (dianas === '0' ? ['4', '6', '12'] : ['1', '2', '4']);
+
 // Programas de las pruebas ISSF (nº de series y disparos; los tiempos no se controlan aquí).
 // Standard: 60 disparos en 12 series de 5 (en.wikipedia.org, «ISSF 25 meter standard pistol»).
 const PROGRAMAS: Omit<Plantilla, 'id'>[] = [
@@ -30,6 +33,7 @@ export default function NuevaSesion() {
   const [municion, setMunicion] = useState(ultima?.municion ?? '');
   const [porSerie, setPorSerie] = useState(String(ultima?.disparosPorSerie ?? 10) as '5' | '10' | '0');
   const [series, setSeries] = useState(String(ultima?.seriesPrevistas ?? 0));
+  const [dianas, setDianas] = useState(String(ultima?.dianasPrevistas ?? 0));
   const [registro, setRegistro] = useState<Registro>(ultima?.registro ?? 'diana');
   const [tipo, setTipo] = useState<'entreno' | 'competicion'>('entreno');
   const [nombrePlantilla, setNombrePlantilla] = useState<string | null>(null); // abierto: guardar como plantilla
@@ -42,6 +46,7 @@ export default function NuevaSesion() {
     if (p.municion !== undefined) setMunicion(p.municion);
     setPorSerie(String(p.disparosPorSerie) as '5' | '10' | '0');
     setSeries(String(p.seriesPrevistas ?? 0));
+    setDianas(String(p.dianasPrevistas ?? 0));
     if (p.registro) setRegistro(p.registro);
   };
   const guardarPlantilla = () => {
@@ -49,7 +54,8 @@ export default function NuevaSesion() {
     if (!nombre) return;
     store.guardarPlantilla({
       id: nuevoId('plantilla'), nombre, armaId, modalidad, distancia, municion: municion.trim() || undefined,
-      disparosPorSerie: Number(porSerie), seriesPrevistas: Number(series) || undefined, registro,
+      disparosPorSerie: Number(porSerie), seriesPrevistas: Number(series) || undefined,
+      dianasPrevistas: Number(dianas) || undefined, registro,
     });
     setNombrePlantilla(null);
   };
@@ -63,7 +69,8 @@ export default function NuevaSesion() {
     if (!armaId) return;
     const id = store.nuevaSesion({
       armaId, modalidad, distancia, municion: municion.trim(), disparosPorSerie: Number(porSerie),
-      seriesPrevistas: Number(series) || undefined, registro, diana: diana.id, calibreMm,
+      seriesPrevistas: Number(series) || undefined, dianasPrevistas: Number(dianas) || undefined,
+      registro, diana: diana.id, calibreMm,
       competicion: tipo === 'competicion' || undefined,
     });
     router.replace(`/sesion/${id}`);
@@ -132,14 +139,35 @@ export default function NuevaSesion() {
       <Segmented value={porSerie} onChange={setPorSerie} options={[{ value: '0', label: 'Libre' }, { value: '5', label: '5' }, { value: '10', label: '10' }]} />
       {porSerie === '0' && <Text style={s.muted}>Sin límite: tiras los que quieras en la diana y pulsas «Finalizar serie» cuando acabes.</Text>}
 
-      <Text style={st.paso}>6. Número de series</Text>
+      <Text style={st.paso}>6. Número de dianas</Text>
+      <Segmented
+        value={dianas}
+        onChange={(v) => {
+          setDianas(v);
+          // Con dianas, las series son las de cada hoja (1, 2 o 4); sin ellas, las de toda la sesión.
+          if (!seriesPosibles(v).includes(series)) setSeries('0');
+        }}
+        options={[{ value: '0', label: 'Libre' }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }]}
+      />
+      <Text style={s.muted}>
+        {dianas === '0'
+          ? 'Cambias de hoja cuando quieras con «Cambiar de diana». Todas quedan juntas en este entrenamiento.'
+          : `Tiras ${dianas} dianas (hojas) y todas quedan juntas en este entrenamiento, cada una con sus resultados.`}
+      </Text>
+
+      <Text style={st.paso}>7. {dianas === '0' ? 'Número de series' : 'Series en cada diana'}</Text>
       <Segmented
         value={series}
         onChange={setSeries}
-        options={[{ value: '0', label: 'Libre' }, { value: '4', label: '4' }, { value: '6', label: '6' }, { value: '12', label: '12' }]}
+        options={[{ value: '0', label: 'Libre' }, ...seriesPosibles(dianas).map((v) => ({ value: v, label: v }))]}
       />
+      {dianas !== '0' && series !== '0' && (
+        <Text style={s.muted}>
+          {`${series === '1' ? '1 serie' : `${series} series`} en cada diana: al acabar${series === '1' ? 'la' : 'las'}, la app pasa sola a la diana siguiente (${Number(series) * Number(dianas)} series en total).`}
+        </Text>
+      )}
 
-      <Text style={st.paso}>7. Cómo apuntas los disparos</Text>
+      <Text style={st.paso}>8. Cómo apuntas los disparos</Text>
       <Segmented
         value={registro}
         onChange={setRegistro}
@@ -160,11 +188,13 @@ export default function NuevaSesion() {
             : 'Más rápido: tocas la puntuación de cada disparo (10, 9, 8…). No guarda dónde entró.'}
       </Text>
 
-      <Text style={st.paso}>8. Tipo</Text>
+      <Text style={st.paso}>9. Tipo</Text>
       <Segmented value={tipo} onChange={setTipo} options={[{ value: 'entreno', label: 'Entreno' }, { value: 'competicion', label: 'Competición' }]} />
 
       <Text style={[s.muted, { marginTop: space.sm }]}>
-        En la sesión apuntas todas las dianas del día: cuando cambies la hoja, pulsa «Cambiar de diana».
+        {dianas === '0'
+          ? 'En la sesión apuntas todas las dianas del día: cuando cambies la hoja, pulsa «Cambiar de diana».'
+          : `Cuando cambies la hoja, pulsa «Cambiar de diana». Al acabar la diana ${dianas}, terminas el entrenamiento.`}
       </Text>
       <Text style={s.muted}>
         Diana: {diana.nombre} · bala de {String(calibreMm).replace('.', ',')} mm{arma?.calibre && distancia !== 10 ? ` (${arma.calibre})` : ''}
