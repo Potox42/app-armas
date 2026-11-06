@@ -538,8 +538,18 @@ export interface Comparacion {
 export function comparar(
   ref: Gris, actual: Gris, cal: Calibracion, calibreMm = DIANAS.precision.calibre, diana: ModeloDiana = DIANAS.precision,
   luz?: { ref: Gris; actual: Gris },
+  recientes?: { min: Float32Array; max: Float32Array },
 ): Comparacion {
   const { w, h } = ref;
+  // Diferencia con la referencia. Con varias referencias recientes (temblor, 6-11-2026), lo que cae
+  // entre la más oscura y la más clara de ellas no es nuevo: es el mismo papel visto con el móvil
+  // medio píxel más allá. Un agujero nuevo no está en ninguna y se sale de las dos.
+  const difDe = (i: number) => {
+    const a = actual.d[i];
+    if (!recientes) return a - ref.d[i];
+    const lo = recientes.min[i], hi = recientes.max[i];
+    return a > hi ? a - hi : a < lo ? a - lo : 0;
+  };
   const pxMm = (cal.rx + cal.ry) / diana.negro;
   // Hasta el último anillo, si se ve (en la de precisión, 2,4 radios del negro, como siempre).
   const rZona = Math.max(1.1, 0.96 * (diametroExterior(diana) / diana.negro)) * Math.max(cal.rx, cal.ry);
@@ -574,7 +584,7 @@ export function comparar(
       // Fuera de la imagen (al alinear, lo que entra por el borde vale 0): no se compara.
       if (!dentroZona(x, y, i)) continue;
       zona++;
-      const dif = actual.d[i] - ref.d[i];
+      const dif = difDe(i);
       if (Math.abs(dif) <= umbral) continue;
       // Lo que cambia mucho (movimiento o luz) se cuenta aparte, con el corte de siempre.
       if (Math.abs(dif) > 28) cambiados++;
@@ -590,7 +600,7 @@ export function comparar(
   const candidatas = manchas(m, w, h).filter((k) => {
     const bw = k.x1 - k.x0 + 1, bh = k.y1 - k.y0 + 1;
     return k.area > Math.max(2.5, 0.3 * esperada) && k.area < 3 * esperada && bw < 4 * rAgujero + 3 && bh < 4 * rAgujero + 3
-      && fuerte(ref, actual, k, umbral) && !esDesplazamiento(ref, actual, k.sx / k.area, k.sy / k.area, rAgujero, ruido);
+      && fuerte(difDe, w, k, umbral) && !alargada(m, w, k) && !esDesplazamiento(ref, actual, k.sx / k.area, k.sy / k.area, rAgujero, ruido);
   });
   const candidatos = candidatas.sort((a, b) => b.area - a.area).map((k): Impacto => {
     const xPx = k.sx / k.area, yPx = k.sy / k.area;
@@ -630,14 +640,32 @@ function zonaIluminada(luzRef: Gris, luzActual: Gris, cal: Calibracion): Uint8Ar
   return o;
 }
 
-/** La mancha cambia con fuerza en algún punto (no es solo ruido que pasa justo del umbral). */
-function fuerte(ref: Gris, actual: Gris, k: { x0: number; y0: number; x1: number; y1: number }, umbral: number): boolean {
-  let mayor = 0;
+/**
+ * La mancha es un trozo de raya, no un agujero: mucho más larga que ancha. Pasa cuando un anillo
+ * se ve medio píxel más allá que en la referencia (temblor, 6-11-2026). Un agujero sale redondo,
+ * también encima de una raya. Las muy pequeñas no se miran (no tienen forma clara).
+ */
+function alargada(m: Uint8Array, w: number, k: Mancha): boolean {
+  if (k.area < 6) return false;
+  const mx = k.sx / k.area, my = k.sy / k.area;
+  let xx = 0, yy = 0, xy = 0, n = 0;
   for (let y = k.y0; y <= k.y1; y++) {
     for (let x = k.x0; x <= k.x1; x++) {
-      const i = y * ref.w + x;
-      mayor = Math.max(mayor, Math.abs(actual.d[i] - ref.d[i]));
+      if (!m[y * w + x]) continue;
+      xx += (x - mx) ** 2; yy += (y - my) ** 2; xy += (x - mx) * (y - my); n++;
     }
+  }
+  xx /= n; yy /= n; xy /= n;
+  const t = (xx + yy) / 2, d = Math.sqrt(((xx - yy) / 2) ** 2 + xy * xy);
+  const mayor = t + d, menor = Math.max(t - d, 1 / 12); // 1/12: lo que mide de ancho un píxel solo
+  return mayor / menor > 2.5 * 2.5;
+}
+
+/** La mancha cambia con fuerza en algún punto (no es solo ruido que pasa justo del umbral). */
+function fuerte(difDe: (i: number) => number, w: number, k: { x0: number; y0: number; x1: number; y1: number }, umbral: number): boolean {
+  let mayor = 0;
+  for (let y = k.y0; y <= k.y1; y++) {
+    for (let x = k.x0; x <= k.x1; x++) mayor = Math.max(mayor, Math.abs(difDe(y * w + x)));
   }
   return mayor >= 1.35 * umbral;
 }
@@ -686,10 +714,46 @@ function esDesplazamiento(ref: Gris, actual: Gris, x: number, y: number, rAgujer
 }
 
 /**
+ * Nitidez de la imagen en paso alto alrededor de la diana: media de |detalle|. Con el móvil
+ * temblando la foto sale movida (borrosa) y las rayas y el borde del negro pierden fuerza.
+ */
+export function nitidez(det: Gris, cal: Calibracion): number {
+  const r = 1.6 * Math.max(cal.rx, cal.ry);
+  let suma = 0, n = 0;
+  for (let y = 2; y < det.h - 2; y += 2) {
+    for (let x = 2; x < det.w - 2; x += 2) {
+      if ((x - cal.cx) ** 2 + (y - cal.cy) ** 2 > r * r) continue;
+      const v = det.d[y * det.w + x];
+      if (v === 0) continue; // fuera de la imagen al alinear
+      suma += Math.abs(v);
+      n++;
+    }
+  }
+  return n ? suma / n : 0;
+}
+
+interface Fotograma { det: Gris; luz: Gris; nit: number }
+
+const RECIENTES = 6; // referencias que se guardan (unos 3 s de imágenes tranquilas)
+const MINIMO = 3; // referencias que ha de haber antes de empezar a contar
+const ESPERA = 4; // imágenes tranquilas que han de pasar antes de tomar una como referencia
+const CONFIRMAR = 3; // imágenes seguidas en las que ha de verse el agujero para darlo por bueno
+const MOVIDA = 0.8; // menos nitidez que esto (respecto a las referencias) = foto movida
+const SALTO_MAX = 4; // píxeles que puede saltar la imagen respecto a la anterior sin contar como temblor
+
+/**
  * Vigila una secuencia de imágenes de la diana y avisa de cada impacto nuevo.
- * Un impacto se da por bueno cuando aparece en dos imágenes seguidas en el mismo sitio
- * (así no cuenta un insecto, un reflejo o un temblor). Tras cada impacto, la imagen actual
- * pasa a ser la referencia.
+ * Contra el temblor del móvil (campo, 6-11-2026: aún salían disparos que no se habían hecho):
+ * - Se descartan las imágenes movidas (borrosas) o que han saltado mucho respecto a la anterior:
+ *   nunca se toman como referencia ni cuentan para confirmar un impacto.
+ * - Se compara con varias referencias recientes a la vez: lo que cambia solo por ver el papel medio
+ *   píxel más allá ya está en alguna de ellas; un agujero nuevo no está en ninguna.
+ * - Las manchas alargadas (un trozo de anillo que se ve medio píxel más allá) no son agujeros.
+ * - Un impacto se da por bueno cuando aparece en tres imágenes tranquilas seguidas en el mismo sitio
+ *   (así no cuenta un insecto, un reflejo o un temblor). Tras cada impacto, su agujero se copia en
+ *   todas las referencias para no contarlo otra vez.
+ * Probado con un simulador de temblor (diana dibujada y foto real de octubre): de 119 disparos
+ * falsos a 2 en 14 tandas de 10 disparos, sin perder ninguno de los 140.
  */
 export class Vigia {
   private diana: ModeloDiana;
@@ -703,14 +767,19 @@ export class Vigia {
   cal: Calibracion | null = null;
   /** Dónde ha dicho el tirador que está la diana (en píxeles de la imagen), si no está en medio. */
   centro: { x: number; y: number } | null = null;
-  private ref: Gris | null = null;
-  private luzRef: Gris | null = null; // la referencia muy suavizada: dónde llega la luz del catalejo
-  private ultima: Gris | null = null; // última imagen alineada, para tomarla de referencia
-  private ultimaLuz: Gris | null = null;
-  private sinNada = 0; // imágenes seguidas sin nada que se parezca a un agujero
-  private pendientes: Impacto[] = []; // manchas de la imagen anterior, por confirmar
+  private recientes: Fotograma[] = []; // referencias, la última es la más nueva
+  private envolvente: { min: Float32Array; max: Float32Array } | null = null;
+  private espera: Fotograma[] = []; // imágenes sin nada, a la espera de ser referencia
+  private ultima: Fotograma | null = null; // última imagen tranquila, para tomarla de referencia
+  private pendientes: { impacto: Impacto; veces: number }[] = []; // manchas por confirmar
   private estables = 0;
-  private quietas = 2; // imágenes seguidas sin moverse el móvil
+  private saltadas = 0; // imágenes seguidas descartadas por temblor
+  private cerrar: { x: number; y: number; R: number; quedan: number } | null = null; // último impacto
+  private desplazamiento: { dx: number; dy: number } | null = null; // el de la imagen anterior
+
+  private get ref(): Fotograma | null {
+    return this.recientes[this.recientes.length - 1] ?? null;
+  }
 
   /** Procesa una imagen. Devuelve el impacto confirmado, si lo hay. */
   procesar(g: Gris): { estado: 'buscando' | 'calibrando' | 'vigilando'; impacto?: Impacto; cal?: Calibracion } {
@@ -727,6 +796,7 @@ export class Vigia {
     if (cal && Math.max(cal.rx, cal.ry) > 1.3 * Math.min(cal.rx, cal.ry)) cal = null;
     if (!cal) {
       this.estables = 0;
+      this.temblor();
       return { estado: this.cal ? 'vigilando' : 'buscando', cal: this.actual ?? this.cal ?? undefined };
     }
     if (!this.cal) {
@@ -738,16 +808,15 @@ export class Vigia {
       if (this.estables < 2) return { estado: 'calibrando', cal };
       this.cal = cal;
       this.actual = cal;
-      this.ref = detalle(g, cal, this.diana);
-      this.luzRef = suavizarLuz(g, cal);
+      const det = detalle(g, cal, this.diana);
+      this.nuevaReferencia({ det, luz: suavizarLuz(g, cal), nit: nitidez(det, cal) });
       return { estado: 'vigilando', cal };
     }
+    const ref = this.ref!;
     const det = detalle(g, this.cal, this.diana);
-    const { dx, dy } = afinar(this.ref!, det, this.cal.cx - cal.cx, this.cal.cy - cal.cy, this.cal);
+    const { dx, dy } = afinar(ref.det, det, this.cal.cx - cal.cx, this.cal.cy - cal.cy, this.cal);
     const alineada = desplazar(det, dx, dy);
-    const luz = desplazar(suavizarLuz(g, this.cal), dx, dy);
-    this.ultima = alineada;
-    this.ultimaLuz = luz;
+    const foto: Fotograma = { det: alineada, luz: desplazar(suavizarLuz(g, this.cal), dx, dy), nit: nitidez(alineada, this.cal) };
     // Dónde está ahora la diana en la imagen: si el móvil se ha movido un poco en el soporte, el
     // círculo, las marcas y los toques la siguen (los impactos se miden siempre sobre la fijada).
     const ahora = { ...this.cal, cx: this.cal.cx - dx, cy: this.cal.cy - dy };
@@ -755,38 +824,65 @@ export class Vigia {
     // Movimientos de un par de píxeles: se suavizan para que el círculo no tiemble.
     const salto = Math.hypot(ahora.cx - antes.cx, ahora.cy - antes.cy);
     this.actual = salto < 3 ? { ...ahora, cx: (ahora.cx + antes.cx) / 2, cy: (ahora.cy + antes.cy) / 2 } : ahora;
-    // Justo después de un golpe al móvil no se cuenta nada: se espera a que vuelva a estar quieto.
-    if (salto >= 3) this.quietas = 0;
-    else this.quietas++;
-    if (this.quietas < 2) {
-      this.pendientes = [];
+    // ¿Tiembla? La imagen ha saltado respecto a la anterior o ha salido movida (borrosa).
+    const previo = this.desplazamiento;
+    this.desplazamiento = { dx, dy };
+    const brinco = previo ? Math.hypot(dx - previo.dx, dy - previo.dy) : 0;
+    if (brinco > SALTO_MAX || foto.nit < MOVIDA * this.nitidezRef()) {
+      this.temblor();
       return { estado: 'vigilando', cal: this.actual };
     }
-    const { candidatos, cambio } = comparar(this.ref!, alineada, this.cal, this.calibreMm, this.diana,
-      this.luzRef ? { ref: this.luzRef, actual: luz } : undefined);
+    // Tras un temblor largo, lo que estaba por confirmar ya no vale (puede haber cambiado la luz).
+    if (this.saltadas > 6) this.pendientes = [];
+    this.saltadas = 0;
+    this.ultima = foto;
+    const { candidatos: todos, cambio } = comparar(ref.det, alineada, this.cal, this.calibreMm, this.diana,
+      { ref: ref.luz, actual: foto.luz }, this.envolvente ?? undefined);
     if (cambio > 0.05) {
       // Ha cambiado demasiado (se ha movido el móvil o la luz): nueva referencia sin contar nada.
-      this.nuevaReferencia(alineada, luz);
-      this.pendientes = [];
+      this.nuevaReferencia(foto);
       return { estado: 'vigilando', cal: this.actual };
     }
-    if (!candidatos.length) {
-      this.pendientes = [];
-      // Un rato largo sin nada (unos 9 s): se renueva la referencia para que la luz que cambia
-      // poco a poco (el sol, una nube) no se vaya sumando hasta parecer un agujero.
-      if (++this.sinNada >= 20) this.nuevaReferencia(alineada, luz);
-      return { estado: 'vigilando', cal: this.actual };
+    // Justo después de un impacto, su agujero se termina de copiar en las referencias con las
+    // imágenes tranquilas siguientes (la que lo confirmó pudo salir algo movida) y no se cuenta otra vez.
+    let candidatos = todos;
+    if (this.cerrar) {
+      const c = this.cerrar;
+      this.parchear(foto, c.x, c.y, c.R);
+      candidatos = todos.filter((k) => Math.hypot(k.xPx - c.x, k.yPx - c.y) > c.R);
+      if (--c.quedan <= 0) this.cerrar = null;
     }
-    this.sinNada = 0;
-    // Vale la mancha más grande si ya estaba en el mismo sitio en la imagen anterior.
-    const impacto = candidatos[0];
+    // Vale la mancha que ya estaba en el mismo sitio en las imágenes anteriores.
     const r = 2 * (this.calibreMm / 2) * ((this.cal.rx + this.cal.ry) / this.diana.negro) + 2;
-    if (this.pendientes.some((p) => Math.hypot(impacto.xPx - p.xPx, impacto.yPx - p.yPx) < r)) {
+    this.pendientes = candidatos.slice(0, 5).map((impacto) => {
+      const antes = this.pendientes.find((p) => Math.hypot(impacto.xPx - p.impacto.xPx, impacto.yPx - p.impacto.yPx) < r);
+      return { impacto, veces: (antes?.veces ?? 0) + 1 };
+    });
+    // Recién fijada la diana (o tras un cambio grande) aún no hay referencias bastantes para saber
+    // qué es temblor: las primeras imágenes tranquilas se toman como referencia sin contar nada.
+    if (this.recientes.length < MINIMO) {
       this.pendientes = [];
-      this.nuevaReferencia(alineada, luz);
-      return { estado: 'vigilando', cal: this.actual, impacto };
+      this.anadirReferencia(foto);
+      return { estado: 'vigilando', cal: this.actual };
     }
-    this.pendientes = [impacto];
+    const bueno = this.pendientes.find((p) => p.veces >= CONFIRMAR);
+    if (bueno) {
+      this.incorporar(foto, bueno.impacto, r);
+      return { estado: 'vigilando', cal: this.actual, impacto: bueno.impacto };
+    }
+    if (!candidatos.length && foto.nit > this.nitidezRef() / MOVIDA) {
+      // Las referencias habían salido algo movidas: mejor esta, más nítida.
+      this.nuevaReferencia(foto);
+      return { estado: 'vigilando', cal: this.actual };
+    }
+    // Pasadas unas imágenes tranquilas, se toma como una referencia más: así la luz que cambia poco
+    // a poco (el sol, una nube) no se va sumando hasta parecer un agujero, y el papel visto con el
+    // móvil un poco más allá ya no parece nuevo. Mientras algo se repite en el mismo sitio (un
+    // agujero por confirmar), no: podría tenerlo.
+    if (!this.pendientes.some((p) => p.veces >= 2)) {
+      this.espera.push(foto);
+      if (this.espera.length > ESPERA) this.anadirReferencia(this.espera.shift()!);
+    }
     return { estado: 'vigilando', cal: this.actual };
   }
 
@@ -799,29 +895,102 @@ export class Vigia {
    * contar luego ese mismo agujero otra vez.
    */
   marcadoAMano() {
-    this.pendientes = [];
-    if (this.ultima) this.nuevaReferencia(this.ultima, this.ultimaLuz);
+    if (this.ultima) this.nuevaReferencia(this.ultima);
   }
 
-  private nuevaReferencia(det: Gris, luz: Gris | null) {
-    this.ref = det;
-    if (luz) this.luzRef = luz;
-    this.sinNada = 0;
+  /**
+   * El móvil se ha movido: esta imagen ni cuenta ni sirve de referencia. Lo que estaba por confirmar
+   * se mantiene (un agujero de verdad seguirá ahí en la siguiente imagen tranquila).
+   */
+  private temblor() {
+    this.saltadas++;
+  }
+
+  /**
+   * Tras un impacto, el agujero nuevo se copia en todas las referencias (y en las que esperan) y la
+   * imagen actual pasa a ser una más. Así no se pierden las referencias recientes: con una sola,
+   * justo después de cada disparo, las rayas que se ven medio píxel más allá parecían agujeros.
+   * Se repite con las tres imágenes tranquilas siguientes.
+   */
+  private incorporar(foto: Fotograma, impacto: Impacto, r: number) {
+    const R = Math.ceil(1.5 * r);
+    this.parchear(foto, impacto.xPx, impacto.yPx, R);
+    this.cerrar = { x: impacto.xPx, y: impacto.yPx, R, quedan: 3 };
+    this.pendientes = [];
+    this.anadirReferencia(foto);
+  }
+
+  /** Copia lo que se ve ahora en un círculo (x, y, R) a todas las referencias. */
+  private parchear(foto: Fotograma, cx: number, cy: number, R: number) {
+    const { w, h } = foto.det;
+    const x0 = Math.max(0, Math.round(cx) - R), x1 = Math.min(w - 1, Math.round(cx) + R);
+    const y0 = Math.max(0, Math.round(cy) - R), y1 = Math.min(h - 1, Math.round(cy) + R);
+    for (const f of [...this.recientes, ...this.espera]) {
+      if (f === foto) continue;
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          if ((x - cx) ** 2 + (y - cy) ** 2 > R * R) continue;
+          const i = y * w + x;
+          if (foto.det.d[i] === 0 || f.det.d[i] === 0) continue;
+          f.det.d[i] = foto.det.d[i];
+          f.luz.d[i] = foto.luz.d[i];
+        }
+      }
+    }
+    this.anadirReferencia(null);
+  }
+
+  private nitidezRef(): number {
+    const v = this.recientes.map((f) => f.nit).sort((a, b) => a - b);
+    return v.length ? v[v.length >> 1] : 0;
+  }
+
+  private nuevaReferencia(f: Fotograma) {
+    this.cerrar = null;
+    this.recientes = [];
+    this.espera = [];
+    this.pendientes = [];
+    this.anadirReferencia(f);
+  }
+
+  /** Añade una referencia (o, sin ella, solo vuelve a calcular la envolvente). */
+  private anadirReferencia(f: Fotograma | null) {
+    if (f) this.recientes.push(f);
+    if (this.recientes.length > RECIENTES) this.recientes.shift();
+    if (this.recientes.length < 2) {
+      this.envolvente = null;
+      return;
+    }
+    const n = this.recientes[0].det.d.length;
+    const min = new Float32Array(n), max = new Float32Array(n);
+    min.set(this.recientes[0].det.d);
+    max.set(this.recientes[0].det.d);
+    for (let k = 1; k < this.recientes.length; k++) {
+      const d = this.recientes[k].det.d;
+      for (let i = 0; i < n; i++) {
+        const v = d[i];
+        if (v === 0) continue; // fuera de la imagen al alinear
+        if (min[i] === 0 || v < min[i]) min[i] = v;
+        if (max[i] === 0 || v > max[i]) max[i] = v;
+      }
+    }
+    this.envolvente = { min, max };
   }
 
   /** Vuelve a empezar (otra diana o se ha movido el soporte). */
   reiniciar() {
     this.ultima = null;
-    this.ultimaLuz = null;
-    this.luzRef = null;
-    this.sinNada = 0;
+    this.recientes = [];
+    this.envolvente = null;
+    this.espera = [];
     this.cal = null;
     this.actual = null;
-    this.quietas = 2;
-    this.ref = null;
+    this.saltadas = 0;
+    this.cerrar = null;
     this.pendientes = [];
     this.previa = null;
     this.estables = 0;
+    this.desplazamiento = null;
   }
 }
 
