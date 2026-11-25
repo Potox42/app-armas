@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { router } from 'expo-router';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Speech from 'expo-speech';
+import { CamaraDiana } from '@/components/CamaraDiana';
 import { Chips } from '@/components/Chips';
+import { Diana } from '@/components/Diana';
 import { Campo } from '@/components/Formulario';
 import { Button, Card, Screen, Segmented, s } from '@/components/ui';
 import { useStore } from '@/data/store';
+import type { Disparo } from '@/data/types';
+import { calibreEnMm, DIANAS, puntuar, type ModeloDiana } from '@/lib/diana';
 import { pitar, prepararPitidos } from '@/lib/pitidos';
 import { pasoEn, plan, PROGRAMAS, type Idioma, type Paso, type Programa } from '@/lib/simulador';
 import { colors, radius, space } from '@/theme';
@@ -20,8 +25,28 @@ export default function Simulador() {
   const [idioma, setIdioma] = useState<Idioma>('es');
   const [sonido, setSonido] = useState<Sonido>('ambos');
   const [pasos, setPasos] = useState<Paso[] | null>(null);
+  // Modo: solo tiempos (como siempre) o con el visor de la diana reconociendo los impactos, como en el entreno.
+  const [modo, setModo] = useState<Modo>('tiempos');
+  const { armas, sesiones } = useStore().datos;
+  const ultima = [...sesiones].sort((a, b) => b.fecha.localeCompare(a.fecha))[0]?.armaId;
+  const [armaId, setArmaId] = useState<string | undefined>(armas.find((a) => a.id === ultima)?.id ?? armas[0]?.id);
+  const arma = armas.find((a) => a.id === armaId);
+  // Tiro rápido se tira sobre la diana de tiro rápido; el resto, sobre la de precisión.
+  const modelo = programa.id === 'rapido' ? DIANAS.rapido : DIANAS.precision;
+  const calibre = calibreEnMm(arma?.calibre, modelo.calibre);
 
-  if (pasos) return <EnMarcha pasos={pasos} idioma={idioma} sonido={sonido} disparos={5 * Number(series)} onFin={() => setPasos(null)} />;
+  if (pasos) {
+    return (
+      <EnMarcha
+        pasos={pasos}
+        idioma={idioma}
+        sonido={sonido}
+        disparos={5 * Number(series)}
+        diana={modo === 'diana' ? { modelo, calibre, armaId, programa, series: Number(series) } : undefined}
+        onFin={() => setPasos(null)}
+      />
+    );
+  }
 
   return (
     <Screen title="Simulador de tirada" kicker="Entrenar" back="/entrenar">
@@ -42,6 +67,29 @@ export default function Simulador() {
           <Text style={[s.muted, { fontSize: 13 }]}>{p.detalle}</Text>
         </Card>
       ))}
+      <Text style={st.etiqueta}>Modo</Text>
+      <Segmented
+        value={modo}
+        onChange={setModo}
+        options={[{ value: 'tiempos', label: 'Solo tiempos' }, { value: 'diana', label: 'Con visor de diana' }]}
+      />
+      {modo === 'diana' && (
+        <>
+          <Text style={[s.muted, { fontSize: 13 }]}>
+            Pon el móvil en el catalejo, como en el entreno con cámara: la app reconoce cada impacto, lo puntúa y lo apunta en su
+            serie. Al terminar ves la diana con los puntos y puedes guardarla como entrenamiento. Diana: {modelo.nombre}.
+          </Text>
+          {Platform.OS !== 'web' && (
+            <Text style={[s.muted, { fontSize: 13, color: colors.accent }]}>De momento el visor solo funciona en la versión web.</Text>
+          )}
+          {armas.length > 0 && (
+            <>
+              <Text style={st.etiqueta}>Arma</Text>
+              <Chips opciones={armas.map((a) => ({ value: a.id, label: `${a.marca} ${a.modelo}`.trim() }))} valor={armaId} onChange={setArmaId} />
+            </>
+          )}
+        </>
+      )}
       <Text style={st.etiqueta}>Series</Text>
       <Segmented value={series} onChange={setSeries} options={['1', '2', '4', '6'].map((n) => ({ value: n, label: n }))} />
       <Text style={st.etiqueta}>Órdenes</Text>
@@ -80,8 +128,25 @@ export default function Simulador() {
 }
 
 type Sonido = 'ambos' | 'voz' | 'pitidos';
+type Modo = 'tiempos' | 'diana';
+interface ConDiana {
+  modelo: ModeloDiana;
+  calibre: number;
+  armaId?: string;
+  programa: Programa;
+  series: number;
+}
+// Impacto apuntado durante la tirada: su serie y la hoja (al cambiar de hoja el visor empieza de cero).
+type Impacto = Disparo & { serie: number; hoja: number };
 
-function EnMarcha({ pasos, idioma, sonido, disparos, onFin }: { pasos: Paso[]; idioma: Idioma; sonido: Sonido; disparos: number; onFin: () => void }) {
+function EnMarcha({ pasos, idioma, sonido, disparos, diana, onFin }: {
+  pasos: Paso[];
+  idioma: Idioma;
+  sonido: Sonido;
+  disparos: number;
+  diana?: ConDiana;
+  onFin: () => void;
+}) {
   // Pantalla siempre encendida mientras dura la tirada (en la web, solo si Safari lo permite).
   useEffect(() => {
     let activa = false;
@@ -94,6 +159,9 @@ function EnMarcha({ pasos, idioma, sonido, disparos, onFin }: { pasos: Paso[]; i
   const [ahora, setAhora] = useState(() => Date.now());
   const [parado, setParado] = useState(false); // «Parar»: también se pregunta por los disparos
   const dicho = useRef(-1);
+  const [impactos, setImpactos] = useState<Impacto[]>([]);
+  const [hoja, setHoja] = useState(0);
+  const { width: anchoPantalla } = useWindowDimensions();
   const pitado = useRef('');
 
   useEffect(() => {
@@ -140,8 +208,14 @@ function EnMarcha({ pasos, idioma, sonido, disparos, onFin }: { pasos: Paso[]; i
   if (i === null || parado) {
     return (
       <Screen title={parado ? 'Tirada parada' : 'Tirada terminada'} kicker="Simulador" back="/entrenar">
-        <Text style={s.muted}>Buen trabajo. Apunta tus puntos en un entrenamiento si quieres guardarlos.</Text>
-        <ApuntarDisparos previstos={disparos} />
+        {diana && impactos.length > 0 ? (
+          <ResultadoDiana diana={diana} impactos={impactos} />
+        ) : (
+          <>
+            <Text style={s.muted}>Buen trabajo. Apunta tus puntos en un entrenamiento si quieres guardarlos.</Text>
+            <ApuntarDisparos previstos={disparos} />
+          </>
+        )}
         <Button title="Otra tirada" onPress={onFin} />
       </Screen>
     );
@@ -152,28 +226,130 @@ function EnMarcha({ pasos, idioma, sonido, disparos, onFin }: { pasos: Paso[]; i
   const siguiente = pasos[i + 1];
   const fondo = paso.luz === 'verde' ? '#0E8A4A' : paso.luz === 'roja' ? '#B3202E' : colors.bg;
 
+  const botones = (
+    <View style={[st.botones, diana && { marginTop: 0 }]}>
+      {paso.saltable && (
+        <Pressable style={[st.boton, st.listo]} onPress={() => setComienzo((c) => c - (paso.fin - t))}>
+          <Text style={st.botonTexto}>Listo</Text>
+        </Pressable>
+      )}
+      <Pressable
+        style={st.boton}
+        onPress={() => {
+          Speech.stop().catch(() => {});
+          setParado(true);
+        }}
+      >
+        <Text style={st.botonTexto}>Parar</Text>
+      </Pressable>
+    </View>
+  );
+
+  if (diana) {
+    // Arriba las luces y la cuenta atrás (más pequeñas) y debajo el visor de la diana.
+    const deLaSerie = impactos.filter((d) => d.serie === paso.serie);
+    const enHoja = impactos.filter((d) => d.hoja === hoja);
+    const suma = deLaSerie.reduce((tot, d) => tot + d.valor, 0);
+    const total = impactos.reduce((tot, d) => tot + d.valor, 0);
+    const ultimo = deLaSerie[deLaSerie.length - 1];
+    const marcador = `Serie ${paso.serie}/${diana.series} · ${deLaSerie.length}/5${ultimo ? ` · Último ${ultimo.valor}` : ''} · Serie ${suma} · Total ${total}`;
+    return (
+      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: space.xl }}>
+        <View style={[st.franjaLuz, { backgroundColor: fondo }]}>
+          <Text style={[st.rotulo, { fontSize: 20 }]}>{paso.rotulo}</Text>
+          <Text style={st.cuentaPequena}>{quedan}</Text>
+          <Text style={st.siguiente}>{siguiente ? `Después: ${siguiente.rotulo}` : ''}</Text>
+          {botones}
+        </View>
+        <View style={{ padding: space.md, gap: space.sm }}>
+          <CamaraDiana
+            key={`sim-${hoja}`}
+            activo={deLaSerie.length < 5}
+            modelo={diana.modelo}
+            calibre={diana.calibre}
+            alto={Math.round(Math.min(anchoPantalla, 480) * 0.75)}
+            disparos={enHoja}
+            marcador={marcador}
+            serie={paso.serie}
+            onBorrar={(n) => {
+              const quitar = enHoja[n];
+              setImpactos((xs) => xs.filter((d) => d !== quitar));
+            }}
+            onImpacto={(x, y) =>
+              setImpactos((xs) => [...xs, { x, y, valor: puntuar(x, y, diana.calibre, diana.modelo), serie: paso.serie, hoja }])
+            }
+          />
+          <Text style={[s.text, { textAlign: 'center' }]}>{marcador}</Text>
+          <Pressable onPress={() => setHoja((h) => h + 1)} hitSlop={8}>
+            <Text style={{ color: colors.accent, fontWeight: '700', textAlign: 'center' }}>He puesto una hoja nueva</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    );
+  }
+
   return (
     <View style={[st.marcha, { backgroundColor: fondo }]}>
       <Text style={st.rotulo}>{paso.rotulo}</Text>
       <Text style={st.cuenta}>{quedan}</Text>
       <Text style={st.siguiente}>{siguiente ? `Después: ${siguiente.rotulo}` : ''}</Text>
-      <View style={st.botones}>
-        {paso.saltable && (
-          <Pressable style={[st.boton, st.listo]} onPress={() => setComienzo((c) => c - (paso.fin - t))}>
-            <Text style={st.botonTexto}>Listo</Text>
-          </Pressable>
-        )}
-        <Pressable
-          style={st.boton}
-          onPress={() => {
-            Speech.stop().catch(() => {});
-            setParado(true);
-          }}
-        >
-          <Text style={st.botonTexto}>Parar</Text>
-        </Pressable>
-      </View>
+      {botones}
     </View>
+  );
+}
+
+/**
+ * Resultado de la tirada con visor: la diana con todos los impactos, los puntos de cada serie y la
+ * opción de guardarla como entrenamiento (cuenta para la limpieza del arma y pregunta por la munición).
+ */
+function ResultadoDiana({ diana, impactos }: { diana: ConDiana; impactos: Impacto[] }) {
+  const store = useStore();
+  const { width } = useWindowDimensions();
+  const lado = Math.min(width - 2 * space.lg, 400);
+  const [armaId, setArmaId] = useState(diana.armaId ?? store.datos.armas[0]?.id);
+  const total = impactos.reduce((t, d) => t + d.valor, 0);
+  const porSerie = Array.from({ length: diana.series }, (_, k) => impactos.filter((d) => d.serie === k + 1));
+  const modalidad = diana.programa.id === 'rapido' ? 'Tiro rápido' : diana.programa.id === 'precision' ? 'Precisión' : 'Standard';
+  return (
+    <>
+      <Card style={{ alignItems: 'center', gap: space.sm }}>
+        <Text style={st.totalTexto}>{total} puntos</Text>
+        <Text style={s.muted}>{impactos.length} disparos · {diana.programa.nombre}</Text>
+        <Diana tamano={lado} modelo={diana.modelo} calibre={diana.calibre} disparos={impactos} />
+      </Card>
+      <Card style={{ gap: space.xs }}>
+        {porSerie.map((ds, k) => ds.length > 0 && (
+          <Text key={k} style={s.text}>
+            Serie {k + 1}: {ds.reduce((t, d) => t + d.valor, 0)} puntos ({ds.map((d) => d.valor).join(' · ')})
+          </Text>
+        ))}
+      </Card>
+      {store.datos.armas.length > 0 && (
+        <Card style={{ gap: space.md, borderColor: colors.accent }}>
+          <Text style={s.text}>¿Guardarla como entrenamiento? Los disparos contarán para la limpieza del arma.</Text>
+          <Chips opciones={store.datos.armas.map((a) => ({ value: a.id, label: `${a.marca} ${a.modelo}`.trim() }))} valor={armaId} onChange={setArmaId} />
+          <Button
+            title="Guardar como entrenamiento"
+            onPress={() => {
+              if (!armaId) return;
+              const id = store.guardarSesionTerminada({
+                armaId,
+                modalidad,
+                distancia: 25,
+                municion: '',
+                disparosPorSerie: 5,
+                seriesPrevistas: diana.series,
+                registro: 'camara',
+                diana: diana.modelo.id,
+                calibreMm: diana.calibre,
+                series: porSerie.map((ds) => ({ disparos: ds.map(({ x, y, valor }) => ({ x, y, valor })) })),
+              });
+              router.replace(`/sesion/${id}`);
+            }}
+          />
+        </Card>
+      )}
+    </>
   );
 }
 
@@ -259,6 +435,9 @@ const st = StyleSheet.create({
   elegido: { borderColor: colors.accent, borderWidth: 2 },
   marcha: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xl, gap: space.lg },
   rotulo: { color: '#fff', fontSize: 26, fontWeight: '800', textAlign: 'center' },
+  franjaLuz: { alignItems: 'center', paddingTop: space.xl, paddingBottom: space.md, paddingHorizontal: space.md, gap: space.xs },
+  cuentaPequena: { color: '#fff', fontSize: 72, fontWeight: '900', fontVariant: ['tabular-nums'], lineHeight: 80 },
+  totalTexto: { color: colors.text, fontSize: 34, fontWeight: '900' },
   cuenta: { color: '#fff', fontSize: 140, fontWeight: '900', fontVariant: ['tabular-nums'], lineHeight: 150 },
   siguiente: { color: 'rgba(255,255,255,0.75)', fontSize: 15, textAlign: 'center', minHeight: 20 },
   botones: { flexDirection: 'row', gap: space.md, marginTop: space.xl },
