@@ -28,6 +28,7 @@ interface Store {
   nuevaSerie: (sesionId: string) => void;
   nuevaDiana: (sesionId: string) => void;
   terminarSesion: (sesionId: string) => void;
+  guardarSesionTerminada: (datos: Omit<Sesion, 'id' | 'fecha' | 'terminada'>) => string; // p. ej. la del simulador con diana
   apuntarGasto: (sesionId: string, desdeCasa: boolean) => void;
   borrarSesion: (sesionId: string) => void;
   cambiarRegistro: (sesionId: string, registro: Registro) => void;
@@ -226,6 +227,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const hayDisparos = s.series.some((x) => (x.diana ?? 0) === actual && x.disparos.length > 0);
           return hayDisparos ? { ...s, series: [...s.series.slice(0, -1), { disparos: [], diana: actual + 1 }] } : s;
         }),
+      guardarSesionTerminada: (nueva) => {
+        const id = `s${Date.now()}`;
+        const series = nueva.series.filter((x) => x.disparos.length > 0);
+        const n = series.reduce((t, x) => t + x.disparos.length, 0);
+        setDatos((d) => d && {
+          ...d,
+          sesiones: [{ ...nueva, series, id, fecha: new Date().toISOString(), terminada: true }, ...d.sesiones],
+          // los disparos cuentan para el mantenimiento del arma, como al terminar un entrenamiento
+          armas: d.armas.map((a) => (a.id === nueva.armaId ? { ...a, disparosTotales: a.disparosTotales + n } : a)),
+        });
+        return id;
+      },
       terminarSesion: (sesionId) =>
         setDatos((d) => {
           if (!d) return d;

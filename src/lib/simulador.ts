@@ -17,6 +17,7 @@ export interface Paso {
   rotulo: string; // lo que se ve en pantalla
   orden?: { es: string; en: string }; // lo que se dice al empezar el paso
   saltable?: boolean; // preparación y pausas: se pueden acortar con «Listo»
+  serie: number; // serie a la que pertenece el paso (1, 2…): los impactos se apuntan en ella
 }
 
 export interface Programa {
@@ -53,11 +54,13 @@ const O = {
 export function plan(p: Programa, series = p.series): Paso[] {
   const pasos: Paso[] = [];
   let t = 0;
+  let serie = 1;
   const poner = (dur: number, luz: Luz, rotulo: string, orden?: Paso['orden'], saltable?: boolean) => {
-    pasos.push({ inicio: t, fin: t + dur, luz, rotulo, orden, saltable });
+    pasos.push({ inicio: t, fin: t + dur, luz, rotulo, orden, saltable, serie });
     t += dur;
   };
   for (let n = 1; n <= series; n++) {
+    serie = n;
     poner(PREPARACION, 'nada', `Serie ${n} de ${series}: carga y prepárate`, O.cargar(n), true);
     if (p.tipo === 'continuo') {
       // En precisión no hay luz roja previa: se da la salida directamente.
